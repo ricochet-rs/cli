@@ -36,7 +36,7 @@ steps:
       # Debug: Check git availability and repo status
       - git --version || echo "Git not installed"
       - git status 2>/dev/null || echo "Not a git repository or git not working"
-      - echo "CI_COMMIT_SHA: ${CI_COMMIT_SHA:-not set}"
+      - echo "CI_COMMIT_SHA:${CI_COMMIT_SHA:-not set}"
 
       # Build using the new unified build command
       # - just cross-build $TARGET
@@ -136,10 +136,10 @@ steps:
           fi
         done
         cd - >/dev/null
-        
+
         echo "Compressed binaries:"
         ls -lh "$outdir"/*.tar.gz "$outdir"/*.zip 2>/dev/null || echo "No compressed files yet"
-        
+
         # Verify binary type
         if [ -n "$(ls $outdir/ricochet-*.exe 2>/dev/null)" ]; then
           file "$outdir"/ricochet-*.exe | grep -i "PE32" && echo "✓ Windows executable verified" || true
