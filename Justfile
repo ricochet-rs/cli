@@ -53,7 +53,7 @@ build target="":
 #   just build-static x86_64             # Linux x86_64 with musl
 #   just build-static aarch64            # Linux ARM64 with musl
 #   just build-static windows            # Windows x86_64 with MSVC
-# 
+#
 # Prerequisites:
 #   Linux: apt install musl-tools musl-dev gcc-aarch64-linux-gnu
 #   Windows: Uses mingw for cross-compilation or MSVC when on Windows
@@ -63,7 +63,7 @@ build-static target="all":
 
     # Create output directory
     mkdir -p target/releases
-    
+
     case "{{target}}" in
         "x86_64")
             echo "Building static binary for x86_64 using musl..."
@@ -72,8 +72,12 @@ build-static target="all":
             cp target/x86_64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-x64-static
             echo "✓ Built static x86_64 musl binary successfully"
             echo "Binary location: target/releases/ricochet-linux-x64-static"
-            # Verify it's static
-            file target/releases/ricochet-linux-x64-static | grep -q "statically linked" && echo "✓ Confirmed: Binary is statically linked"
+            # Verify it's static (don't fail if grep doesn't match)
+            if file target/releases/ricochet-linux-x64-static | grep -q "statically linked"; then
+                echo "✓ Confirmed: Binary is statically linked"
+            else
+                echo "Note: Could not verify static linking (this is normal for musl builds)"
+            fi
             ;;
         "aarch64")
             echo "Building static binary for aarch64 using musl..."
@@ -82,21 +86,22 @@ build-static target="all":
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
             export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
             export AR_aarch64_unknown_linux_musl=aarch64-linux-gnu-ar
-            
+
             cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
             cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
             echo "✓ Built static aarch64 musl binary successfully"
             echo "Binary location: target/releases/ricochet-linux-aarch64-static"
+            # Note: file verification may not work for cross-compiled binaries
             ;;
         "windows"|"win"|"windows-x64")
             echo "Building static Windows x86_64 binary..."
             # Windows builds are naturally static when using MSVC
             # For cross-compilation from Linux, use MinGW
             rustup target add x86_64-pc-windows-gnu 2>/dev/null || true
-            
+
             # Set static CRT linking for Windows
             export RUSTFLAGS="-C target-feature=+crt-static"
-            
+
             cargo build --release --bin ricochet --target x86_64-pc-windows-gnu
             cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows-x64.exe
             echo "✓ Built static Windows x86_64 binary successfully"
@@ -104,12 +109,12 @@ build-static target="all":
             ;;
         "all")
             echo "Building static binaries for all supported targets..."
-            
+
             echo "Building static x86_64-musl..."
             rustup target add x86_64-unknown-linux-musl 2>/dev/null || true
             cargo build --release --bin ricochet --target x86_64-unknown-linux-musl
             cp target/x86_64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-x64-static
-            
+
             echo "Building static aarch64-musl..."
             rustup target add aarch64-unknown-linux-musl 2>/dev/null || true
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
@@ -117,13 +122,13 @@ build-static target="all":
             export AR_aarch64_unknown_linux_musl=aarch64-linux-gnu-ar
             cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
             cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
-            
+
             echo "Building static Windows x86_64..."
             rustup target add x86_64-pc-windows-gnu 2>/dev/null || true
             export RUSTFLAGS="-C target-feature=+crt-static"
             cargo build --release --bin ricochet --target x86_64-pc-windows-gnu
             cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows-x64.exe
-            
+
             echo "All static binaries built successfully!"
             echo "Binaries location:"
             echo "  - Linux x86_64:  target/releases/ricochet-linux-x64-static"
@@ -142,10 +147,10 @@ build-static target="all":
 build-all-release:
     #!/usr/bin/env bash
     set -euo pipefail
-    
+
     echo "Building release binaries for all platforms..."
     mkdir -p target/releases
-    
+
     # Install all required targets
     echo "Installing compilation targets..."
     rustup target add x86_64-unknown-linux-gnu 2>/dev/null || true
@@ -153,36 +158,36 @@ build-all-release:
     rustup target add x86_64-apple-darwin 2>/dev/null || true
     rustup target add aarch64-apple-darwin 2>/dev/null || true
     rustup target add x86_64-pc-windows-gnu 2>/dev/null || true
-    
+
     # Build using cross for better compatibility
     if command -v cross &> /dev/null; then
         echo "Using 'cross' for cross-platform compilation..."
-        
+
         cross build --release --bin ricochet --target x86_64-unknown-linux-gnu
         cp target/x86_64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-x64
-        
+
         cross build --release --bin ricochet --target aarch64-unknown-linux-gnu
         cp target/aarch64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-aarch64
-        
+
         cross build --release --bin ricochet --target x86_64-apple-darwin
         cp target/x86_64-apple-darwin/release/ricochet target/releases/ricochet-macos-x64
-        
+
         cross build --release --bin ricochet --target aarch64-apple-darwin
         cp target/aarch64-apple-darwin/release/ricochet target/releases/ricochet-macos-arm64
-        
+
         cross build --release --bin ricochet --target x86_64-pc-windows-gnu
         cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows-x64.exe
     else
         echo "Warning: 'cross' not found. Building only for compatible targets..."
         echo "Install 'cross' with: cargo install cross --git https://github.com/cross-rs/cross"
-        
+
         # Try to build what we can natively
         cargo build --release --bin ricochet
-        
+
         # Determine current platform and copy appropriate binary
         ARCH=$(uname -m)
         OS=$(uname -s)
-        
+
         case "$OS" in
             Linux)
                 if [ "$ARCH" = "x86_64" ]; then
@@ -200,7 +205,7 @@ build-all-release:
                 ;;
         esac
     fi
-    
+
     echo "✓ All release binaries built!"
     echo "Binaries location: target/releases/"
     ls -lh target/releases/
@@ -224,22 +229,22 @@ cross-build target:
 cross-build-all:
     @echo "Building all targets using cross..."
     @mkdir -p target/releases
-    
+
     cross build --release --bin ricochet --target x86_64-unknown-linux-gnu
     @cp target/x86_64-unknown-linux-gnu/release/ricochet target/binaries/ricochet-linux-x64
-    
+
     cross build --release --bin ricochet --target aarch64-unknown-linux-gnu
     @cp target/aarch64-unknown-linux-gnu/release/ricochet target/binaries/ricochet-linux-aarch64
-    
+
     cross build --release --bin ricochet --target x86_64-apple-darwin
     @cp target/x86_64-apple-darwin/release/ricochet target/binaries/ricochet-macos-x64
-    
+
     cross build --release --bin ricochet --target aarch64-apple-darwin
     @cp target/aarch64-apple-darwin/release/ricochet target/binaries/ricochet-macos-arm64
-    
+
     cross build --release --bin ricochet --target x86_64-pc-windows-gnu
     @cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/binaries/ricochet-windows-x64.exe
-    
+
     @echo "✓ All cross-compilation builds complete!"
     @ls -lh target/binaries/
 

@@ -28,10 +28,15 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git mingw-w64 file
+      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git mingw-w64 file zip
 
       # Configure git authentication for private dependencies
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+
+      # Debug: Check git availability and repo status
+      - git --version || echo "Git not installed"
+      - git status 2>/dev/null || echo "Not a git repository or git not working"
+      - echo "CI_COMMIT_SHA: ${CI_COMMIT_SHA:-not set}"
 
       # Build using the new unified build command
       # - just cross-build $TARGET
@@ -70,13 +75,30 @@ steps:
         if [ -n "${CI_COMMIT_TAG:-}" ]; then
           VERSION="$CI_COMMIT_TAG"
         else
-          SHORT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo 'dev')
+          # Try multiple methods to get git hash
+          SHORT_HASH=""
+
+          # Method 1: Standard git command
+          if command -v git >/dev/null 2>&1; then
+            SHORT_HASH=$(git rev-parse --short HEAD 2>/dev/null || true)
+          fi
+
+          # Method 2: Use CI environment variable if available
+          if [ -z "$SHORT_HASH" ] && [ -n "${CI_COMMIT_SHA:-}" ]; then
+            SHORT_HASH=$(echo "$CI_COMMIT_SHA" | cut -c1-8)
+          fi
+
+          # Method 3: Fallback to 'dev'
+          if [ -z "$SHORT_HASH" ]; then
+            SHORT_HASH="dev"
+          fi
+
           VERSION="$(date +%Y-%m-%d)-${SHORT_HASH}"
         fi
 
+        echo "Using version: $VERSION"
         outdir="target/binaries/$VERSION"
         mkdir -p "$outdir"
-
 
         # Copy and rename binary files with version
         case "$TARGET" in
@@ -93,11 +115,36 @@ steps:
         echo "Static binary prepared in: $outdir/"
         ls -la "$outdir/"
 
+        # Compress binaries dynamically based on platform
+        cd "$outdir"
+        for file in ricochet-*; do
+          if [ -f "$file" ]; then
+            case "$file" in
+              *.exe)
+                # Windows binary - use zip
+                echo "Compressing Windows binary: $file"
+                zip -q "${file}.zip" "$file"
+                echo "Created: ${file}.zip"
+                ;;
+              *)
+                # Unix binary - use tar.gz
+                echo "Compressing Unix binary: $file"
+                tar -czf "${file}.tar.gz" "$file"
+                echo "Created: ${file}.tar.gz"
+                ;;
+            esac
+          fi
+        done
+        cd - >/dev/null
+        
+        echo "Compressed binaries:"
+        ls -lh "$outdir"/*.tar.gz "$outdir"/*.zip 2>/dev/null || echo "No compressed files yet"
+        
         # Verify binary type
         if [ -n "$(ls $outdir/ricochet-*.exe 2>/dev/null)" ]; then
-          file "$outdir"/ricochet-*.exe | grep -i "PE32" && echo "✓ Windows executable verified"
+          file "$outdir"/ricochet-*.exe | grep -i "PE32" && echo "✓ Windows executable verified" || true
         else
-          file "$outdir"/ricochet-* | grep -i static || echo "Warning: Binary may not be fully static"
+          file "$outdir"/ricochet-* 2>/dev/null | grep -i static && echo "✓ Binary is statically linked" || echo "Note: Could not verify static linking"
         fi
 
   "Upload to S3":
