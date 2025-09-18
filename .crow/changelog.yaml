@@ -7,7 +7,6 @@ clone:
 when:
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
-  - event: manual
 
 steps:
   - name: 'Upcoming Changelog'

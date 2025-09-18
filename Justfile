@@ -28,27 +28,30 @@ cli-build:
     cargo build --release --bin ricochet
 
 # Build CLI for multiple platforms using cross-compilation
-cli-build-all: cli-build-linux-x64 cli-build-linux-arm64 cli-build-macos-x64 cli-build-macos-arm64 cli-build-windows
+cli-build-all: cli-install-targets cli-build-linux-x64 cli-build-linux-aarch64 cli-build-macos-x64 cli-build-macos-arm64 cli-build-windows-x64
     @echo "✓ All CLI builds complete!"
     @ls -lh target/releases/
 
 # Build CLI for Linux x86_64
 cli-build-linux-x64:
     @echo "Building CLI for Linux x86_64..."
+    rustup target add x86_64-unknown-linux-gnu
     @mkdir -p target/releases
     cargo build --release --bin ricochet --target x86_64-unknown-linux-gnu
     @cp target/x86_64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-x64
 
 # Build CLI for Linux ARM64
-cli-build-linux-arm64:
-    @echo "Building CLI for Linux ARM64..."
+cli-build-linux-aarch64:
+    @echo "Building CLI for Linux aarch64..."
+    rustup target add aarch64-unknown-linux-gnu
     @mkdir -p target/releases
     cargo build --release --bin ricochet --target aarch64-unknown-linux-gnu
-    @cp target/aarch64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-arm64
+    @cp target/aarch64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-aarch64
 
 # Build CLI for macOS x86_64
 cli-build-macos-x64:
     @echo "Building CLI for macOS x86_64..."
+    rustup target add x86_64-apple-darwin
     @mkdir -p target/releases
     cargo build --release --bin ricochet --target x86_64-apple-darwin
     @cp target/x86_64-apple-darwin/release/ricochet target/releases/ricochet-macos-x64
@@ -56,16 +59,28 @@ cli-build-macos-x64:
 # Build CLI for macOS ARM64 (Apple Silicon)
 cli-build-macos-arm64:
     @echo "Building CLI for macOS ARM64..."
+    rustup target add aarch64-apple-darwin
     @mkdir -p target/releases
     cargo build --release --bin ricochet --target aarch64-apple-darwin
     @cp target/aarch64-apple-darwin/release/ricochet target/releases/ricochet-macos-arm64
 
 # Build CLI for Windows
-cli-build-windows:
+cli-build-windows-x64:
     @echo "Building CLI for Windows..."
+    rustup target add x86_64-pc-windows-gnu
     @mkdir -p target/releases
     cargo build --release --bin ricochet --target x86_64-pc-windows-gnu
     @cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows.exe
+
+# Install all required rustup targets for cross-compilation
+cli-install-targets:
+    @echo "Installing all rustup targets for cross-compilation..."
+    rustup target add x86_64-unknown-linux-gnu
+    rustup target add aarch64-unknown-linux-gnu
+    rustup target add x86_64-apple-darwin
+    rustup target add aarch64-apple-darwin
+    rustup target add x86_64-pc-windows-gnu
+    @echo "✓ All rustup targets installed"
 
 # Install cross-compilation tools
 cli-install-cross-tools:

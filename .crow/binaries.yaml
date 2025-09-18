@@ -1,0 +1,69 @@
+when:
+  - event: tag
+  - event: deployment
+  - event: manual
+
+labels:
+  type: autoscale
+
+matrix:
+  include:
+    - TARGET: linux-x64
+    - TARGET: linux-aarch64
+    - TARGET: macos-x64
+    - TARGET: macos-arm64
+    - TARGET: windows-x64
+
+
+steps:
+  build:
+    image: reg.devxy.io/docker.io/library/rust:1.89-slim
+    environment:
+      SQLX_OFFLINE: true
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
+    commands:
+      - apt-get update && apt-get install -y just pkg-config musl-tools libssl-dev curl wget nodejs build-essential cmake ca-certificates musl-tools musl-dev gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu tree git
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      - just cli-build-$TARGET
+      - tree target/binaries/
+      - |
+        # Determine version string
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          VERSION="$CI_COMMIT_TAG"
+        else
+          VERSION="$(date +%Y-%m-%d)-8c08b2db"
+        fi
+
+        outdir="target/binaries/$VERSION"
+        mkdir -p "$outdir"
+        mkdir -p "target/binaries/$VERSION"
+        # Move and rename binary files with version
+        for file in target/binaries/ricochet-*; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            arch=$(echo "$filename" | sed 's/^ricochet-//')
+
+            new_name="ricochet-$VERSION-$arch"
+            mv "$file" "$outdir/$new_name"
+            echo "Moved: $filename -> $new_name"
+          fi
+        done
+
+        echo "Binaries moved to: $outdir/"
+        ls -la "$outdir/"
+
+  "Upload to S3":
+    image: reg.devxy.io/docker.io/woodpeckerci/plugin-s3:1.5.1
+    settings:
+      bucket: ricochet-cli
+      region: hel1
+      endpoint: https://hel1.your-objectstorage.com
+      access_key:
+        from_secret: s3_access_key
+      secret_key:
+        from_secret: s3_secret_key
+      source: target/binaries/**/*
+      strip_prefix: target/binaries/
+      target: /
