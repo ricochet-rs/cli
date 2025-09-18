@@ -1,0 +1,29 @@
+clone:
+  git:
+    image: codeberg.org/crow-plugins/clone:1.0.1
+    settings:
+      tags: true
+
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: manual
+
+steps:
+  - name: 'Upcoming Changelog'
+    environment:
+      GH_TOKEN:
+        from_secret: ricochet_issue_token
+    image: reg.devxy.io/docker.io/thegeeklab/git-sv:2.0.4
+    commands: |
+      apk add -q --no-cache jq github-cli
+
+      export RELEASE_NOTES=$(git sv rn)
+      echo -e "RELEASE_NOTES: $RELEASE_NOTES"
+      export ISSUE_NUMBER=$(gh issue list --json number --state open --search "Changelog for upcoming version" | jq -r '.[] | .number')
+
+      if [ -z "$ISSUE_NUMBER" ]; then
+        gh issue create --title "Changelog for upcoming version" --body "$RELEASE_NOTES"
+      else
+        gh issue edit $ISSUE_NUMBER --body "$RELEASE_NOTES"
+      fi
