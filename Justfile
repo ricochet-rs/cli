@@ -81,6 +81,8 @@ build-static target="all":
             # For cross-compilation to aarch64-musl, we need proper setup
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
             export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+            export AR_aarch64_unknown_linux_musl=aarch64-linux-gnu-ar
+            
             cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
             cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
             echo "✓ Built static aarch64 musl binary successfully"
@@ -112,6 +114,7 @@ build-static target="all":
             rustup target add aarch64-unknown-linux-musl 2>/dev/null || true
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
             export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+            export AR_aarch64_unknown_linux_musl=aarch64-linux-gnu-ar
             cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
             cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
             
