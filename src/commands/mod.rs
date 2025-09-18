@@ -1,5 +1,4 @@
 pub mod auth;
-mod auth_ui;
 pub mod config;
 pub mod delete;
 pub mod deploy;

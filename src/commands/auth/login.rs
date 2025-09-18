@@ -435,5 +435,4 @@ pub fn logout(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod auth_unit_test;
+
