@@ -34,14 +34,8 @@ axum = "0.7"
 urlencoding = "2.1"
 unicode-icons = "0.1"
 
-# Internal dependencies
-# Using Git dependencies with SSH (for private repo)
-ricochet-core = { git = "ssh://git@github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
-ricochet-auth = { git = "ssh://git@github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
-
-# For local development, you can override with:
-# ricochet-core = { path = "../ricochet/ricochet-core" }
-# ricochet-auth = { path = "../ricochet/ricochet-auth" }
+ricochet-core = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
+ricochet-auth = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
 
 [dev-dependencies]
 mockito = "1.5"

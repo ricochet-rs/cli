@@ -25,8 +25,13 @@ steps:
     image: reg.devxy.io/docker.io/library/rust:1.89
     environment:
       SQLX_OFFLINE: true
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
     commands:
       - apt update && apt-get install -y cmake
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # test
       - cargo test -q --all-features --workspace

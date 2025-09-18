@@ -1,0 +1,10 @@
+# Cargo configuration for ricochet-cli
+
+# For private repository authentication in CI
+# Option 1: Use git credential helper with token
+[net]
+git-fetch-with-cli = true
+
+# Option 2: Use direct token replacement (uncomment and set token)
+# [url."https://<token>@github.com/"]
+# insteadOf = "https://github.com/"

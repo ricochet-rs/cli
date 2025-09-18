@@ -40,10 +40,14 @@ steps:
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
     commands:
-      - apt update && apt-get install -y cmake
+      - apt update && apt-get install -y cmake git
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       - rustup component add clippy
       # Use SQLx offline mode - no database setup needed
       - cargo clippy -q --no-deps
