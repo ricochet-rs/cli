@@ -97,6 +97,10 @@ cli-cross-build-all:
     @echo "✓ All cross-compilation builds complete!"
     @ls -lh target/releases/
 
+
+move-cli-local:
+    sudo cp target/release/ricochet ~/.local/bin/ricochet-dev
+
 # generate CLI documentation
 docs:
     @echo "Generating CLI documentation..."
