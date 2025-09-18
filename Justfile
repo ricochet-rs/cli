@@ -5,7 +5,7 @@ default:
 	@just --list
 
 fmt:
-    leptosfmt ricochet-ui/src/**/*.rs && leptosfmt ricochet-ui/src/*.rs && cargo fmt --all
+    cargo fmt --all
 
 check:
     cargo check --all-features --workspace
@@ -18,6 +18,10 @@ lint:
 
 lint-fix:
     cargo clippy --fix --all-targets --all-features -- -D warnings
+
+# Test commands
+test:
+    cargo test --all-features --workspace
 
 # Build the CLI for current platform
 cli-build:
@@ -92,28 +96,6 @@ cli-cross-build-all:
     @cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows.exe
     @echo "✓ All cross-compilation builds complete!"
     @ls -lh target/releases/
-
-### build container images
-# just container alpine alpine reg.devxy.io ricochet ricochet
-# just container ubuntu
-container variant tag="latest" registry="ghcr.io" org="ricochet-rs" name="ricochet-dev":
-    #!/usr/bin/env bash
-    IMAGE_NAME="{{registry}}/{{org}}/{{name}}:{{tag}}"
-    echo "Building: $IMAGE_NAME"
-    case "{{variant}}" in
-        "alpine")
-            docker buildx build -f container/Containerfile.alpine --push -t "$IMAGE_NAME" .
-            ;;
-        "ubuntu")
-            docker buildx build -f container/Containerfile.ubuntu --push -t "$IMAGE_NAME" .
-            ;;
-        *)
-            echo "Unknown variant: {{variant}}"
-            echo "Available variants: alpine, ubuntu"
-            exit 1
-            ;;
-    esac
-    echo "Built: $IMAGE_NAME"
 
 # generate CLI documentation
 docs:

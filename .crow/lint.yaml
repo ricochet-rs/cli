@@ -1,0 +1,51 @@
+when:
+  - event: pull_request
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: push
+    branch:
+      - ${CI_REPO_DEFAULT_BRANCH}
+
+labels:
+  type: static
+
+steps:
+  editor-config:
+    image: reg.devxy.io/docker.io/mstruebing/editorconfig-checker:v3.4.0
+    depends_on: []
+
+  cache:
+    image: codeberg.org/crow-plugins/sccache:0.1.0
+    settings:
+      s3-endpoint: https://hel1.your-objectstorage.com
+      s3-bucket: ricochet-sccache
+      s3-region: hel1
+      s3-key-prefix: ${CI_REPO_NAME}
+      s3-access-key:
+        from_secret: s3_access_key
+      s3-secret-key:
+        from_secret: s3_secret_key
+
+  rust-fmt:
+    image: reg.devxy.io/docker.io/library/rust:1.89
+    depends_on: cache
+    commands:
+      - export PATH=".sccache-cache:$PATH"
+      - . ./.sccache
+      - rustup component add rustfmt
+      - cargo fmt -q --all
+      - sccache --show-stats
+
+  rust-lint:
+    image: reg.devxy.io/docker.io/library/rust:1.89
+    depends_on: cache
+    environment:
+      SQLX_OFFLINE: true
+    commands:
+      - apt update && apt-get install -y cmake
+      - export PATH=".sccache-cache:$PATH"
+      - . ./.sccache
+      - rustup component add clippy
+      # Use SQLx offline mode - no database setup needed
+      - cargo clippy -q --no-deps
+      # - cargo clippy --all-targets --all-features -- -D warnings
+      - sccache --show-stats
