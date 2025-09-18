@@ -33,7 +33,7 @@ flate2 = "1.0"
 tar = "0.4"
 axum = "0.7"
 urlencoding = "2.1"
-unicode-icons = "0.1"
+unicode-icons = "2.0"
 html-escape = "0.2"
 
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
