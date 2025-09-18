@@ -6,7 +6,7 @@ use dialoguer::{Confirm, Input, Password};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use unicode_icons::checkmarks;
+use unicode_icons::icons::symbols;
 
 #[derive(Debug)]
 struct AuthState {
@@ -47,7 +47,7 @@ pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
             Ok(true) => {
                 println!(
                     "{} Already authenticated via environment variables",
-                    checkmarks::heavy().green().bold()
+                    symbols::check_mark().to_string().green().bold()
                 );
                 // Note: We can't check expiration without server returning it
                 println!(
@@ -111,7 +111,7 @@ pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
 
                 println!(
                     "\n{} Successfully authenticated!",
-                    checkmarks::heavy().green().bold()
+                    symbols::check_mark().to_string().green().bold()
                 );
                 println!(
                     "Configuration saved to: {}",
@@ -148,7 +148,7 @@ async fn oauth_login_with_callback(config: &mut Config, server: String) -> Resul
         if client.validate_key().await.unwrap_or(false) {
             println!(
                 "{} Already authenticated with valid API key",
-                checkmarks::heavy().green().bold()
+                symbols::check_mark().to_string().green().bold()
             );
             return Ok(());
         }
@@ -271,7 +271,7 @@ async fn oauth_login_with_callback(config: &mut Config, server: String) -> Resul
             // Direct API key - just save it!
             println!(
                 "\n{} Received API key directly from server!",
-                checkmarks::heavy().green().bold()
+                symbols::check_mark().to_string().green().bold()
             );
             validate_and_save_key(config, server.clone(), token.clone()).await?;
         } else {
@@ -343,7 +343,7 @@ async fn create_api_key_with_session(
 
         println!(
             "\n{} Successfully created and saved API key!",
-            checkmarks::heavy().green().bold()
+            symbols::check_mark().to_string().green().bold()
         );
 
         // Display expiration info
@@ -398,7 +398,7 @@ async fn validate_and_save_key(config: &mut Config, server: String, key: String)
 
             println!(
                 "\n{} Successfully authenticated!",
-                checkmarks::heavy().green().bold()
+                symbols::check_mark().to_string().green().bold()
             );
             println!(
                 "Configuration saved to: {}",
@@ -430,7 +430,7 @@ pub fn logout(config: &mut Config) -> Result<()> {
 
     println!(
         "{} Logged out successfully",
-        checkmarks::heavy().green().bold()
+        symbols::check_mark().to_string().green().bold()
     );
     Ok(())
 }
