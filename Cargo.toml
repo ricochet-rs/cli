@@ -18,7 +18,7 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
-dirs = "5.0"
+dirs = "6.0"
 toml = "0.9"
 dialoguer = "0.12"
 indicatif = "0.18"
