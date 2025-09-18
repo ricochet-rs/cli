@@ -42,3 +42,8 @@ ricochet-auth = { git = "ssh://git@github.com/ricochet-rs/ricochet.git", branch 
 # For local development, you can override with:
 # ricochet-core = { path = "../ricochet/ricochet-core" }
 # ricochet-auth = { path = "../ricochet/ricochet-auth" }
+
+[dev-dependencies]
+mockito = "1.5"
+tempfile = "3.8"
+tokio-test = "0.4"

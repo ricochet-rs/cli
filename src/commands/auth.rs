@@ -15,21 +15,21 @@ struct AuthState {
     error: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct CreateApiKeyRequest {
-    name: String,
-    expires_in_hours: u32,
+#[derive(Debug, Serialize, Clone)]
+pub(crate) struct CreateApiKeyRequest {
+    pub(crate) name: String,
+    pub(crate) expires_in_hours: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    expires_at: Option<String>, // Alternative: ISO 8601 timestamp
+    pub(crate) expires_at: Option<String>, // Alternative: ISO 8601 timestamp
 }
 
-#[derive(Debug, Deserialize)]
-struct ApiKeyResponse {
-    key: String,
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct ApiKeyResponse {
+    pub(crate) key: String,
     #[allow(dead_code)]
-    name: String,
+    pub(crate) name: String,
     #[allow(dead_code)]
-    expires_at: Option<String>,
+    pub(crate) expires_at: Option<String>,
 }
 
 pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
@@ -434,3 +434,6 @@ pub fn logout(config: &mut Config) -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod auth_unit_test;
