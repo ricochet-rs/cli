@@ -33,14 +33,6 @@ steps:
       # Configure git authentication for private dependencies
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
 
-      # Debug: Check git availability and repo status
-      - git --version || echo "Git not installed"
-      - git status 2>/dev/null || echo "Not a git repository or git not working"
-      - echo "CI_COMMIT_SHA:${CI_COMMIT_SHA:-not set}"
-
-      # Build using the new unified build command
-      # - just cross-build $TARGET
-
       # Build static version for each target
       - |
         mkdir -p target/releases
@@ -78,18 +70,32 @@ steps:
           # Try multiple methods to get git hash
           SHORT_HASH=""
 
-          # Method 1: Standard git command
-          if command -v git >/dev/null 2>&1; then
-            SHORT_HASH=$(git rev-parse --short HEAD 2>/dev/null || true)
+          # Method 1: Use Woodpecker/Drone CI environment variables FIRST (most reliable in CI)
+          if [ -n "${CI_COMMIT_SHA:-}" ]; then
+            SHORT_HASH=$(echo "$CI_COMMIT_SHA" | cut -c1-8)
+            echo "Got hash from CI_COMMIT_SHA: $SHORT_HASH"
+          elif [ -n "${CI_COMMIT_SHORT_SHA:-}" ]; then
+            SHORT_HASH="$CI_COMMIT_SHORT_SHA"
+            echo "Got hash from CI_COMMIT_SHORT_SHA: $SHORT_HASH"
+          elif [ -n "${DRONE_COMMIT_SHA:-}" ]; then
+            SHORT_HASH=$(echo "$DRONE_COMMIT_SHA" | cut -c1-8)
+            echo "Got hash from DRONE_COMMIT_SHA: $SHORT_HASH"
+          elif [ -n "${CI_BUILD_COMMIT:-}" ]; then
+            SHORT_HASH=$(echo "$CI_BUILD_COMMIT" | cut -c1-8)
+            echo "Got hash from CI_BUILD_COMMIT: $SHORT_HASH"
           fi
 
-          # Method 2: Use CI environment variable if available
-          if [ -z "$SHORT_HASH" ] && [ -n "${CI_COMMIT_SHA:-}" ]; then
-            SHORT_HASH=$(echo "$CI_COMMIT_SHA" | cut -c1-8)
+          # Method 2: Try git command if CI vars failed
+          if [ -z "$SHORT_HASH" ] && command -v git >/dev/null 2>&1; then
+            if [ -d .git ] || git rev-parse --git-dir >/dev/null 2>&1; then
+              SHORT_HASH=$(git rev-parse --short HEAD 2>/dev/null || true)
+              [ -n "$SHORT_HASH" ] && echo "Got hash from git: $SHORT_HASH"
+            fi
           fi
 
           # Method 3: Fallback to 'dev'
           if [ -z "$SHORT_HASH" ]; then
+            echo "WARNING: Could not determine git hash, using 'dev'"
             SHORT_HASH="dev"
           fi
 
@@ -117,20 +123,25 @@ steps:
 
         # Compress binaries dynamically based on platform
         cd "$outdir"
-        for file in ricochet-*; do
-          if [ -f "$file" ]; then
-            case "$file" in
+        for binary_file in ricochet-*; do
+          if [ -f "$binary_file" ]; then
+            echo "Processing file: $binary_file"
+            case "$binary_file" in
               *.exe)
                 # Windows binary - use zip
-                echo "Compressing Windows binary: $file"
-                zip -q "${file}.zip" "$file"
-                echo "Created: ${file}.zip"
+                echo "Compressing Windows binary: $binary_file"
+                zip_name="${binary_file}.zip"
+                zip -j "$zip_name" "$binary_file"
+                echo "Created: $zip_name"
+                ls -lh "$zip_name"
                 ;;
               *)
                 # Unix binary - use tar.gz
-                echo "Compressing Unix binary: $file"
-                tar -czf "${file}.tar.gz" "$file"
-                echo "Created: ${file}.tar.gz"
+                echo "Compressing Unix binary: $binary_file"
+                tar_name="${binary_file}.tar.gz"
+                tar -czf "$tar_name" "$binary_file"
+                echo "Created: $tar_name"
+                ls -lh "$tar_name"
                 ;;
             esac
           fi
