@@ -45,17 +45,18 @@ build target="":
         echo "✓ Build complete: target/{{target}}/release/ricochet"
     fi
 
-# Build statically linked Linux binaries using musl
+# Build statically linked binaries using musl (Linux) or MSVC (Windows)
 # Usage: just build-static [target]
-# Builds fully static Linux binaries that work on any Linux system
+# Builds fully static binaries that work on any system
 # Examples:
 #   just build-static                    # builds all targets
-#   just build-static x86_64
-#   just build-static aarch64
+#   just build-static x86_64             # Linux x86_64 with musl
+#   just build-static aarch64            # Linux ARM64 with musl
+#   just build-static windows            # Windows x86_64 with MSVC
 # 
-# Prerequisites on Debian/Ubuntu:
-#   apt install musl-tools musl-dev gcc-aarch64-linux-gnu
-#   rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+# Prerequisites:
+#   Linux: apt install musl-tools musl-dev gcc-aarch64-linux-gnu
+#   Windows: Uses mingw for cross-compilation or MSVC when on Windows
 build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -85,8 +86,22 @@ build-static target="all":
             echo "✓ Built static aarch64 musl binary successfully"
             echo "Binary location: target/releases/ricochet-linux-aarch64-static"
             ;;
+        "windows"|"win"|"windows-x64")
+            echo "Building static Windows x86_64 binary..."
+            # Windows builds are naturally static when using MSVC
+            # For cross-compilation from Linux, use MinGW
+            rustup target add x86_64-pc-windows-gnu 2>/dev/null || true
+            
+            # Set static CRT linking for Windows
+            export RUSTFLAGS="-C target-feature=+crt-static"
+            
+            cargo build --release --bin ricochet --target x86_64-pc-windows-gnu
+            cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows-x64.exe
+            echo "✓ Built static Windows x86_64 binary successfully"
+            echo "Binary location: target/releases/ricochet-windows-x64.exe"
+            ;;
         "all")
-            echo "Building static binaries for all Linux targets using musl..."
+            echo "Building static binaries for all supported targets..."
             
             echo "Building static x86_64-musl..."
             rustup target add x86_64-unknown-linux-musl 2>/dev/null || true
@@ -100,14 +115,21 @@ build-static target="all":
             cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
             cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
             
+            echo "Building static Windows x86_64..."
+            rustup target add x86_64-pc-windows-gnu 2>/dev/null || true
+            export RUSTFLAGS="-C target-feature=+crt-static"
+            cargo build --release --bin ricochet --target x86_64-pc-windows-gnu
+            cp target/x86_64-pc-windows-gnu/release/ricochet.exe target/releases/ricochet-windows-x64.exe
+            
             echo "All static binaries built successfully!"
             echo "Binaries location:"
-            echo "  - x86_64:  target/releases/ricochet-linux-x64-static"
-            echo "  - aarch64: target/releases/ricochet-linux-aarch64-static"
+            echo "  - Linux x86_64:  target/releases/ricochet-linux-x64-static"
+            echo "  - Linux aarch64: target/releases/ricochet-linux-aarch64-static"
+            echo "  - Windows x64:   target/releases/ricochet-windows-x64.exe"
             ;;
         *)
             echo "Unknown target: {{target}}"
-            echo "Available targets: x86_64, aarch64, all"
+            echo "Available targets: x86_64, aarch64, windows, all"
             exit 1
             ;;
     esac

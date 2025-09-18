@@ -12,13 +12,13 @@ matrix:
       OUTPUT: linux-x64
     - TARGET: aarch64-unknown-linux-gnu
       OUTPUT: linux-aarch64
+    - TARGET: x86_64-pc-windows-gnu
+      OUTPUT: windows-x64
     # Enable these when cross-compilation is properly configured
     # - TARGET: x86_64-apple-darwin
     #   OUTPUT: macos-x64
     # - TARGET: aarch64-apple-darwin
     #   OUTPUT: macos-arm64
-    - TARGET: x86_64-pc-windows-gnu
-      OUTPUT: windows-x64
 
 steps:
   build:
@@ -28,7 +28,7 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git
+      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git mingw-w64
 
       # Configure git authentication for private dependencies
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
@@ -36,11 +36,12 @@ steps:
       # Build using the new unified build command
       # - just cross-build $TARGET
 
-      # Build static version for Linux targets
+      # Build static version for each target
       - |
+        mkdir -p target/releases
         case "$TARGET" in
           *linux*)
-            echo "Building static version for $TARGET..."
+            echo "Building static Linux version for $TARGET..."
             case "$TARGET" in
               x86_64-unknown-linux-gnu)
                 just build-static x86_64
@@ -50,10 +51,18 @@ steps:
                 ;;
             esac
             ;;
+          *windows*)
+            echo "Building static Windows version for $TARGET..."
+            just build-static windows-x64
+            ;;
+          *)
+            echo "Unknown target type: $TARGET"
+            ;;
         esac
 
       # Show what we built
-      - ls -la target/releases/
+      - ls -la target/releases/ || echo "No files in target/releases yet"
+      - find target -name "ricochet*" -type f 2>/dev/null | head -20
 
       # Prepare versioned binaries for upload
       - |
@@ -77,12 +86,19 @@ steps:
           aarch64-unknown-linux-gnu)
             cp target/releases/ricochet-linux-aarch64-static "$outdir/ricochet-$VERSION-linux-aarch64"
             ;;
+          x86_64-pc-windows-gnu)
+            cp target/releases/ricochet-windows-x64.exe "$outdir/ricochet-$VERSION-windows-x64.exe"
+            ;;
         esac
         echo "Static binary prepared in: $outdir/"
         ls -la "$outdir/"
 
-        # Verify it's actually static
-        file "$outdir"/ricochet-* | grep -i static || echo "Warning: Binary may not be fully static"
+        # Verify binary type
+        if [ -n "$(ls $outdir/ricochet-*.exe 2>/dev/null)" ]; then
+          file "$outdir"/ricochet-*.exe | grep -i "PE32" && echo "✓ Windows executable verified"
+        else
+          file "$outdir"/ricochet-* | grep -i static || echo "Warning: Binary may not be fully static"
+        fi
 
   "Upload to S3":
     image: reg.devxy.io/docker.io/woodpeckerci/plugin-s3:1.5.1
