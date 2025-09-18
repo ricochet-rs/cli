@@ -45,7 +45,7 @@ build target="":
         echo "✓ Build complete: target/{{target}}/release/ricochet"
     fi
 
-# Build statically linked Linux binaries
+# Build statically linked Linux binaries using musl
 # Usage: just build-static [target]
 # Builds fully static Linux binaries that work on any Linux system
 # Examples:
@@ -54,52 +54,51 @@ build target="":
 #   just build-static aarch64
 # 
 # Prerequisites on Debian/Ubuntu:
-#   apt install gcc-aarch64-linux-gnu pkg-config libssl-dev build-essential
-#   rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+#   apt install musl-tools musl-dev gcc-aarch64-linux-gnu
+#   rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
-    
-    # Set flags for static linking
-    export RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static"
-    
-    # Setup cross-compilation for glibc targets
-    export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-    export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-    export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
 
     # Create output directory
     mkdir -p target/releases
     
     case "{{target}}" in
         "x86_64")
-            echo "Building static binary for x86_64-unknown-linux-gnu..."
-            rustup target add x86_64-unknown-linux-gnu 2>/dev/null || true
-            cargo build --release --bin ricochet --target x86_64-unknown-linux-gnu
-            cp target/x86_64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-x64-static
-            echo "✓ Built static x86_64-unknown-linux-gnu successfully"
+            echo "Building static binary for x86_64 using musl..."
+            rustup target add x86_64-unknown-linux-musl 2>/dev/null || true
+            cargo build --release --bin ricochet --target x86_64-unknown-linux-musl
+            cp target/x86_64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-x64-static
+            echo "✓ Built static x86_64 musl binary successfully"
             echo "Binary location: target/releases/ricochet-linux-x64-static"
+            # Verify it's static
+            file target/releases/ricochet-linux-x64-static | grep -q "statically linked" && echo "✓ Confirmed: Binary is statically linked"
             ;;
         "aarch64")
-            echo "Building static binary for aarch64-unknown-linux-gnu..."
-            rustup target add aarch64-unknown-linux-gnu 2>/dev/null || true
-            cargo build --release --bin ricochet --target aarch64-unknown-linux-gnu
-            cp target/aarch64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-aarch64-static
-            echo "✓ Built static aarch64-unknown-linux-gnu successfully"
+            echo "Building static binary for aarch64 using musl..."
+            rustup target add aarch64-unknown-linux-musl 2>/dev/null || true
+            # For cross-compilation to aarch64-musl, we need proper setup
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+            export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+            cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
+            cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
+            echo "✓ Built static aarch64 musl binary successfully"
             echo "Binary location: target/releases/ricochet-linux-aarch64-static"
             ;;
         "all")
-            echo "Building static binaries for all Linux targets..."
+            echo "Building static binaries for all Linux targets using musl..."
             
-            echo "Building static x86_64-unknown-linux-gnu..."
-            rustup target add x86_64-unknown-linux-gnu 2>/dev/null || true
-            cargo build --release --bin ricochet --target x86_64-unknown-linux-gnu
-            cp target/x86_64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-x64-static
+            echo "Building static x86_64-musl..."
+            rustup target add x86_64-unknown-linux-musl 2>/dev/null || true
+            cargo build --release --bin ricochet --target x86_64-unknown-linux-musl
+            cp target/x86_64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-x64-static
             
-            echo "Building static aarch64-unknown-linux-gnu..."
-            rustup target add aarch64-unknown-linux-gnu 2>/dev/null || true
-            cargo build --release --bin ricochet --target aarch64-unknown-linux-gnu
-            cp target/aarch64-unknown-linux-gnu/release/ricochet target/releases/ricochet-linux-aarch64-static
+            echo "Building static aarch64-musl..."
+            rustup target add aarch64-unknown-linux-musl 2>/dev/null || true
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc
+            export CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc
+            cargo build --release --bin ricochet --target aarch64-unknown-linux-musl
+            cp target/aarch64-unknown-linux-musl/release/ricochet target/releases/ricochet-linux-aarch64-static
             
             echo "All static binaries built successfully!"
             echo "Binaries location:"

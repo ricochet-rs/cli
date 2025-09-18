@@ -17,8 +17,8 @@ matrix:
     #   OUTPUT: macos-x64
     # - TARGET: aarch64-apple-darwin
     #   OUTPUT: macos-arm64
-    # - TARGET: x86_64-pc-windows-gnu
-    #   OUTPUT: windows-x64
+    - TARGET: x86_64-pc-windows-gnu
+      OUTPUT: windows-x64
 
 steps:
   build:
@@ -28,7 +28,7 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu tree git libreadline-dev
+      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git
 
       # Configure git authentication for private dependencies
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
