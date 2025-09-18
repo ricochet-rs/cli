@@ -43,7 +43,6 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apt update && apt-get install -y cmake git
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
       # git auth

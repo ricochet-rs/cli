@@ -1,9 +1,7 @@
-// Direct integration with ricochet-ui styles
-// This module provides HTML pages that use the exact same CSS as ricochet-ui
+// HTML pages for OAuth authentication callbacks
 
-// Include the CSS files at compile time if available
-const THEME_CSS: &str = include_str!("../../../ricochet/ricochet-ui/style/theme.css");
-const BASECOAT_CSS: &str = include_str!("../../../ricochet/ricochet-ui/style/basecoat.css");
+// Include CSS from ricochet-ui at compile time via build script
+const RICOCHET_UI_CSS: &str = include_str!(env!("RICOCHET_UI_CSS_PATH"));
 
 pub fn create_success_page() -> String {
     format!(
@@ -14,10 +12,7 @@ pub fn create_success_page() -> String {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Success - Ricochet CLI</title>
     <style>
-        /* Include ricochet-ui theme */
-        {}
-
-        /* Include basecoat styles */
+        /* Include ricochet-ui styles */
         {}
 
         /* Page-specific styles */
@@ -114,7 +109,7 @@ pub fn create_success_page() -> String {
     </div>
 </body>
 </html>"#,
-        THEME_CSS, BASECOAT_CSS
+        RICOCHET_UI_CSS
     )
 }
 
@@ -127,7 +122,6 @@ pub fn create_error_page(error: &str) -> String {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Error - Ricochet CLI</title>
     <style>
-        {}
         {}
 
         .auth-container {{
@@ -209,7 +203,8 @@ pub fn create_error_page(error: &str) -> String {
     </div>
 </body>
 </html>"#,
-        THEME_CSS, BASECOAT_CSS, error
+        RICOCHET_UI_CSS,
+        html_escape::encode_text(error)
     )
 }
 
@@ -222,7 +217,6 @@ pub fn create_session_page() -> String {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Success - Ricochet CLI</title>
     <style>
-        {}
         {}
 
         .auth-container {{
@@ -306,6 +300,6 @@ pub fn create_session_page() -> String {
     </div>
 </body>
 </html>"#,
-        THEME_CSS, BASECOAT_CSS
+        RICOCHET_UI_CSS
     )
 }
