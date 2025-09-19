@@ -43,18 +43,25 @@ build target="":
         echo "Building for {{target}}..."
         rustup target add {{target}} 2>/dev/null || true
 
+        if [ "{{target}}" = "aarch64-apple-darwin" ]; then
+            export CC=oa64-clang
+            export CXX=oa64-clang++
+        fi
+
         echo "CC: $CC"
         echo "CXX: $CXX"
-        export CC_x86_64_apple_darwin=x86_64-apple-darwin24.5-clang
-        export CXX_x86_64_apple_darwin=x86_64-apple-darwin24.5-clang++
-        export AR_x86_64_apple_darwin=x86_64-apple-darwin24.5-ar
-        export CC_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang
-        export CXX_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang++
-        export AR_aarch64_apple_darwin=aarch64-apple-darwin24.5-ar
+        # export CC_x86_64_apple_darwin=x86_64-apple-darwin24.5-clang
+        # export CXX_x86_64_apple_darwin=x86_64-apple-darwin24.5-clang++
+        # export AR_x86_64_apple_darwin=x86_64-apple-darwin24.5-ar
+        # export CC_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang
+        # export CXX_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang++
+        # export AR_aarch64_apple_darwin=aarch64-apple-darwin24.5-ar
 
         export LIBSQLITE3_SYS_BUNDLED=1
         export LIBZ_SYS_STATIC=1
+        export TARGET={{target}}
 
+        echo "Running 'cargo build --release --bin ricochet --target {{target}}'"
         cargo build --release --bin ricochet --target {{target}}
         echo "✓ Build complete: target/{{target}}/release/ricochet"
     fi

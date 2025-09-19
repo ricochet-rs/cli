@@ -19,8 +19,8 @@ matrix:
       # IMAGE: reg.devxy.io/docker.io/library/rust:1.89-slim
     - TARGET: x86_64-apple-darwin
       IMAGE: reg.devxy.io/devxy/rust-osxcross:15.5-debian
-    - TARGET: aarch64-apple-darwin
-      IMAGE: reg.devxy.io/devxy/rust-osxcross:15.5-debian
+    # - TARGET: aarch64-apple-darwin
+      # IMAGE: reg.devxy.io/devxy/rust-osxcross:15.5-debian
 
 steps:
   build:
