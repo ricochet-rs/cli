@@ -52,6 +52,9 @@ build target="":
         export CXX_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang++
         export AR_aarch64_apple_darwin=aarch64-apple-darwin24.5-ar
 
+        export LIBSQLITE3_SYS_BUNDLED=1
+        export LIBZ_SYS_STATIC=1
+
         cargo build --release --bin ricochet --target {{target}}
         echo "✓ Build complete: target/{{target}}/release/ricochet"
     fi
