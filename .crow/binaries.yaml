@@ -31,7 +31,7 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git mingw-w64 file zip
+      # - apt-get update && apt-get install -y just pkg-config libssl-dev curl wget build-essential gcc-aarch64-linux-gnu musl-tools musl-dev tree git mingw-w64 file zip
 
       # Configure git authentication for private dependencies
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"

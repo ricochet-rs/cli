@@ -58,6 +58,7 @@ build target="":
         # export AR_aarch64_apple_darwin=aarch64-apple-darwin24.5-ar
 
         export LIBSQLITE3_SYS_BUNDLED=1
+        export SQLITE3_STATIC=1
         export LIBZ_SYS_STATIC=1
         export TARGET={{target}}
 

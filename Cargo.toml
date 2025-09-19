@@ -42,9 +42,9 @@ ricochet-ui = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "f
 
 # Direct dependency to control SQLite build configuration
 # Use bundled for all targets to ensure consistent behavior
-[dependencies.libsqlite3-sys]
-version = "0.28.0"
-features = ["bundled"]
+# [dependencies.libsqlite3-sys]
+# version = "0.28.0"
+# features = ["bundled"]
 
 [dev-dependencies]
 mockito = "1.5"
