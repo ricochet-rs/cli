@@ -8,21 +8,24 @@ labels:
 
 matrix:
   include:
-    - TARGET: x86_64-unknown-linux-gnu
-      OUTPUT: linux-x64
-    - TARGET: aarch64-unknown-linux-gnu
-      OUTPUT: linux-aarch64
-    - TARGET: x86_64-pc-windows-gnu
-      OUTPUT: windows-x64
-    # Enable these when cross-compilation is properly configured
-    # - TARGET: x86_64-apple-darwin
-    #   OUTPUT: macos-x64
-    # - TARGET: aarch64-apple-darwin
-    #   OUTPUT: macos-arm64
+    # - TARGET: x86_64-unknown-linux-gnu
+      # OUTPUT: linux-x64
+      # IMAGE: reg.devxy.io/docker.io/library/rust:1.89-slim
+    # - TARGET: aarch64-unknown-linux-gnu
+      # OUTPUT: linux-aarch64
+      # IMAGE: reg.devxy.io/docker.io/library/rust:1.89-slim
+    # - TARGET: x86_64-pc-windows-gnu
+      # OUTPUT: windows-x64
+      # IMAGE: reg.devxy.io/docker.io/library/rust:1.89-slim
+    - TARGET: x86_64-apple-darwin
+      IMAGE: reg.devxy.io/devxy/rust-osxcross:15.5-debian
+    - TARGET: aarch64-apple-darwin
+      IMAGE: reg.devxy.io/devxy/rust-osxcross:15.5-debian
 
 steps:
   build:
-    image: reg.devxy.io/docker.io/library/rust:1.89-slim
+    image: ${IMAGE}
+    pull: true
     environment:
       SQLX_OFFLINE: true
       GITHUB_TOKEN:
@@ -34,32 +37,10 @@ steps:
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
 
       # Build static version for each target
-      - |
-        mkdir -p target/releases
-        case "$TARGET" in
-          *linux*)
-            echo "Building static Linux version for $TARGET..."
-            case "$TARGET" in
-              x86_64-unknown-linux-gnu)
-                just build-static x86_64
-                ;;
-              aarch64-unknown-linux-gnu)
-                just build-static aarch64
-                ;;
-            esac
-            ;;
-          *windows*)
-            echo "Building static Windows version for $TARGET..."
-            just build-static windows-x64
-            ;;
-          *)
-            echo "Unknown target type: $TARGET"
-            ;;
-        esac
+      - just build $TARGET
 
       # Show what we built
       - ls -la target/releases/ || echo "No files in target/releases yet"
-      - find target -name "ricochet*" -type f 2>/dev/null | head -20
 
       # Prepare versioned binaries for upload
       - |
@@ -67,39 +48,7 @@ steps:
         if [ -n "${CI_COMMIT_TAG:-}" ]; then
           VERSION="$CI_COMMIT_TAG"
         else
-          # Try multiple methods to get git hash
-          SHORT_HASH=""
-
-          # Method 1: Use Woodpecker/Drone CI environment variables FIRST (most reliable in CI)
-          if [ -n "${CI_COMMIT_SHA:-}" ]; then
-            SHORT_HASH=$(echo "$CI_COMMIT_SHA" | cut -c1-8)
-            echo "Got hash from CI_COMMIT_SHA: $SHORT_HASH"
-          elif [ -n "${CI_COMMIT_SHORT_SHA:-}" ]; then
-            SHORT_HASH="$CI_COMMIT_SHORT_SHA"
-            echo "Got hash from CI_COMMIT_SHORT_SHA: $SHORT_HASH"
-          elif [ -n "${DRONE_COMMIT_SHA:-}" ]; then
-            SHORT_HASH=$(echo "$DRONE_COMMIT_SHA" | cut -c1-8)
-            echo "Got hash from DRONE_COMMIT_SHA: $SHORT_HASH"
-          elif [ -n "${CI_BUILD_COMMIT:-}" ]; then
-            SHORT_HASH=$(echo "$CI_BUILD_COMMIT" | cut -c1-8)
-            echo "Got hash from CI_BUILD_COMMIT: $SHORT_HASH"
-          fi
-
-          # Method 2: Try git command if CI vars failed
-          if [ -z "$SHORT_HASH" ] && command -v git >/dev/null 2>&1; then
-            if [ -d .git ] || git rev-parse --git-dir >/dev/null 2>&1; then
-              SHORT_HASH=$(git rev-parse --short HEAD 2>/dev/null || true)
-              [ -n "$SHORT_HASH" ] && echo "Got hash from git: $SHORT_HASH"
-            fi
-          fi
-
-          # Method 3: Fallback to 'dev'
-          if [ -z "$SHORT_HASH" ]; then
-            echo "WARNING: Could not determine git hash, using 'dev'"
-            SHORT_HASH="dev"
-          fi
-
-          VERSION="$(date +%Y-%m-%d)-${SHORT_HASH}"
+          VERSION="$(date +%Y-%m-%d)-${CI_COMMIT_SHA:0:8}"
         fi
 
         echo "Using version: $VERSION"
@@ -107,17 +56,17 @@ steps:
         mkdir -p "$outdir"
 
         # Copy and rename binary files with version
-        case "$TARGET" in
-          x86_64-unknown-linux-gnu)
-            cp target/releases/ricochet-linux-x64-static "$outdir/ricochet-$VERSION-linux-x64"
-            ;;
-          aarch64-unknown-linux-gnu)
-            cp target/releases/ricochet-linux-aarch64-static "$outdir/ricochet-$VERSION-linux-aarch64"
-            ;;
-          x86_64-pc-windows-gnu)
-            cp target/releases/ricochet-windows-x64.exe "$outdir/ricochet-$VERSION-windows-x64.exe"
-            ;;
-        esac
+        for file in target/$TARGET/release/*; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            arch=$(echo "$filename" | sed 's/^ricochet-//')
+
+            new_name="ricochet-$VERSION-$arch"
+            mv "$file" "$outdir/$new_name"
+            echo "Moved: $filename -> $new_name"
+          fi
+        done
+
         echo "Static binary prepared in: $outdir/"
         ls -la "$outdir/"
 
