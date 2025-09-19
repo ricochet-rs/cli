@@ -42,14 +42,16 @@ build target="":
     else
         echo "Building for {{target}}..."
         rustup target add {{target}} 2>/dev/null || true
+
         echo "CC: $CC"
         echo "CXX: $CXX"
-        export CC_x86_64_apple_darwin=o64-clang
-        export CXX_x86_64_apple_darwin=o64-clang++
-        export AR_x86_64_apple_darwin=o64-ar
-        export CC_aarch64_apple_darwin=o64-clang
-        export CXX_aarch64_apple_darwin=o64-clang++
-        export AR_aarch64_apple_darwin=o64-ar
+        export CC_x86_64_apple_darwin=x86_64-apple-darwin24.5-clang
+        export CXX_x86_64_apple_darwin=x86_64-apple-darwin24.5-clang++
+        export AR_x86_64_apple_darwin=x86_64-apple-darwin24.5-ar
+        export CC_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang
+        export CXX_aarch64_apple_darwin=aarch64-apple-darwin24.5-clang++
+        export AR_aarch64_apple_darwin=aarch64-apple-darwin24.5-ar
+
         cargo build --release --bin ricochet --target {{target}}
         echo "✓ Build complete: target/{{target}}/release/ricochet"
     fi
