@@ -26,7 +26,7 @@ steps:
         from_secret: s3_secret_key
 
   rust-fmt:
-    image: reg.devxy.io/docker.io/library/rust:1.89
+    image: reg.devxy.io/docker.io/library/rust:1.90
     depends_on: cache
     commands:
       - export PATH=".sccache-cache:$PATH"
@@ -36,7 +36,7 @@ steps:
       - sccache --show-stats
 
   rust-lint:
-    image: reg.devxy.io/docker.io/library/rust:1.89
+    image: reg.devxy.io/docker.io/library/rust:1.90
     depends_on: cache
     environment:
       SQLX_OFFLINE: true

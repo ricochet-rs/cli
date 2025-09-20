@@ -17,7 +17,7 @@ matrix:
 
 steps:
   build:
-    image: reg.devxy.io/docker.io/library/rust:1.89-slim
+    image: reg.devxy.io/docker.io/library/rust:1.90-slim
     environment:
       SQLX_OFFLINE: true
       GITHUB_TOKEN:
