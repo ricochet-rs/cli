@@ -113,7 +113,7 @@ cli-cross-build-all:
     @ls -lh target/releases/
 
 
-move-cli-local:
+move-cli-local: cli-build
     sudo cp target/release/ricochet ~/.local/bin/ricochet-dev
 
 # generate CLI documentation
