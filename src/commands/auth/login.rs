@@ -33,7 +33,7 @@ pub(crate) struct ApiKeyResponse {
 }
 
 pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
-    println!("🔐 Authenticating with Ricochet...\n");
+    println!("🔐 Authenticating against ricochet server\n");
 
     // First check if API key is set via environment variable
     if let Ok(env_key) = std::env::var("RICOCHET_API_KEY")
@@ -434,5 +434,3 @@ pub fn logout(config: &mut Config) -> Result<()> {
     );
     Ok(())
 }
-
-

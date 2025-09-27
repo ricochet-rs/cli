@@ -51,6 +51,16 @@ impl RicochetClient {
             anyhow::bail!("Request failed with status {}: {}", status, error_text)
         }
     }
+    
+    fn mask_api_key(key: &str) -> String {
+        if key.is_empty() {
+            "No API key provided".to_string()
+        } else if key.len() > 12 {
+            format!("{}...{}", &key[..8], &key[key.len().saturating_sub(4)..])
+        } else {
+            "***".to_string()
+        }
+    }
 
     pub async fn validate_key(&self) -> Result<bool> {
         let url = format!("{}/api/v0/check_key", self.base_url);
@@ -73,41 +83,56 @@ impl RicochetClient {
             .send()
             .await?;
 
-        Self::handle_response(response).await
+        match Self::handle_response(response).await {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                // Check if this is an authentication error
+                if e.to_string().contains("403") && e.to_string().contains("Invalid API key") {
+                    let masked_key = Self::mask_api_key(&self.api_key);
+                    anyhow::bail!("Authentication failed. API key used: {}", masked_key)
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     pub async fn deploy(
         &self,
         path: &Path,
-        name: Option<String>,
-        description: Option<String>,
+        content_id: Option<String>,
+        toml_path: &Path,
     ) -> Result<serde_json::Value> {
         let url = format!("{}/api/v0/content/upload", self.base_url);
 
-        // Check if path is a directory or a bundle
-        let file = if path.is_dir() {
-            // Create a tar bundle from the directory
-            let tar_path =
-                std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
-            crate::utils::create_bundle(path, &tar_path)?;
-            tokio::fs::File::open(&tar_path).await?
-        } else {
-            tokio::fs::File::open(path).await?
-        };
-
-        let file_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file));
+        // Create a tar bundle from the directory
+        let tar_path =
+            std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
+        crate::utils::create_bundle(path, &tar_path)?;
+        
+        let bundle_file = tokio::fs::File::open(&tar_path).await?;
+        let bundle_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(bundle_file));
 
         let mut form = reqwest::multipart::Form::new().part(
-            "file",
-            reqwest::multipart::Part::stream(file_body)
-                .file_name(path.file_name().unwrap().to_string_lossy().to_string()),
+            "bundle",
+            reqwest::multipart::Part::stream(bundle_body)
+                .file_name("bundle.tar.gz")
+                .mime_str("application/x-tar")?,
         );
 
-        if let Some(name) = name {
-            form = form.text("name", name);
-        }
-        if let Some(description) = description {
-            form = form.text("description", description);
+        if let Some(id) = content_id {
+            // Updating existing content
+            form = form.text("id", id);
+        } else {
+            // Creating new content - include the config file
+            let toml_file = tokio::fs::File::open(toml_path).await?;
+            let toml_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
+            form = form.part(
+                "config",
+                reqwest::multipart::Part::stream(toml_body)
+                    .file_name("_ricochet.toml")
+                    .mime_str("application/toml")?,
+            );
         }
 
         let response = self
@@ -118,7 +143,18 @@ impl RicochetClient {
             .send()
             .await?;
 
-        Self::handle_response(response).await
+        match Self::handle_response(response).await {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                // Check if this is an authentication error
+                if e.to_string().contains("403") && e.to_string().contains("Invalid API key") {
+                    let masked_key = Self::mask_api_key(&self.api_key);
+                    anyhow::bail!("Authentication failed. API key used: {}", masked_key)
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     pub async fn get_status(&self, id: &str) -> Result<serde_json::Value> {
