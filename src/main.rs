@@ -10,11 +10,11 @@ struct Cli {
     command: Commands,
 
     /// Server URL (can also be set with RICOCHET_SERVER environment variable)
-    #[arg(global = true, long, env = "RICOCHET_SERVER")]
+    #[arg(global = true, short = 'S', long, env = "RICOCHET_SERVER")]
     server: Option<String>,
 
     /// Output format
-    #[arg(global = true, long, default_value = "table", value_enum)]
+    #[arg(global = true, short = 'F', long, default_value = "table", value_enum)]
     format: OutputFormat,
 }
 
@@ -23,7 +23,7 @@ enum Commands {
     /// Authenticate with the Ricochet server
     Login {
         /// API key (can also be provided interactively)
-        #[arg(long)]
+        #[arg(short = 'k', long)]
         api_key: Option<String>,
     },
     /// Remove stored credentials
@@ -34,20 +34,24 @@ enum Commands {
         #[arg(default_value = ".")]
         path: std::path::PathBuf,
         /// Name for the deployment
-        #[arg(long)]
+        #[arg(short = 'n', long)]
         name: Option<String>,
         /// Description for the deployment
-        #[arg(long)]
+        #[arg(short = 'd', long)]
         description: Option<String>,
     },
     /// List all content items
     List {
         /// Filter by content type
-        #[arg(long)]
+        #[arg(short = 't', long)]
         content_type: Option<String>,
-        /// Show only active deployments
-        #[arg(long)]
+        /// Show only active deployments (status: deployed, running, or success)
+        #[arg(short = 'a', long)]
         active_only: bool,
+        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
+        /// Prefix with '-' for descending order (e.g., "-updated,name")
+        #[arg(short = 's', long)]
+        sort: Option<String>,
     },
     /// Get status of a content item
     Status {
@@ -59,7 +63,7 @@ enum Commands {
         /// Content item ID (ULID)
         id: String,
         /// Parameters as JSON
-        #[arg(long)]
+        #[arg(short = 'p', long)]
         params: Option<String>,
     },
     /// Stop a running service or invocation
@@ -67,7 +71,7 @@ enum Commands {
         /// Content item ID (ULID)
         id: String,
         /// Instance PID (for services) or invocation ID
-        #[arg(long)]
+        #[arg(short = 'i', long)]
         instance: Option<String>,
     },
     /// Delete a content item
@@ -75,7 +79,7 @@ enum Commands {
         /// Content item ID (ULID)
         id: String,
         /// Skip confirmation
-        #[arg(long)]
+        #[arg(short = 'f', long)]
         force: bool,
     },
     /// Manage content schedules
@@ -83,10 +87,10 @@ enum Commands {
         /// Content item ID (ULID)
         id: String,
         /// Cron expression (e.g., "0 0 * * *" for daily at midnight)
-        #[arg(long)]
+        #[arg(short = 'c', long)]
         cron: Option<String>,
         /// Disable the schedule
-        #[arg(long)]
+        #[arg(short = 'D', long)]
         disable: bool,
     },
     /// Update content settings
@@ -94,13 +98,13 @@ enum Commands {
         /// Content item ID (ULID)
         id: String,
         /// Update settings as JSON
-        #[arg(long)]
+        #[arg(short = 'u', long)]
         update: String,
     },
     /// Show configuration
     Config {
         /// Show full configuration including sensitive values
-        #[arg(long)]
+        #[arg(short = 'A', long)]
         show_all: bool,
     },
     /// Generate markdown documentation (hidden command)
@@ -138,8 +142,9 @@ async fn main() -> Result<()> {
         Commands::List {
             content_type,
             active_only,
+            sort,
         } => {
-            commands::list::list(&config, content_type, active_only, cli.format).await?;
+            commands::list::list(&config, content_type, active_only, sort, cli.format).await?;
         }
         Commands::Status { id } => {
             commands::status::status(&config, &id, cli.format).await?;

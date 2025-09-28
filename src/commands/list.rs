@@ -2,11 +2,48 @@ use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
 use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
+use std::cmp::Ordering;
+
+// Helper function to compare items by a specific field
+fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -> Ordering {
+    let a_val = match field {
+        "status" => a.get("status")
+            .or_else(|| a.get("deployment_status"))
+            .or_else(|| a.get("last_deployment_status")),
+        _ => a.get(field),
+    };
+    
+    let b_val = match field {
+        "status" => b.get("status")
+            .or_else(|| b.get("deployment_status"))
+            .or_else(|| b.get("last_deployment_status")),
+        _ => b.get(field),
+    };
+
+    match (a_val, b_val) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater, // None values sort last
+        (Some(_), None) => Ordering::Less,
+        (Some(a), Some(b)) => {
+            // Try to compare as strings
+            if let (Some(a_str), Some(b_str)) = (a.as_str(), b.as_str()) {
+                a_str.to_lowercase().cmp(&b_str.to_lowercase())
+            } else if let (Some(a_num), Some(b_num)) = (a.as_f64(), b.as_f64()) {
+                // Try to compare as numbers
+                a_num.partial_cmp(&b_num).unwrap_or(Ordering::Equal)
+            } else {
+                // Fall back to string representation
+                a.to_string().cmp(&b.to_string())
+            }
+        }
+    }
+}
 
 pub async fn list(
     config: &Config,
     content_type: Option<String>,
     active_only: bool,
+    sort_fields: Option<String>,
     format: OutputFormat,
 ) -> Result<()> {
     let client = RicochetClient::new(config)?;
@@ -29,14 +66,45 @@ pub async fn list(
         .filter(|item| {
             if active_only {
                 item.get("status")
+                    .or_else(|| item.get("deployment_status"))
+                    .or_else(|| item.get("last_deployment_status"))
                     .and_then(|v| v.as_str())
-                    .map(|s| s == "deployed" || s == "running")
+                    .map(|s| s == "deployed" || s == "running" || s == "success")
                     .unwrap_or(false)
             } else {
                 true
             }
         })
         .collect();
+
+    // Apply sorting if requested
+    let mut sorted_items = filtered_items;
+    if let Some(sort_str) = sort_fields {
+        // Parse sort fields (comma-separated, prefix with - for descending)
+        let sort_specs: Vec<(String, bool)> = sort_str
+            .split(',')
+            .map(|s| {
+                let s = s.trim();
+                if let Some(field) = s.strip_prefix('-') {
+                    (field.to_lowercase(), false) // descending
+                } else {
+                    (s.to_lowercase(), true) // ascending
+                }
+            })
+            .collect();
+
+        sorted_items.sort_by(|a, b| {
+            for (field, ascending) in &sort_specs {
+                let cmp = compare_by_field(a, b, field);
+                if cmp != Ordering::Equal {
+                    return if *ascending { cmp } else { cmp.reverse() };
+                }
+            }
+            Ordering::Equal
+        });
+    }
+
+    let filtered_items = sorted_items;
 
     match format {
         OutputFormat::Json => {

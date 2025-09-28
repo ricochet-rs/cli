@@ -51,6 +51,7 @@ mod list_tests {
             &config,
             None,
             false,
+            None, // no sorting
             ricochet_cli::OutputFormat::Json,
         )
         .await;
@@ -95,6 +96,7 @@ mod list_tests {
             &config,
             None,
             false,
+            None, // no sorting
             ricochet_cli::OutputFormat::Table,
         )
         .await;
@@ -150,6 +152,7 @@ mod list_tests {
             &config,
             Some("shiny".to_string()),
             false,
+            None, // no sorting
             ricochet_cli::OutputFormat::Json,
         )
         .await;
@@ -161,6 +164,7 @@ mod list_tests {
             &config,
             None,
             true,
+            None, // no sorting
             ricochet_cli::OutputFormat::Json,
         )
         .await;
@@ -192,6 +196,7 @@ mod list_tests {
             &config,
             None,
             false,
+            None, // no sorting
             ricochet_cli::OutputFormat::Table,
         )
         .await;
