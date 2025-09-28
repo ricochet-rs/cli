@@ -114,6 +114,10 @@ pub async fn list(
             println!("{}", serde_yaml::to_string(&filtered_items)?);
         }
         OutputFormat::Table => {
+            // Display server name in italics above the table
+            let server_url = config.server_url()?;
+            println!("{}", server_url.italic().dimmed());
+            
             if filtered_items.is_empty() {
                 println!("{}", "No content items found".yellow());
                 return Ok(());
