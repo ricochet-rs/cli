@@ -10,11 +10,11 @@ struct Cli {
     command: Commands,
 
     /// Server URL (can also be set with RICOCHET_SERVER environment variable)
-    #[arg(global = true, short = 'S', long, env = "RICOCHET_SERVER")]
+    #[arg(global = true, short = 'S', long, env = "RICOCHET_SERVER", help_heading = "Global Options")]
     server: Option<String>,
 
     /// Output format
-    #[arg(global = true, short = 'F', long, default_value = "table", value_enum)]
+    #[arg(global = true, short = 'F', long, default_value = "table", value_enum, help_heading = "Global Options")]
     format: OutputFormat,
 }
 
