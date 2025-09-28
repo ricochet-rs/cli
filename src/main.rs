@@ -31,6 +31,7 @@ enum Commands {
     /// Deploy content to the server
     Deploy {
         /// Path to the content directory or bundle
+        #[arg(default_value = ".")]
         path: std::path::PathBuf,
         /// Name for the deployment
         #[arg(long)]

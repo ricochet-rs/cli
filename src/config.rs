@@ -59,9 +59,9 @@ impl Config {
     }
 
     pub fn api_key(&self) -> Result<String> {
-        self.api_key
-            .clone()
-            .or_else(|| std::env::var("RICOCHET_API_KEY").ok())
+        std::env::var("RICOCHET_API_KEY")
+            .ok()
+            .or_else(|| self.api_key.clone())
             .context("No API key configured. Use 'ricochet login' to authenticate")
     }
 }
