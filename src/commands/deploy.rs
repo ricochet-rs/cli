@@ -40,7 +40,7 @@ pub async fn deploy(
     // Read and parse _ricochet.toml
     let toml_content = std::fs::read_to_string(&toml_path)?;
     let mut ricochet_toml: RicochetToml = toml::from_str(&toml_content)?;
-    
+
     let content_id = ricochet_toml.content.id.clone();
     let content_type = ricochet_toml.content.content_type.clone();
 
@@ -49,7 +49,7 @@ pub async fn deploy(
     }
 
     if let Some(ref id) = content_id {
-        println!("📦 Creating new deployment for item: {}\n", id.bright_cyan());
+        println!("📦 Creating new deployment for content item: {}\n", id.bright_cyan());
     } else if let Some(ref ctype) = content_type {
         println!("📦 Deploying new {} content item\n", ctype.bright_cyan());
     } else {
@@ -74,32 +74,29 @@ pub async fn deploy(
 
             if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
                 println!("{} Deployment successful!", "✓".green().bold());
-                println!("\nContent ID: {}", id.bright_cyan());
 
                 // Update _ricochet.toml with the content ID if it's a new deployment
                 if content_id.is_none() {
                     ricochet_toml.content.id = Some(id.to_string());
                     let updated_toml = toml::to_string_pretty(&ricochet_toml)?;
                     std::fs::write(&toml_path, updated_toml)?;
-                    println!("Updated _ricochet.toml with content ID");
                 }
 
-                if let Some(name) = response.get("name").and_then(|v| v.as_str()) {
-                    println!("Name: {}", name);
+                // Get server URL and construct links
+                let server_url = config.server_url()?;
+                let base_url = server_url.trim_end_matches('/');
+
+                println!("\n{}", "Links:".bold());
+
+                // Show deployment link if deployment_id is available
+                if let Some(deployment_id) = response.get("deployment_id")
+                    .or_else(|| response.get("deploymentId"))
+                    .and_then(|v| v.as_str()) {
+                    println!("  Deployment: {}/deployments/{}", base_url, deployment_id);
                 }
 
-                if let Some(content_type) = response.get("content_type").and_then(|v| v.as_str()) {
-                    println!("Type: {}", content_type);
-                }
-
-                if let Some(status) = response.get("status").and_then(|v| v.as_str()) {
-                    let status_colored = match status {
-                        "deployed" => status.green(),
-                        "failed" => status.red(),
-                        _ => status.yellow(),
-                    };
-                    println!("Status: {}", status_colored);
-                }
+                // Show app overview link
+                println!("  App Overview: {}/apps/{}/overview", base_url, id);
             } else {
                 println!("{} Deployment successful!", "✓".green().bold());
                 println!("\n{}", serde_json::to_string_pretty(&response)?);
