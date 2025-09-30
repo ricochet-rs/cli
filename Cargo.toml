@@ -36,9 +36,9 @@ urlencoding = "2.1"
 unicode-icons = "2.0"
 html-escape = "0.2"
 
-ricochet-core = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
-ricochet-auth = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
-ricochet-ui = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
+ricochet-core = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "main" }
+ricochet-auth = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "main" }
+ricochet-ui = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "main" }
 regex = "1.11.3"
 
 [dev-dependencies]
