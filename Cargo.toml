@@ -39,6 +39,7 @@ html-escape = "0.2"
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
 ricochet-auth = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
 ricochet-ui = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "feat/oauth-callback" }
+regex = "1.11.3"
 
 [dev-dependencies]
 mockito = "1.5"

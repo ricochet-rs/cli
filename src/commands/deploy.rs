@@ -39,7 +39,7 @@ pub async fn deploy(
 
     // Read and parse _ricochet.toml
     let toml_content = std::fs::read_to_string(&toml_path)?;
-    let mut ricochet_toml: RicochetToml = toml::from_str(&toml_content)?;
+    let ricochet_toml: RicochetToml = toml::from_str(&toml_content)?;
 
     let content_id = ricochet_toml.content.id.clone();
     let content_type = ricochet_toml.content.content_type.clone();
@@ -77,9 +77,23 @@ pub async fn deploy(
 
                 // Update _ricochet.toml with the content ID if it's a new deployment
                 if content_id.is_none() {
-                    ricochet_toml.content.id = Some(id.to_string());
-                    let updated_toml = toml::to_string_pretty(&ricochet_toml)?;
-                    std::fs::write(&toml_path, updated_toml)?;
+                    // Read the original file content
+                    let original_content = std::fs::read_to_string(&toml_path)?;
+                    
+                    // Find the [content] section and add/update the id field
+                    let updated_content = if original_content.contains("id =") {
+                        // Replace existing id field
+                        use regex::Regex;
+                        let re = Regex::new(r#"(?m)^(\s*)id\s*=\s*.*$"#)?;
+                        re.replace(&original_content, format!("${{1}}id = \"{}\"", id)).to_string()
+                    } else {
+                        // Add id field after [content] section
+                        use regex::Regex;
+                        let re = Regex::new(r#"(?m)^\[content\]$"#)?;
+                        re.replace(&original_content, format!("[content]\nid = \"{}\"", id)).to_string()
+                    };
+                    
+                    std::fs::write(&toml_path, updated_content)?;
                 }
 
                 // Get server URL and construct links
