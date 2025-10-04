@@ -55,7 +55,7 @@ steps:
         ls -la "$outdir/"
 
   "Upload to S3":
-    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.1
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
     settings:
       bucket: ricochet-cli
       region: hel1
