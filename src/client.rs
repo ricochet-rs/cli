@@ -239,7 +239,7 @@ impl RicochetClient {
     }
 
     pub async fn delete(&self, id: &str) -> Result<()> {
-        let url = format!("{}/api/v0/admin/delete/{}", self.base_url, id);
+        let url = format!("{}/api/v0/content/{}", self.base_url, id);
 
         let response = self
             .client
