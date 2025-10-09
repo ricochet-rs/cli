@@ -59,4 +59,5 @@ steps:
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
+      - apt update && apt install -y just
       - just docs-check
