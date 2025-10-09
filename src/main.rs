@@ -53,27 +53,6 @@ enum Commands {
         #[arg(short = 's', long)]
         sort: Option<String>,
     },
-    /// Get status of a content item
-    Status {
-        /// Content item ID (ULID)
-        id: String,
-    },
-    /// Invoke a content item
-    Invoke {
-        /// Content item ID (ULID)
-        id: String,
-        /// Parameters as JSON
-        #[arg(short = 'p', long)]
-        params: Option<String>,
-    },
-    /// Stop a running service or invocation
-    Stop {
-        /// Content item ID (ULID)
-        id: String,
-        /// Instance PID (for services) or invocation ID
-        #[arg(short = 'i', long)]
-        instance: Option<String>,
-    },
     /// Delete a content item
     Delete {
         /// Content item ID (ULID)
@@ -81,25 +60,6 @@ enum Commands {
         /// Skip confirmation
         #[arg(short = 'f', long)]
         force: bool,
-    },
-    /// Manage content schedules
-    Schedule {
-        /// Content item ID (ULID)
-        id: String,
-        /// Cron expression (e.g., "0 0 * * *" for daily at midnight)
-        #[arg(short = 'c', long)]
-        cron: Option<String>,
-        /// Disable the schedule
-        #[arg(short = 'D', long)]
-        disable: bool,
-    },
-    /// Update content settings
-    Settings {
-        /// Content item ID (ULID)
-        id: String,
-        /// Update settings as JSON
-        #[arg(short = 'u', long)]
-        update: String,
     },
     /// Show configuration
     Config {
@@ -146,23 +106,8 @@ async fn main() -> Result<()> {
         } => {
             commands::list::list(&config, content_type, active_only, sort, cli.format).await?;
         }
-        Commands::Status { id } => {
-            commands::status::status(&config, &id, cli.format).await?;
-        }
-        Commands::Invoke { id, params } => {
-            commands::invoke::invoke(&config, &id, params).await?;
-        }
-        Commands::Stop { id, instance } => {
-            commands::stop::stop(&config, &id, instance).await?;
-        }
         Commands::Delete { id, force } => {
             commands::delete::delete(&config, &id, force).await?;
-        }
-        Commands::Schedule { id, cron, disable } => {
-            commands::schedule::update(&config, &id, cron, disable).await?;
-        }
-        Commands::Settings { id, update } => {
-            commands::settings::update(&config, &id, &update).await?;
         }
         Commands::Config { show_all } => {
             commands::config::show(&config, show_all)?;
