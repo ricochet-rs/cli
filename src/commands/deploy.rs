@@ -7,10 +7,12 @@ use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct RicochetToml {
+    #[serde(default)]
     content: ContentSection,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
 struct ContentSection {
     id: Option<String>,
     content_type: Option<String>,
