@@ -5,9 +5,10 @@ use ricochet_cli::{OutputFormat, commands, config::Config};
 #[derive(Parser)]
 #[command(name = "ricochet")]
 #[command(about = "Ricochet CLI", long_about = None)]
+#[command(disable_version_flag = true)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 
     /// Server URL (can also be set with RICOCHET_SERVER environment variable)
     #[arg(global = true, short = 'S', long, env = "RICOCHET_SERVER", help_heading = "Global Options")]
@@ -16,6 +17,10 @@ struct Cli {
     /// Output format
     #[arg(global = true, short = 'F', long, default_value = "table", value_enum, help_heading = "Global Options")]
     format: OutputFormat,
+
+    /// Print version
+    #[arg(short = 'V', long)]
+    version: bool,
 }
 
 #[derive(Subcommand)]
@@ -76,6 +81,23 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Handle version flag
+    if cli.version {
+        let version = env!("CARGO_PKG_VERSION");
+        let git_hash = env!("GIT_HASH");
+        let has_tag = env!("HAS_GIT_TAG");
+        let build_date = env!("BUILD_DATE");
+        
+        if has_tag == "true" || git_hash.is_empty() {
+            // Tagged release or not in git repo - just show version
+            println!("{}", version);
+        } else {
+            // Untagged build - append git hash and build date
+            println!("{}-{} ({})", version, git_hash, build_date);
+        }
+        return Ok(());
+    }
+
     // Load or initialize config
     let mut config = Config::load()?;
 
@@ -86,35 +108,40 @@ async fn main() -> Result<()> {
 
     // Execute command
     match cli.command {
-        Commands::Login { api_key } => {
+        Some(Commands::Login { api_key }) => {
             commands::auth::login(&mut config, api_key).await?;
         }
-        Commands::Logout => {
+        Some(Commands::Logout) => {
             commands::auth::logout(&mut config)?;
         }
-        Commands::Deploy {
+        Some(Commands::Deploy {
             path,
             name,
             description,
-        } => {
+        }) => {
             commands::deploy::deploy(&config, path, name, description).await?;
         }
-        Commands::List {
+        Some(Commands::List {
             content_type,
             active_only,
             sort,
-        } => {
+        }) => {
             commands::list::list(&config, content_type, active_only, sort, cli.format).await?;
         }
-        Commands::Delete { id, force } => {
+        Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, &id, force).await?;
         }
-        Commands::Config { show_all } => {
+        Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
         }
-        Commands::GenerateDocs => {
+        Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
             println!("{}", markdown);
+        }
+        None => {
+            // No command provided, print help
+            use clap::CommandFactory;
+            Cli::command().print_help()?;
         }
     }
 
