@@ -56,9 +56,15 @@ steps:
   check-docs:
     image: reg.ricochet.rs/docker.io/library/rust:1.90
     depends_on: cache
+    environment:
+      SQLX_OFFLINE: true
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       # Build only the lightweight docs generator (no heavy dependencies needed)
       - cargo build --quiet --bin generate-docs
       # Generate new docs using the fast generator

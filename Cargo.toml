@@ -11,7 +11,6 @@ path = "src/main.rs"
 [[bin]]
 name = "generate-docs"
 path = "src/bin/generate-docs.rs"
-required-features = []
 
 [dependencies]
 anyhow = "1.0"
