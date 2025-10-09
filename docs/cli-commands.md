@@ -9,12 +9,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet logout`↴](#ricochet-logout)
 * [`ricochet deploy`↴](#ricochet-deploy)
 * [`ricochet list`↴](#ricochet-list)
-* [`ricochet status`↴](#ricochet-status)
-* [`ricochet invoke`↴](#ricochet-invoke)
-* [`ricochet stop`↴](#ricochet-stop)
 * [`ricochet delete`↴](#ricochet-delete)
-* [`ricochet schedule`↴](#ricochet-schedule)
-* [`ricochet settings`↴](#ricochet-settings)
 * [`ricochet config`↴](#ricochet-config)
 
 ## `ricochet`
@@ -29,18 +24,13 @@ Ricochet CLI
 * `logout` — Remove stored credentials
 * `deploy` — Deploy content to the server
 * `list` — List all content items
-* `status` — Get status of a content item
-* `invoke` — Invoke a content item
-* `stop` — Stop a running service or invocation
 * `delete` — Delete a content item
-* `schedule` — Manage content schedules
-* `settings` — Update content settings
 * `config` — Show configuration
 
 ###### **Options:**
 
-* `--server <SERVER>` — Server URL (can also be set with RICOCHET_SERVER environment variable)
-* `--format <FORMAT>` — Output format
+* `-S`, `--server <SERVER>` — Server URL (can also be set with RICOCHET_SERVER environment variable)
+* `-F`, `--format <FORMAT>` — Output format
 
   Default value: `table`
 
@@ -57,7 +47,7 @@ Authenticate with the Ricochet server
 
 ###### **Options:**
 
-* `--api-key <API_KEY>` — API key (can also be provided interactively)
+* `-k`, `--api-key <API_KEY>` — API key (can also be provided interactively)
 
 
 
@@ -73,16 +63,18 @@ Remove stored credentials
 
 Deploy content to the server
 
-**Usage:** `ricochet deploy [OPTIONS] <PATH>`
+**Usage:** `ricochet deploy [OPTIONS] [PATH]`
 
 ###### **Arguments:**
 
 * `<PATH>` — Path to the content directory or bundle
 
+  Default value: `.`
+
 ###### **Options:**
 
-* `--name <NAME>` — Name for the deployment
-* `--description <DESCRIPTION>` — Description for the deployment
+* `-n`, `--name <NAME>` — Name for the deployment
+* `-d`, `--description <DESCRIPTION>` — Description for the deployment
 
 
 
@@ -94,52 +86,9 @@ List all content items
 
 ###### **Options:**
 
-* `--content-type <CONTENT_TYPE>` — Filter by content type
-* `--active-only` — Show only active deployments
-
-
-
-## `ricochet status`
-
-Get status of a content item
-
-**Usage:** `ricochet status <ID>`
-
-###### **Arguments:**
-
-* `<ID>` — Content item ID (ULID)
-
-
-
-## `ricochet invoke`
-
-Invoke a content item
-
-**Usage:** `ricochet invoke [OPTIONS] <ID>`
-
-###### **Arguments:**
-
-* `<ID>` — Content item ID (ULID)
-
-###### **Options:**
-
-* `--params <PARAMS>` — Parameters as JSON
-
-
-
-## `ricochet stop`
-
-Stop a running service or invocation
-
-**Usage:** `ricochet stop [OPTIONS] <ID>`
-
-###### **Arguments:**
-
-* `<ID>` — Content item ID (ULID)
-
-###### **Options:**
-
-* `--instance <INSTANCE>` — Instance PID (for services) or invocation ID
+* `-t`, `--content-type <CONTENT_TYPE>` — Filter by content type
+* `-a`, `--active-only` — Show only active deployments (status: deployed, running, or success)
+* `-s`, `--sort <SORT>` — Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name") Prefix with '-' for descending order (e.g., "-updated,name")
 
 
 
@@ -155,40 +104,7 @@ Delete a content item
 
 ###### **Options:**
 
-* `--force` — Skip confirmation
-
-
-
-## `ricochet schedule`
-
-Manage content schedules
-
-**Usage:** `ricochet schedule [OPTIONS] <ID>`
-
-###### **Arguments:**
-
-* `<ID>` — Content item ID (ULID)
-
-###### **Options:**
-
-* `--cron <CRON>` — Cron expression (e.g., "0 0 * * *" for daily at midnight)
-* `--disable` — Disable the schedule
-
-
-
-## `ricochet settings`
-
-Update content settings
-
-**Usage:** `ricochet settings --update <UPDATE> <ID>`
-
-###### **Arguments:**
-
-* `<ID>` — Content item ID (ULID)
-
-###### **Options:**
-
-* `--update <UPDATE>` — Update settings as JSON
+* `-f`, `--force` — Skip confirmation
 
 
 
@@ -200,7 +116,7 @@ Show configuration
 
 ###### **Options:**
 
-* `--show-all` — Show full configuration including sensitive values
+* `-A`, `--show-all` — Show full configuration including sensitive values
 
 
 

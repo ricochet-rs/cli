@@ -52,3 +52,11 @@ steps:
       - cargo clippy -q --no-deps
       # - cargo clippy --all-targets --all-features -- -D warnings
       - sccache --show-stats
+
+  check-docs:
+    image: reg.ricochet.rs/docker.io/library/rust:1.90
+    depends_on: cache
+    commands:
+      - export PATH=".sccache-cache:$PATH"
+      - . ./.sccache
+      - just docs-check
