@@ -16,7 +16,7 @@ This document contains the help content for the `ricochet` command-line program.
 
 Ricochet CLI
 
-**Usage:** `ricochet [OPTIONS] <COMMAND>`
+**Usage:** `ricochet [OPTIONS] [COMMAND]`
 
 ###### **Subcommands:**
 
@@ -36,6 +36,7 @@ Ricochet CLI
 
   Possible values: `table`, `json`, `yaml`
 
+* `-V`, `--version` — Print version
 
 
 

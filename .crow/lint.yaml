@@ -55,18 +55,14 @@ steps:
 
   check-docs:
     image: reg.ricochet.rs/docker.io/library/rust:1.90
-    depends_on: rust-lint
-    environment:
-      SQLX_OFFLINE: true
-      GITHUB_TOKEN:
-        from_secret: ricochet_bot_token
+    depends_on: cache
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
-      # git auth
-      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-      # Generate new docs
-      - cargo run --quiet --bin ricochet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
+      # Build only the lightweight docs generator (no heavy dependencies needed)
+      - cargo build --quiet --bin generate-docs
+      # Generate new docs using the fast generator
+      - cargo run --quiet --bin generate-docs > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
       # Check if docs are up-to-date
       - |
         if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then
