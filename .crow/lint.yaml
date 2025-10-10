@@ -49,26 +49,22 @@ steps:
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       - rustup component add clippy
       # Use SQLx offline mode - no database setup needed
-      - cargo clippy -q --no-deps
+      # Use CI profile for faster builds in CI
+      - cargo clippy -q --no-deps --profile ci
       # - cargo clippy --all-targets --all-features -- -D warnings
       - sccache --show-stats
 
   check-docs:
     image: reg.ricochet.rs/docker.io/library/rust:1.90
     depends_on: cache
-    environment:
-      SQLX_OFFLINE: true
-      GITHUB_TOKEN:
-        from_secret: ricochet_bot_token
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
-      # git auth
-      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       # Build only the lightweight docs generator (no heavy dependencies needed)
-      - cargo build --quiet --bin generate-docs
+      # Use CI profile for faster builds
+      - cargo build --quiet --manifest-path docs-generator/Cargo.toml --profile ci
       # Generate new docs using the fast generator
-      - cargo run --quiet --bin generate-docs > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
+      - cargo run --quiet --manifest-path docs-generator/Cargo.toml --profile ci > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
       # Check if docs are up-to-date
       - |
         if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then
