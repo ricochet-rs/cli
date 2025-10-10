@@ -49,8 +49,8 @@ steps:
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       - rustup component add clippy
       # Use SQLx offline mode - no database setup needed
-      # Use CI profile for faster builds in CI
-      - cargo clippy -q --no-deps --profile ci
+      # Use testing profile for faster builds in CI
+      - cargo clippy -q --no-deps --profile testing
       # - cargo clippy --all-targets --all-features -- -D warnings
       - sccache --show-stats
 
@@ -62,9 +62,9 @@ steps:
       - . ./.sccache
       # Build only the lightweight docs generator (no heavy dependencies needed)
       # Use CI profile for faster builds
-      - cargo build --quiet --manifest-path docs-generator/Cargo.toml --profile ci
+      - cargo build --quiet --manifest-path docs-generator/Cargo.toml --profile testing
       # Generate new docs using the fast generator
-      - cargo run --quiet --manifest-path docs-generator/Cargo.toml --profile ci > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
+      - cargo run --quiet --manifest-path docs-generator/Cargo.toml --profile testing > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
       # Check if docs are up-to-date
       - |
         if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then

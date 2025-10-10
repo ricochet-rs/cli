@@ -12,7 +12,7 @@ path = "src/main.rs"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive", "env"] }
 clap-markdown = "0.1"
-reqwest = { version = "0.12", features = ["json", "multipart", "stream", "cookies"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "cookies", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -46,28 +46,23 @@ mockito = "1.5"
 tempfile = "3.8"
 tokio-test = "0.4"
 
-# CI profile: fast compilation, minimal optimization
-# Use with: cargo build --profile ci
-[profile.ci]
+# Testing profile: faster compilation for CI/testing (matches ricochet repo)
+# Use with: cargo build --profile testing
+[profile.testing]
 inherits = "release"
-opt-level = 0          # No optimization for faster compilation
-debug = false          # No debug info to keep binary size reasonable
-strip = true           # Strip symbols
+opt-level = 2          # Some optimization, faster compile than release
 lto = false            # No link-time optimization
-codegen-units = 4     # More units = faster compilation
-incremental = true     # Enable incremental compilation
+strip = false          # Keep symbols for debugging
+debug = 0              # Minimal debug info
 
-# Release profile: full optimization for production builds
+# Release profile: full optimization for production builds (matches ricochet repo)
 # Only used for tagged releases
 [profile.release]
-opt-level = 3          # Maximum optimization
-debug = false          # No debug info
-strip = true           # Strip symbols for smaller binaries
-lto = "thin"           # Thin LTO for better optimization with reasonable compile time
-codegen-units = 1      # Single unit for better optimization
-panic = "abort"        # Smaller binaries, faster execution
-incremental = false    # No incremental for reproducible builds
+lto = true             # Full LTO for maximum optimization
+codegen-units = 1      # Single unit for best optimization
+strip = "symbols"      # Strip symbols for smaller binaries
 
 # Optimize dependencies even in dev mode for better test performance
 [profile.dev.package."*"]
-opt-level = 1
+opt-level = 3
+debug = 2
