@@ -26,7 +26,15 @@ steps:
       - apt-get update && apt-get install -y just pkg-config musl-tools libssl-dev curl wget nodejs build-essential cmake ca-certificates musl-tools musl-dev gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu tree git
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-      - just cli-build-$TARGET
+      # Use release profile for tagged builds, CI profile for others
+      - |
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          echo "Building with release profile for tag: $CI_COMMIT_TAG"
+          just cli-build-$TARGET PROFILE=release
+        else
+          echo "Building with CI profile for faster builds"
+          just cli-build-$TARGET PROFILE=ci
+        fi
       - tree target/binaries/
       - |
         # Determine version string

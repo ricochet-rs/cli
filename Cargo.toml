@@ -45,3 +45,29 @@ regex = "1.11.3"
 mockito = "1.5"
 tempfile = "3.8"
 tokio-test = "0.4"
+
+# CI profile: fast compilation, minimal optimization
+# Use with: cargo build --profile ci
+[profile.ci]
+inherits = "release"
+opt-level = 0          # No optimization for faster compilation
+debug = false          # No debug info to keep binary size reasonable
+strip = true           # Strip symbols
+lto = false            # No link-time optimization
+codegen-units = 4     # More units = faster compilation
+incremental = true     # Enable incremental compilation
+
+# Release profile: full optimization for production builds
+# Only used for tagged releases
+[profile.release]
+opt-level = 3          # Maximum optimization
+debug = false          # No debug info
+strip = true           # Strip symbols for smaller binaries
+lto = "thin"           # Thin LTO for better optimization with reasonable compile time
+codegen-units = 1      # Single unit for better optimization
+panic = "abort"        # Smaller binaries, faster execution
+incremental = false    # No incremental for reproducible builds
+
+# Optimize dependencies even in dev mode for better test performance
+[profile.dev.package."*"]
+opt-level = 1
