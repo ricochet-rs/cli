@@ -11,6 +11,7 @@ check:
     cargo check --all-features --workspace
     cargo fmt --all -- --check
     cargo clippy --all-targets --all-features -- -D warnings
+    just docs-check
 
 # run cargo clippy
 lint:
@@ -122,3 +123,22 @@ docs:
     @mkdir -p docs
     @cargo run --quiet -- generate-docs > docs/cli-commands.md 2>/dev/null
     @echo "✓ Documentation generated: docs/cli-commands.md"
+
+# check if CLI documentation is up-to-date
+docs-check:
+    @echo "Checking if CLI documentation is up-to-date..."
+    @mkdir -p docs
+    @cargo run --quiet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null
+    @if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then \
+        echo "❌ ERROR: CLI documentation is out of date!"; \
+        echo ""; \
+        echo "Run 'just docs' to update the documentation."; \
+        echo ""; \
+        echo "Differences:"; \
+        diff -u docs/cli-commands.md /tmp/cli-commands-generated.md || true; \
+        rm -f /tmp/cli-commands-generated.md; \
+        exit 1; \
+    else \
+        echo "✓ CLI documentation is up-to-date"; \
+        rm -f /tmp/cli-commands-generated.md; \
+    fi

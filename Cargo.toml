@@ -8,6 +8,10 @@ build = "build.rs"
 name = "ricochet"
 path = "src/main.rs"
 
+[[bin]]
+name = "generate-docs"
+path = "src/bin/generate-docs.rs"
+
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive", "env"] }
