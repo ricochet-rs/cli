@@ -121,14 +121,14 @@ move-cli-local: cli-build
 docs:
     @echo "Generating CLI documentation..."
     @mkdir -p docs
-    @cargo run --quiet -- generate-docs > docs/cli-commands.md 2>/dev/null
+    @cargo run --quiet --bin ricochet -- generate-docs > docs/cli-commands.md 2>/dev/null
     @echo "✓ Documentation generated: docs/cli-commands.md"
 
 # check if CLI documentation is up-to-date
 docs-check:
     @echo "Checking if CLI documentation is up-to-date..."
     @mkdir -p docs
-    @cargo run --quiet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null
+    @cargo run --quiet --bin ricochet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null
     @if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then \
         echo "❌ ERROR: CLI documentation is out of date!"; \
         echo ""; \
