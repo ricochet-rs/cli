@@ -24,52 +24,153 @@ lint-fix:
 test:
     cargo test --all-features --workspace
 
-# Build the CLI for current platform
-cli-build PROFILE="release":
+# Build statically linked Linux binaries with glibc and Windows binaries
+# Usage: just build-static [target]
+# Builds fully static Linux binaries that work on any Linux system and Windows executables
+# Examples:
+#   just build-static                    # builds all targets
+#   just build-static x86_64
+#   just build-static aarch64
+#   just build-static riscv64
+#   just build-static windows
+#
+# Prerequisites on Debian/Ubuntu:
+#   apt install gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mingw-w64 pkg-config libssl-dev build-essential
+#   rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64gc-unknown-linux-gnu x86_64-pc-windows-gnu
+build-static target="all":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Use SQLx offline mode to avoid needing database during build
+    export SQLX_OFFLINE=true
+
+    # Determine which profile to use
+    # Use "release" if CI_COMMIT_TAG is set (tagged release), otherwise use "testing"
+    if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        PROFILE="release"
+        echo "Building with 'release' profile (CI_COMMIT_TAG is set)"
+    else
+        PROFILE="testing"
+        echo "Building with 'testing' profile (CI_COMMIT_TAG is not set)"
+    fi
+
+    # Set flags for static linking with glibc
+    # Note: We avoid PIE (Position Independent Executable) for static builds
+    export RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static -C link-arg=-no-pie"
+
+    # Setup cross-compilation for glibc targets
+    export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+    export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+    export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+
+    export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc
+    export CC_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-gcc
+    export AR_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-ar
+
+    # Create output directory
+    mkdir -p target/binaries
+
+    # Function to clean up assets after build
+    cleanup_assets() {
+        if [ -n "${CI:-}" ]; then
+            echo "Cleaning up UI assets and cache (CI environment detected)..."
+            rm -rf ./target/site
+            # Clean incremental compilation cache
+            rm -rf ./target/release/incremental
+            rm -rf ./target/testing/incremental
+            # Clean cargo cache for the profile that was used
+            if [ "$PROFILE" = "release" ]; then
+                cargo clean --release 2>/dev/null || true
+            else
+                cargo clean --profile testing 2>/dev/null || true
+            fi
+            echo "✓ Cleanup complete"
+        fi
+    }
+
+    case "{{target}}" in
+        "x86_64")
+            echo "Building static binary for x86_64-unknown-linux-gnu..."
+            rustup target add x86_64-unknown-linux-gnu || true
+            cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-unknown-linux-gnu
+            cp target/x86_64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-x86_64
+            cleanup_assets
+            echo "✓ Built static x86_64-unknown-linux-gnu successfully"
+            echo "Binary location: target/binaries/ricochet-x86_64"
+            ;;
+        "aarch64")
+            echo "Building static binary for aarch64-unknown-linux-gnu..."
+            rustup target add aarch64-unknown-linux-gnu || true
+            cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-unknown-linux-gnu
+            cp target/aarch64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-aarch64
+            cleanup_assets
+            echo "✓ Built static aarch64-unknown-linux-gnu successfully"
+            echo "Binary location: target/binaries/ricochet-aarch64"
+            ;;
+        "riscv64"|"riscv")
+            echo "Building static binary for riscv64gc-unknown-linux-gnu..."
+            rustup target add riscv64gc-unknown-linux-gnu || true
+            cargo build --profile "$PROFILE" --locked --bin ricochet --target riscv64gc-unknown-linux-gnu
+            cp target/riscv64gc-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-riscv64
+            cleanup_assets
+            echo "✓ Built static riscv64gc-unknown-linux-gnu successfully"
+            echo "Binary location: target/binaries/ricochet-riscv64"
+            ;;
+        "windows"|"win")
+            echo "Building static binary for x86_64-pc-windows-gnu..."
+            rustup target add x86_64-pc-windows-gnu || true
+            # Windows builds use different RUSTFLAGS
+            RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-pc-windows-gnu
+            cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows.exe
+            cleanup_assets
+            echo "✓ Built static x86_64-pc-windows-gnu successfully"
+            echo "Binary location: target/binaries/ricochet-windows.exe"
+            ;;
+        "all")
+            echo "Building static binaries for all Linux targets..."
+
+            echo "Building static x86_64-unknown-linux-gnu..."
+            rustup target add x86_64-unknown-linux-gnu || true
+            cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-unknown-linux-gnu
+            cp target/x86_64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-x86_64
+
+            echo "Building static aarch64-unknown-linux-gnu..."
+            rustup target add aarch64-unknown-linux-gnu || true
+            cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-unknown-linux-gnu
+            cp target/aarch64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-aarch64
+
+            echo "Building static riscv64gc-unknown-linux-gnu..."
+            rustup target add riscv64gc-unknown-linux-gnu || true
+            cargo build --profile "$PROFILE" --locked --bin ricochet --target riscv64gc-unknown-linux-gnu
+            cp target/riscv64gc-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-riscv64
+
+            echo "Building static x86_64-pc-windows-gnu..."
+            rustup target add x86_64-pc-windows-gnu || true
+            RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-pc-windows-gnu
+            cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows.exe
+
+            cleanup_assets
+
+            echo "All static binaries built successfully!"
+            echo "Binaries location:"
+            echo "  - x86_64:  target/binaries/ricochet-x86_64"
+            echo "  - aarch64: target/binaries/ricochet-aarch64"
+            echo "  - riscv64: target/binaries/ricochet-riscv64"
+            echo "  - windows: target/binaries/ricochet-windows.exe"
+            ;;
+        *)
+            echo "Unknown target: {{target}}"
+            echo "Available targets: x86_64, aarch64, riscv64 (or riscv), windows (or win), all"
+            exit 1
+            ;;
+    esac
+
+
+build-local PROFILE="release":
     cargo build --profile {{PROFILE}} --bin ricochet
 
-# Build CLI for Linux x86_64
-cli-build-linux-x64 PROFILE="release":
-    @echo "Building CLI for Linux x86_64 with profile: {{PROFILE}}"
-    rustup target add x86_64-unknown-linux-gnu
-    @mkdir -p target/binaries
-    cargo build --profile {{PROFILE}} --bin ricochet --target x86_64-unknown-linux-gnu
-    @cp target/x86_64-unknown-linux-gnu/{{PROFILE}}/ricochet target/binaries/ricochet-linux-x64
-
-# Build CLI for Linux ARM64
-cli-build-linux-aarch64 PROFILE="release":
-    @echo "Building CLI for Linux aarch64 with profile: {{PROFILE}}"
-    rustup target add aarch64-unknown-linux-gnu
-    @mkdir -p target/binaries
-    cargo build --profile {{PROFILE}} --bin ricochet --target aarch64-unknown-linux-gnu
-    @cp target/aarch64-unknown-linux-gnu/{{PROFILE}}/ricochet target/binaries/ricochet-linux-aarch64
-
-# Build CLI for macOS x86_64
-cli-build-macos-x64 PROFILE="release":
-    @echo "Building CLI for macOS x86_64 with profile: {{PROFILE}}"
-    rustup target add x86_64-apple-darwin
-    @mkdir -p target/binaries
-    cargo build --profile {{PROFILE}} --bin ricochet --target x86_64-apple-darwin
-    @cp target/x86_64-apple-darwin/{{PROFILE}}/ricochet target/binaries/ricochet-macos-x64
-
-# Build CLI for macOS ARM64 (Apple Silicon)
-cli-build-macos-arm64 PROFILE="release":
-    @echo "Building CLI for macOS ARM64 with profile: {{PROFILE}}"
-    rustup target add aarch64-apple-darwin
-    @mkdir -p target/binaries
-    cargo build --profile {{PROFILE}} --bin ricochet --target aarch64-apple-darwin
-    @cp target/aarch64-apple-darwin/{{PROFILE}}/ricochet target/binaries/ricochet-macos-arm64
-
-# Build CLI for Windows
-cli-build-windows-x64 PROFILE="release":
-    @echo "Building CLI for Windows with profile: {{PROFILE}}"
-    rustup target add x86_64-pc-windows-gnu
-    @mkdir -p target/binaries
-    cargo build --profile {{PROFILE}} --bin ricochet --target x86_64-pc-windows-gnu
-    @cp target/x86_64-pc-windows-gnu/{{PROFILE}}/ricochet.exe target/binaries/ricochet-windows.exe
-
 # Move built binary to local bin
-move-cli-local PROFILE="release": (cli-build PROFILE)
+move-cli-local PROFILE="release": (build-local PROFILE)
     sudo cp target/{{PROFILE}}/ricochet ~/.local/bin/ricochet-dev
 
 # generate CLI documentation

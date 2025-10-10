@@ -2,6 +2,7 @@
 name = "ricochet-cli"
 version = "0.1.0"
 edition = "2024"
+resolver = "3"
 build = "build.rs"
 
 [[bin]]
@@ -23,7 +24,7 @@ toml = "0.9"
 dialoguer = "0.12"
 indicatif = "0.18"
 comfy-table = "7.1"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
 colored = "3.0"
 webbrowser = "1.0"
 url = "2.5"
@@ -36,9 +37,6 @@ urlencoding = "2.1"
 unicode-icons = "2.0"
 html-escape = "0.2"
 
-ricochet-core = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "main" }
-ricochet-auth = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "main" }
-ricochet-ui = { git = "https://github.com/ricochet-rs/ricochet.git", branch = "main" }
 regex = "1.11.3"
 
 [dev-dependencies]

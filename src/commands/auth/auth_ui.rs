@@ -1,7 +1,52 @@
 // HTML pages for OAuth authentication callbacks
 
-// Include CSS from ricochet-ui at compile time via build script
-const RICOCHET_UI_CSS: &str = include_str!(env!("RICOCHET_UI_CSS_PATH"));
+// Minimal embedded CSS for auth pages
+const RICOCHET_UI_CSS: &str = r#"
+:root {
+    --background: #ffffff;
+    --foreground: #09090b;
+    --card: #ffffff;
+    --card-foreground: #09090b;
+    --border: #e4e4e7;
+    --primary: #18181b;
+    --primary-foreground: #fafafa;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+    --destructive: #ef4444;
+    --destructive-foreground: #fafafa;
+    --font-sans: system-ui, -apple-system, sans-serif;
+    --font-mono: ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: #09090b;
+        --foreground: #fafafa;
+        --card: #18181b;
+        --card-foreground: #fafafa;
+        --border: #27272a;
+        --primary: #fafafa;
+        --primary-foreground: #18181b;
+        --secondary: #27272a;
+        --secondary-foreground: #fafafa;
+        --muted: #27272a;
+        --muted-foreground: #a1a1aa;
+    }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-sans);
+}
+"#;
 
 pub fn create_success_page() -> String {
     format!(
