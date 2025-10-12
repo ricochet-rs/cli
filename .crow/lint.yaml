@@ -14,7 +14,7 @@ steps:
     depends_on: []
 
   cache:
-    image: codeberg.org/crow-plugins/sccache:0.1.0
+    image: codeberg.org/crow-plugins/sccache:0.2.0
     settings:
       s3-endpoint: https://hel1.your-objectstorage.com
       s3-bucket: ricochet-sccache
