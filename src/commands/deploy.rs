@@ -23,6 +23,7 @@ pub async fn deploy(
     path: PathBuf,
     _name: Option<String>,
     _description: Option<String>,
+    debug: bool,
 ) -> Result<()> {
     if !path.exists() {
         anyhow::bail!("Path does not exist: {}", path.display());
@@ -64,13 +65,11 @@ pub async fn deploy(
             .template("{spinner:.green} {msg}")
             .unwrap(),
     );
-    pb.set_message("Creating bundle...");
+    pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
     let client = RicochetClient::new(config)?;
 
-    pb.set_message("Uploading to server...");
-
-    match client.deploy(&path, content_id.clone(), &toml_path).await {
+    match client.deploy(&path, content_id.clone(), &toml_path, &pb, debug).await {
         Ok(response) => {
             pb.finish_and_clear();
 
@@ -122,6 +121,23 @@ pub async fn deploy(
         }
         Err(e) => {
             pb.finish_and_clear();
+            
+            // Provide helpful context for 403 errors when updating existing content
+            if let Some(id) = content_id.as_ref()
+                && e.to_string().contains("403") {
+                eprintln!("{} Deployment failed: {}\n", "✗".red().bold(), e);
+                eprintln!("{}", "Hint:".yellow().bold());
+                eprintln!("  You're trying to update content item: {}", id.bright_cyan());
+                eprintln!("  This error usually means:");
+                eprintln!("    • The content ID doesn't exist on this server");
+                eprintln!("    • Your API key lacks permission to modify this content item");
+                eprintln!("    • The content item was created on a different server\n");
+                eprintln!("  Try:");
+                eprintln!("    1. Run {} to verify the content item exists", "ricochet list".bright_cyan());
+                eprintln!("    2. Check if you're connected to the correct server: {}", config.server_url().unwrap_or_default().bright_cyan());
+                eprintln!("    3. Remove the 'id' field from _ricochet.toml to create a new content item instead");
+                anyhow::bail!("")
+            }
             anyhow::bail!("Deployment failed: {}", e)
         }
     }
