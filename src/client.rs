@@ -3,6 +3,34 @@ use anyhow::{Context, Result};
 use reqwest::{Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use std::path::Path;
+use std::pin::Pin;
+use std::task::{Context as TaskContext, Poll};
+use tokio::io::{AsyncRead, ReadBuf};
+
+// Progress tracking wrapper for AsyncRead
+struct ProgressReader<R> {
+    reader: R,
+    progress_bar: indicatif::ProgressBar,
+    bytes_read: u64,
+}
+
+impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut TaskContext<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let before = buf.filled().len();
+        let result = Pin::new(&mut self.reader).poll_read(cx, buf);
+        let after = buf.filled().len();
+        let bytes_read = (after - before) as u64;
+        
+        self.bytes_read += bytes_read;
+        self.progress_bar.set_position(self.bytes_read);
+        
+        result
+    }
+}
 
 pub struct RicochetClient {
     client: Client,
@@ -102,16 +130,38 @@ impl RicochetClient {
         path: &Path,
         content_id: Option<String>,
         toml_path: &Path,
+        pb: &indicatif::ProgressBar,
+        debug: bool,
     ) -> Result<serde_json::Value> {
         let url = format!("{}/api/v0/content/upload", self.base_url);
 
         // Create a tar bundle from the directory
+        pb.set_message("Creating bundle...");
         let tar_path =
             std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
-        crate::utils::create_bundle(path, &tar_path)?;
+        crate::utils::create_bundle(path, &tar_path, debug)?;
+        
+        // Get file size for progress tracking
+        let file_size = tokio::fs::metadata(&tar_path).await?.len();
+        
+        // Change to progress bar with bytes
+        pb.set_style(
+            indicatif::ProgressStyle::default_bar()
+                .template("{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({percent}%)")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+        pb.set_length(file_size);
+        pb.set_position(0);
+        pb.set_message("Uploading to server");
         
         let bundle_file = tokio::fs::File::open(&tar_path).await?;
-        let bundle_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(bundle_file));
+        let progress_reader = ProgressReader {
+            reader: bundle_file,
+            progress_bar: pb.clone(),
+            bytes_read: 0,
+        };
+        let bundle_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(progress_reader));
 
         let mut form = reqwest::multipart::Form::new().part(
             "bundle",

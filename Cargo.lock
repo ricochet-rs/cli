@@ -1666,6 +1666,7 @@ dependencies = [
  "unicode-icons",
  "url",
  "urlencoding",
+ "walkdir",
  "webbrowser",
 ]
 

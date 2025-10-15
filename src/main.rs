@@ -18,6 +18,10 @@ struct Cli {
     #[arg(global = true, short = 'F', long, default_value = "table", value_enum, help_heading = "Global Options")]
     format: OutputFormat,
 
+    /// Enable debug output
+    #[arg(global = true, long, help_heading = "Global Options")]
+    debug: bool,
+
     /// Print version
     #[arg(short = 'V', long)]
     version: bool,
@@ -119,7 +123,7 @@ async fn main() -> Result<()> {
             name,
             description,
         }) => {
-            commands::deploy::deploy(&config, path, name, description).await?;
+            commands::deploy::deploy(&config, path, name, description, cli.debug).await?;
         }
         Some(Commands::List {
             content_type,

@@ -77,6 +77,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
@@ -127,6 +128,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
@@ -159,6 +161,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
@@ -200,6 +203,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
@@ -236,6 +240,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
@@ -283,6 +288,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
@@ -328,6 +334,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
         )
         .await;
 
