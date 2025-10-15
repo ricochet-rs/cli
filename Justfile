@@ -45,6 +45,8 @@ build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    export RUSTC_WRAPPER=sccache
+
     rustup default stable
 
     # Use SQLx offline mode to avoid needing database during build
