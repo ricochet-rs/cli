@@ -74,7 +74,7 @@ steps:
         ls -la "$outdir/"
 
         # Compress binaries
-        tar -czvf "$outdir/$new_name.tar.gz" -C "$outdir" "$new_name" --remove-files
+        gtar -czvf "$outdir/$new_name.tar.gz" -C "$outdir" "$new_name" --remove-files
 
   # "Upload to S3":
     # image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
