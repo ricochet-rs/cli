@@ -45,6 +45,8 @@ build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    rustup default stable
+
     # Use SQLx offline mode to avoid needing database during build
     export SQLX_OFFLINE=true
 
