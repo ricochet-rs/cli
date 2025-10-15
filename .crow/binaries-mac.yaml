@@ -13,31 +13,31 @@ matrix:
     - TARGET: macos-arm64
 
 steps:
-  cache:
-    image: codeberg.org/crow-plugins/sccache:0.2.0
-    settings:
-      s3-endpoint: https://hel1.your-objectstorage.com
-      s3-bucket: ricochet-sccache
-      s3-region: hel1
-      s3-key-prefix: ${CI_REPO_NAME}-${TARGET}
-      s3-access-key:
-        from_secret: s3_access_key
-      s3-secret-key:
-        from_secret: s3_secret_key
+  # cache:
+    # image: codeberg.org/crow-plugins/sccache:0.2.0
+    # settings:
+      # s3-endpoint: https://hel1.your-objectstorage.com
+      # s3-bucket: ricochet-sccache
+      # s3-region: hel1
+      # s3-key-prefix: ${CI_REPO_NAME}-${TARGET}
+      # s3-access-key:
+        # from_secret: s3_access_key
+      # s3-secret-key:
+        # from_secret: s3_secret_key
 
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.90-slim
+    image: bash
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
-    depends_on:
-      - cache
+    # depends_on:
+      # - cache
     commands:
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       # sccache
-      - export PATH=".sccache-cache:$PATH"
-      - . ./.sccache
+      # - export PATH=".sccache-cache:$PATH"
+      # - . ./.sccache
       # build
       - just build-static $TARGET
       - tree target/binaries/
@@ -76,18 +76,18 @@ steps:
         # Compress binaries
         tar -czvf "$outdir/$new_name.tar.gz" -C "$outdir" "$new_name" --remove-files
 
-  "Upload to S3":
-    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
-    depends_on:
-      - build
-    settings:
-      bucket: ricochet-cli
-      region: hel1
-      endpoint: https://hel1.your-objectstorage.com
-      access_key:
-        from_secret: s3_access_key
-      secret_key:
-        from_secret: s3_secret_key
-      source: target/binaries/**/*
-      strip_prefix: target/binaries/
-      target: /
+  # "Upload to S3":
+    # image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
+    # depends_on:
+      # - build
+    # settings:
+      # bucket: ricochet-cli
+      # region: hel1
+      # endpoint: https://hel1.your-objectstorage.com
+      # access_key:
+        # from_secret: s3_access_key
+      # secret_key:
+        # from_secret: s3_secret_key
+      # source: target/binaries/**/*
+      # strip_prefix: target/binaries/
+      # target: /
