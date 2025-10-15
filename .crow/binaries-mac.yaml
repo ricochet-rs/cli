@@ -80,21 +80,21 @@ steps:
 
             echo "ARCH: $ARCH"
 
-            # Map to Rust target triple names
+            # Simplify architecture naming for darwin
             case "$ARCH" in
               arm64)
-                TARGET_TRIPLE="aarch64-apple-darwin"
+                DARWIN_ARCH="arm64"
                 ;;
               x86_64)
-                TARGET_TRIPLE="x86_64-apple-darwin"
+                DARWIN_ARCH="x86_64"
                 ;;
             esac
 
-            echo "TARGET_TRIPLE: $TARGET_TRIPLE"
+            echo "DARWIN_ARCH: $DARWIN_ARCH"
 
             # Create Homebrew bottle structure: ricochet/{VERSION}/bin/ricochet
-            # Use Rust target triple for bottle name
-            bottle_name=$(printf "ricochet-%s.%s.bottle" "$VERSION" "$TARGET_TRIPLE")
+            # Use darwin-<arch> naming convention
+            bottle_name=$(printf "ricochet-%s-darwin-%s" "$VERSION" "$DARWIN_ARCH")
             echo "Creating bottle: $bottle_name"
 
             bottle_dir="$outdir/$bottle_name"
@@ -104,11 +104,11 @@ steps:
             cp "$file" "$bottle_dir/ricochet/$VERSION/bin/ricochet"
             chmod +x "$bottle_dir/ricochet/$VERSION/bin/ricochet"
 
-            # Create the tarball with proper structure
+            # Create the tarball (basename only, no directory structure)
             # Get absolute path for output since we're changing directories
             tarball_name="$bottle_name.tar.gz"
             abs_outdir=$(cd "$outdir" && pwd)
-            (cd "$bottle_dir" && gtar -czf "$abs_outdir/$tarball_name" ricochet)
+            (cd "$bottle_dir/ricochet/$VERSION/bin" && gtar -czf "$abs_outdir/$tarball_name" ricochet)
 
             # Clean up temporary bottle directory
             rm -rf "$bottle_dir"
@@ -140,4 +140,4 @@ steps:
       - build
     commands:
       - export VERSION=$(basename "$(ls -d target/binaries/*/ | head -1)")
-      - rclone copyto target/binaries/$VERSION/ s3:ricochet-cli/$VERSION/
+      - rclone copyto target/binaries/$VERSION/ s3:ricochet-cli/v$VERSION/

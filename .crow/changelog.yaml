@@ -1,3 +1,7 @@
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+
 clone:
   git:
     image: codeberg.org/crow-plugins/clone:1.0.1
@@ -7,12 +11,8 @@ clone:
 labels:
   type: static
 
-when:
-  - event: push
-    branch: ${CI_REPO_DEFAULT_BRANCH}
-
 steps:
-  - name: 'Upcoming Changelog'
+  - name: "Upcoming Changelog"
     environment:
       GH_TOKEN:
         from_secret: ricochet_issue_token

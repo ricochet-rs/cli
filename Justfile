@@ -29,42 +29,56 @@ test:
 # Builds fully static Linux binaries that work on any Linux system, macOS binaries, and Windows executables
 # Examples:
 #   just build-static                    # builds all targets
-#   just build-static x86_64
-#   just build-static aarch64
-#   just build-static riscv64
-#   just build-static windows
+#   just build-static linux-x86_64
+#   just build-static linux-aarch64
+#   just build-static linux-riscv64
+#   just build-static windows-x86_64
+#   just build-static windows-arm64
 #   just build-static macos-arm64
-#   just build-static macos-x86
+#   just build-static macos-x86_64
 #
 # Prerequisites on Debian/Ubuntu:
 #   apt install gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mingw-w64 pkg-config libssl-dev build-essential
-#   rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64gc-unknown-linux-gnu x86_64-pc-windows-gnu
+#   rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64gc-unknown-linux-gnu x86_64-pc-windows-gnu aarch64-pc-windows-msvc
 # Prerequisites on macOS:
 #   rustup target add x86_64-apple-darwin aarch64-apple-darwin
 build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Set up Rust environment
+    # Set up Rust environment (macOS only)
     # Detect cargo/rustup location - handles both regular users and root
-    if [ -d "$HOME/.cargo" ]; then
-        CARGO_HOME_DIR="$HOME/.cargo"
-        RUSTUP_HOME_DIR="$HOME/.rustup"
-    elif [ -d "/var/root/.cargo" ]; then
-        CARGO_HOME_DIR="/var/root/.cargo"
-        RUSTUP_HOME_DIR="/var/root/.rustup"
-    elif [ -d "/root/.cargo" ]; then
-        CARGO_HOME_DIR="/root/.cargo"
-        RUSTUP_HOME_DIR="/root/.rustup"
-    else
-        echo "Error: Cannot find cargo installation"
-        exit 1
+    if [ "$(uname)" = "Darwin" ]; then
+      if [ -d "$HOME/.cargo" ]; then
+          CARGO_HOME_DIR="$HOME/.cargo"
+          RUSTUP_HOME_DIR="$HOME/.rustup"
+      elif [ -d "/var/root/.cargo" ]; then
+          CARGO_HOME_DIR="/var/root/.cargo"
+          RUSTUP_HOME_DIR="/var/root/.rustup"
+      elif [ -d "/root/.cargo" ]; then
+          CARGO_HOME_DIR="/root/.cargo"
+          RUSTUP_HOME_DIR="/root/.rustup"
+      else
+          echo "Error: Cannot find cargo installation"
+          exit 1
+      fi
+
+      export PATH="${CARGO_HOME_DIR}/bin:$PATH"
+      export CARGO_HOME="${CARGO_HOME:-${CARGO_HOME_DIR}}"
+      export RUSTUP_HOME="${RUSTUP_HOME:-${RUSTUP_HOME_DIR}}"
+      export RUSTC_WRAPPER=sccache
     fi
 
-    export PATH="${CARGO_HOME_DIR}/bin:$PATH"
-    export CARGO_HOME="${CARGO_HOME:-${CARGO_HOME_DIR}}"
-    export RUSTUP_HOME="${RUSTUP_HOME:-${RUSTUP_HOME_DIR}}"
-    export RUSTC_WRAPPER=sccache
+    # Set up sccache directory (macOS only)
+    if [ "$(uname)" = "Darwin" ]; then
+        if [ -z "${SCCACHE_DIR:-}" ]; then
+            if [ -d "/var/root" ] && [ "$HOME" = "/var/root" ]; then
+                export SCCACHE_DIR="/var/root/Library/Caches/Mozilla.sccache"
+            else
+                export SCCACHE_DIR="${HOME}/Library/Caches/Mozilla.sccache"
+            fi
+        fi
+    fi
 
     # Use SQLx offline mode to avoid needing database during build
     export SQLX_OFFLINE=true
@@ -91,6 +105,11 @@ build-static target="all":
     export CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER=riscv64-linux-gnu-gcc
     export CC_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-gcc
     export AR_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-ar
+
+    # Setup cross-compilation for Windows ARM64 with clang
+    export CC_aarch64_pc_windows_msvc=clang
+    export CXX_aarch64_pc_windows_msvc=clang++
+    export AR_aarch64_pc_windows_msvc=llvm-ar
 
     # Determine version string
     if [ -n "${CI_COMMIT_TAG:-}" ]; then
@@ -127,43 +146,56 @@ build-static target="all":
     }
 
     case "{{target}}" in
-        "x86_64")
+        # Linux targets
+        "linux-x86_64"|"x86_64")
             echo "Building static binary for x86_64-unknown-linux-gnu..."
             rustup target add x86_64-unknown-linux-gnu || true
             cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-unknown-linux-gnu
-            cp target/x86_64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-x86_64
+            cp target/x86_64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-linux-x86_64
             cleanup_assets
             echo "✓ Built static x86_64-unknown-linux-gnu successfully"
-            echo "Binary location: target/binaries/ricochet-x86_64"
+            echo "Binary location: target/binaries/ricochet-linux-x86_64"
             ;;
-        "aarch64")
+        "linux-aarch64"|"aarch64")
             echo "Building static binary for aarch64-unknown-linux-gnu..."
             rustup target add aarch64-unknown-linux-gnu || true
             cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-unknown-linux-gnu
-            cp target/aarch64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-aarch64
+            cp target/aarch64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-linux-aarch64
             cleanup_assets
             echo "✓ Built static aarch64-unknown-linux-gnu successfully"
-            echo "Binary location: target/binaries/ricochet-aarch64"
+            echo "Binary location: target/binaries/ricochet-linux-aarch64"
             ;;
-        "riscv64"|"riscv")
+        "linux-riscv64"|"riscv64"|"riscv")
             echo "Building static binary for riscv64gc-unknown-linux-gnu..."
             rustup target add riscv64gc-unknown-linux-gnu || true
             cargo build --profile "$PROFILE" --locked --bin ricochet --target riscv64gc-unknown-linux-gnu
-            cp target/riscv64gc-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-riscv64
+            cp target/riscv64gc-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-linux-riscv64
             cleanup_assets
             echo "✓ Built static riscv64gc-unknown-linux-gnu successfully"
-            echo "Binary location: target/binaries/ricochet-riscv64"
+            echo "Binary location: target/binaries/ricochet-linux-riscv64"
             ;;
-        "windows"|"win")
+        # Windows targets
+        "windows-x86_64"|"windows"|"win")
             echo "Building static binary for x86_64-pc-windows-gnu..."
             rustup target add x86_64-pc-windows-gnu || true
             # Windows builds use different RUSTFLAGS
             RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-pc-windows-gnu
-            cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows.exe
+            cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows-x86_64.exe
             cleanup_assets
             echo "✓ Built static x86_64-pc-windows-gnu successfully"
-            echo "Binary location: target/binaries/ricochet-windows.exe"
+            echo "Binary location: target/binaries/ricochet-windows-x86_64.exe"
             ;;
+        "windows-arm64")
+            echo "Building static binary for aarch64-pc-windows-msvc..."
+            rustup target add aarch64-pc-windows-msvc || true
+            # Windows ARM64 builds use MSVC target with static CRT
+            RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-pc-windows-msvc
+            cp target/aarch64-pc-windows-msvc/$PROFILE/ricochet.exe target/binaries/ricochet-windows-arm64.exe
+            cleanup_assets
+            echo "✓ Built static aarch64-pc-windows-msvc successfully"
+            echo "Binary location: target/binaries/ricochet-windows-arm64.exe"
+            ;;
+        # macOS targets
         "macos-arm64"|"macos-arm"|"darwin-arm64")
             echo "Building binary for aarch64-apple-darwin..."
             rustup target add aarch64-apple-darwin || true
@@ -190,22 +222,27 @@ build-static target="all":
             echo "Building static x86_64-unknown-linux-gnu..."
             rustup target add x86_64-unknown-linux-gnu || true
             cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-unknown-linux-gnu
-            cp target/x86_64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-x86_64
+            cp target/x86_64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-linux-x86_64
 
             echo "Building static aarch64-unknown-linux-gnu..."
             rustup target add aarch64-unknown-linux-gnu || true
             cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-unknown-linux-gnu
-            cp target/aarch64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-aarch64
+            cp target/aarch64-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-linux-aarch64
 
             echo "Building static riscv64gc-unknown-linux-gnu..."
             rustup target add riscv64gc-unknown-linux-gnu || true
             cargo build --profile "$PROFILE" --locked --bin ricochet --target riscv64gc-unknown-linux-gnu
-            cp target/riscv64gc-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-riscv64
+            cp target/riscv64gc-unknown-linux-gnu/$PROFILE/ricochet target/binaries/ricochet-linux-riscv64
 
             echo "Building static x86_64-pc-windows-gnu..."
             rustup target add x86_64-pc-windows-gnu || true
             RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-pc-windows-gnu
-            cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows.exe
+            cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows-x86_64.exe
+
+            echo "Building static aarch64-pc-windows-msvc..."
+            rustup target add aarch64-pc-windows-msvc || true
+            RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-pc-windows-msvc
+            cp target/aarch64-pc-windows-msvc/$PROFILE/ricochet.exe target/binaries/ricochet-windows-arm64.exe
 
             echo "Building aarch64-apple-darwin..."
             rustup target add aarch64-apple-darwin || true
@@ -215,29 +252,37 @@ build-static target="all":
             echo "Building x86_64-apple-darwin..."
             rustup target add x86_64-apple-darwin || true
             RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-apple-darwin
-            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-x86
+            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-x86_64
 
             cleanup_assets
 
             echo "All binaries built successfully!"
             echo "Binaries location:"
-            echo "  - Linux x86_64:    target/binaries/ricochet-x86_64"
-            echo "  - Linux aarch64:   target/binaries/ricochet-aarch64"
-            echo "  - Linux riscv64:   target/binaries/ricochet-riscv64"
-            echo "  - Windows x86_64:  target/binaries/ricochet-windows.exe"
-            echo "  - macOS ARM64:     target/binaries/ricochet-macos-arm64"
-            echo "  - macOS x86_64:    target/binaries/ricochet-macos-x86"
+            echo "  - Linux x86_64:      target/binaries/ricochet-linux-x86_64"
+            echo "  - Linux aarch64:     target/binaries/ricochet-linux-aarch64"
+            echo "  - Linux riscv64:     target/binaries/ricochet-linux-riscv64"
+            echo "  - Windows x86_64:    target/binaries/ricochet-windows-x86_64.exe"
+            echo "  - Windows ARM64:     target/binaries/ricochet-windows-arm64.exe"
+            echo "  - macOS ARM64:       target/binaries/ricochet-macos-arm64"
+            echo "  - macOS x86_64:      target/binaries/ricochet-macos-x86_64"
             ;;
         *)
             echo "Unknown target: {{target}}"
             echo "Available targets:"
-            echo "  - x86_64             Linux x86_64"
-            echo "  - aarch64            Linux ARM64"
-            echo "  - riscv64 (riscv)    Linux RISC-V 64"
-            echo "  - windows (win)      Windows x86_64"
+            echo "  - linux-x86_64       Linux x86_64"
+            echo "  - linux-aarch64      Linux ARM64"
+            echo "  - linux-riscv64      Linux RISC-V 64"
+            echo "  - windows-x86_64     Windows x86_64"
+            echo "  - windows-arm64      Windows ARM64"
             echo "  - macos-arm64        macOS ARM64"
-            echo "  - macos-x86          macOS x86_64"
+            echo "  - macos-x86_64       macOS x86_64"
             echo "  - all                All targets"
+            echo ""
+            echo "Legacy aliases (deprecated):"
+            echo "  - x86_64             -> linux-x86_64"
+            echo "  - aarch64            -> linux-aarch64"
+            echo "  - riscv64 (riscv)    -> linux-riscv64"
+            echo "  - windows (win)      -> windows-x86_64"
             exit 1
             ;;
     esac
