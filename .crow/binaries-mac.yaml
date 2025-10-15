@@ -99,9 +99,21 @@ steps:
 
             echo "ARCH: $ARCH"
 
+            # Map to Rust target triple names
+            case "$ARCH" in
+              arm64)
+                TARGET_TRIPLE="aarch64-apple-darwin"
+                ;;
+              x86_64)
+                TARGET_TRIPLE="x86_64-apple-darwin"
+                ;;
+            esac
+
+            echo "TARGET_TRIPLE: $TARGET_TRIPLE"
+
             # Create Homebrew bottle structure: ricochet/{VERSION}/bin/ricochet
-            # Build bottle name using printf to avoid Crow variable parsing issues
-            bottle_name=$(printf "ricochet-%s.%s_%s.bottle" "$VERSION" "$ARCH" "$MACOS_NAME")
+            # Use Rust target triple for bottle name
+            bottle_name=$(printf "ricochet-%s.%s.bottle" "$VERSION" "$TARGET_TRIPLE")
             echo "Creating bottle: $bottle_name"
 
             bottle_dir="$outdir/$bottle_name"
