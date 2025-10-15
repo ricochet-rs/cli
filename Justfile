@@ -45,9 +45,26 @@ build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    export RUSTC_WRAPPER=sccache
+    # Set up Rust environment
+    # Detect cargo/rustup location - handles both regular users and root
+    if [ -d "$HOME/.cargo" ]; then
+        CARGO_HOME_DIR="$HOME/.cargo"
+        RUSTUP_HOME_DIR="$HOME/.rustup"
+    elif [ -d "/var/root/.cargo" ]; then
+        CARGO_HOME_DIR="/var/root/.cargo"
+        RUSTUP_HOME_DIR="/var/root/.rustup"
+    elif [ -d "/root/.cargo" ]; then
+        CARGO_HOME_DIR="/root/.cargo"
+        RUSTUP_HOME_DIR="/root/.rustup"
+    else
+        echo "Error: Cannot find cargo installation"
+        exit 1
+    fi
 
-    rustup default stable
+    export PATH="${CARGO_HOME_DIR}/bin:$PATH"
+    export CARGO_HOME="${CARGO_HOME:-${CARGO_HOME_DIR}}"
+    export RUSTUP_HOME="${RUSTUP_HOME:-${RUSTUP_HOME_DIR}}"
+    export RUSTC_WRAPPER=sccache
 
     # Use SQLx offline mode to avoid needing database during build
     export SQLX_OFFLINE=true
