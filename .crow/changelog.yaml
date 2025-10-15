@@ -4,6 +4,9 @@ clone:
     settings:
       tags: true
 
+labels:
+  type: static
+
 when:
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
