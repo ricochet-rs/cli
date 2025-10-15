@@ -1,0 +1,93 @@
+when:
+  - event: tag
+  - event: deployment
+  - event: manual
+    evaluate: "task == 'mac'"
+
+labels:
+  backend: local
+
+matrix:
+  include:
+    # - TARGET: macos-x64
+    - TARGET: macos-arm64
+
+steps:
+  cache:
+    image: codeberg.org/crow-plugins/sccache:0.2.0
+    settings:
+      s3-endpoint: https://hel1.your-objectstorage.com
+      s3-bucket: ricochet-sccache
+      s3-region: hel1
+      s3-key-prefix: ${CI_REPO_NAME}-${TARGET}
+      s3-access-key:
+        from_secret: s3_access_key
+      s3-secret-key:
+        from_secret: s3_secret_key
+
+  build:
+    image: reg.ricochet.rs/docker.io/library/rust:1.90-slim
+    environment:
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
+    depends_on:
+      - cache
+    commands:
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # sccache
+      - export PATH=".sccache-cache:$PATH"
+      - . ./.sccache
+      # build
+      - just build-static $TARGET
+      - tree target/binaries/
+      - |
+        # Determine version string
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          VERSION="${CI_COMMIT_TAG#v}"
+        else
+          # Use commit SHA if available, otherwise use date only
+          if [ -n "${CI_COMMIT_SHA:-}" ]; then
+            COMMIT_SHORT=$(echo "${CI_COMMIT_SHA}" | cut -c1-8)
+            VERSION="$(date +%Y%m%d).$COMMIT_SHORT"
+          else
+            VERSION="$(date +%Y%m%d)"
+          fi
+        fi
+
+        outdir="target/binaries/$VERSION"
+        mkdir -p "$outdir"
+        mkdir -p "target/binaries/$VERSION"
+        # Move and rename binary files with version
+        for file in target/binaries/ricochet-*; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            arch=$(echo "$filename" | sed 's/^ricochet-//')
+
+            new_name="ricochet-$VERSION-$arch"
+            mv "$file" "$outdir/$new_name"
+            echo "Moved: $filename -> $new_name"
+          fi
+        done
+
+        echo "Binaries moved to: $outdir/"
+        ls -la "$outdir/"
+
+        # Compress binaries
+        tar -czvf "$outdir/$new_name.tar.gz" -C "$outdir" "$new_name" --remove-files
+
+  "Upload to S3":
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
+    depends_on:
+      - build
+    settings:
+      bucket: ricochet-cli
+      region: hel1
+      endpoint: https://hel1.your-objectstorage.com
+      access_key:
+        from_secret: s3_access_key
+      secret_key:
+        from_secret: s3_secret_key
+      source: target/binaries/**/*
+      strip_prefix: target/binaries/
+      target: /
