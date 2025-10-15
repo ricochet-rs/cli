@@ -169,20 +169,20 @@ build-static target="all":
             rustup target add aarch64-apple-darwin || true
             # macOS uses different RUSTFLAGS (no static linking flags)
             RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-apple-darwin
-            cp target/aarch64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-$VERSION.arm64_sequoia.bottle
+            cp target/aarch64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-arm64
             cleanup_assets
             echo "✓ Built aarch64-apple-darwin successfully"
-            echo "Binary location: target/binaries/ricochet-$VERSION.arm64_sequoia.bottle"
+            echo "Binary location: target/binaries/ricochet-macos-arm64"
             ;;
         "macos-x86_64"|"macos-x64"|"darwin-x86")
             echo "Building binary for x86_64-apple-darwin..."
             rustup target add x86_64-apple-darwin || true
             # macOS uses different RUSTFLAGS (no static linking flags)
             RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-apple-darwin
-            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-$VERSION.x86_64_sequoia.bottle
+            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-x86_64
             cleanup_assets
             echo "✓ Built x86_64-apple-darwin successfully"
-            echo "Binary location: target/binaries/ricochet-$VERSION.x86_64_sequoia.bottle"
+            echo "Binary location: target/binaries/ricochet-macos-x86_64"
             ;;
         "all")
             echo "Building binaries for all targets..."

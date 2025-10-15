@@ -43,6 +43,9 @@ steps:
       - just build-static $TARGET
       - tree target/binaries/
       - |
+        #!/bin/bash
+        set -euo pipefail
+
         # Determine version string
         if [ -n "${CI_COMMIT_TAG:-}" ]; then
           VERSION="${CI_COMMIT_TAG#v}"
@@ -56,26 +59,76 @@ steps:
           fi
         fi
 
+        echo "VERSION: $VERSION"
+
+        # Get macOS version for bottle naming
+        MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1,2)
+        case "$MACOS_VERSION" in
+          15.*) MACOS_NAME="sequoia" ;;
+          14.*) MACOS_NAME="sonoma" ;;
+          13.*) MACOS_NAME="ventura" ;;
+          12.*) MACOS_NAME="monterey" ;;
+          *) MACOS_NAME="sequoia" ;;  # default to sequoia
+        esac
+
+        echo "MACOS_NAME: $MACOS_NAME"
+
         outdir="target/binaries/$VERSION"
         mkdir -p "$outdir"
-        mkdir -p "target/binaries/$VERSION"
-        # Move and rename binary files with version
+
+        # Process each binary and create Homebrew-compatible bottles
         for file in target/binaries/ricochet-*; do
           if [ -f "$file" ]; then
             filename=$(basename "$file")
-            arch=$(echo "$filename" | sed 's/^ricochet-//')
 
-            new_name="ricochet-$VERSION-$arch"
-            mv "$file" "$outdir/$new_name"
-            echo "Moved: $filename -> $new_name"
+            echo "Processing: $filename"
+
+            # Determine architecture from filename
+            case "$filename" in
+              *arm64*)
+                ARCH="arm64"
+                ;;
+              *x86_64*|*x86*)
+                ARCH="x86_64"
+                ;;
+              *)
+                echo "Unknown architecture for $filename"
+                continue
+                ;;
+            esac
+
+            echo "ARCH: $ARCH"
+
+            # Create Homebrew bottle structure: ricochet/{VERSION}/bin/ricochet
+            # Build bottle name using printf to avoid Crow variable parsing issues
+            bottle_name=$(printf "ricochet-%s.%s_%s.bottle" "$VERSION" "$ARCH" "$MACOS_NAME")
+            echo "Creating bottle: $bottle_name"
+
+            bottle_dir="$outdir/$bottle_name"
+            mkdir -p "$bottle_dir/ricochet/$VERSION/bin"
+
+            # Copy binary into bottle structure
+            cp "$file" "$bottle_dir/ricochet/$VERSION/bin/ricochet"
+            chmod +x "$bottle_dir/ricochet/$VERSION/bin/ricochet"
+
+            # Create the tarball with proper structure
+            # Get absolute path for output since we're changing directories
+            tarball_name="$bottle_name.tar.gz"
+            abs_outdir=$(cd "$outdir" && pwd)
+            (cd "$bottle_dir" && gtar -czf "$abs_outdir/$tarball_name" ricochet)
+
+            # Clean up temporary bottle directory
+            rm -rf "$bottle_dir"
+
+            echo "Created bottle: $bottle_name.tar.gz"
           fi
         done
 
-        echo "Binaries moved to: $outdir/"
-        ls -la "$outdir/"
+        # Clean up original binaries
+        rm -f target/binaries/ricochet-*
 
-        # Compress binaries
-        gtar -czvf "$outdir/$new_name.tar.gz" -C "$outdir" "$new_name" --remove-files
+        echo "Bottles created in: $outdir/"
+        ls -lah "$outdir/"
 
         sccache -s
 
