@@ -9,7 +9,7 @@ labels:
 
 matrix:
   include:
-    # - TARGET: macos-x64
+    - TARGET: macos-x86_64
     - TARGET: macos-arm64
 
 steps:

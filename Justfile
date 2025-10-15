@@ -92,6 +92,19 @@ build-static target="all":
     export CC_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-gcc
     export AR_riscv64gc_unknown_linux_gnu=riscv64-linux-gnu-ar
 
+    # Determine version string
+    if [ -n "${CI_COMMIT_TAG:-}" ]; then
+      VERSION="${CI_COMMIT_TAG#v}"
+    else
+      # Use commit SHA if available, otherwise use date only
+      if [ -n "${CI_COMMIT_SHA:-}" ]; then
+        COMMIT_SHORT=$(echo "${CI_COMMIT_SHA}" | cut -c1-8)
+        VERSION="$(date +%Y%m%d).$COMMIT_SHORT"
+      else
+        VERSION="$(date +%Y%m%d)"
+      fi
+    fi
+
     # Create output directory
     mkdir -p target/binaries
 
@@ -156,20 +169,20 @@ build-static target="all":
             rustup target add aarch64-apple-darwin || true
             # macOS uses different RUSTFLAGS (no static linking flags)
             RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-apple-darwin
-            cp target/aarch64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-arm64
+            cp target/aarch64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-$VERSION.arm64_sequoia.bottle
             cleanup_assets
             echo "✓ Built aarch64-apple-darwin successfully"
-            echo "Binary location: target/binaries/ricochet-macos-arm64"
+            echo "Binary location: target/binaries/ricochet-$VERSION.arm64_sequoia.bottle"
             ;;
-        "macos-x86"|"macos-x64"|"darwin-x86")
+        "macos-x86_64"|"macos-x64"|"darwin-x86")
             echo "Building binary for x86_64-apple-darwin..."
             rustup target add x86_64-apple-darwin || true
             # macOS uses different RUSTFLAGS (no static linking flags)
             RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-apple-darwin
-            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-x86
+            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-$VERSION.x86_64_sequoia.bottle
             cleanup_assets
             echo "✓ Built x86_64-apple-darwin successfully"
-            echo "Binary location: target/binaries/ricochet-macos-x86"
+            echo "Binary location: target/binaries/ricochet-$VERSION.x86_64_sequoia.bottle"
             ;;
         "all")
             echo "Building binaries for all targets..."
