@@ -24,19 +24,23 @@ lint-fix:
 test:
     cargo test --all-features --workspace
 
-# Build statically linked Linux binaries with glibc and Windows binaries
+# Build statically linked binaries for Linux, macOS, and Windows
 # Usage: just build-static [target]
-# Builds fully static Linux binaries that work on any Linux system and Windows executables
+# Builds fully static Linux binaries that work on any Linux system, macOS binaries, and Windows executables
 # Examples:
 #   just build-static                    # builds all targets
 #   just build-static x86_64
 #   just build-static aarch64
 #   just build-static riscv64
 #   just build-static windows
+#   just build-static macos-arm64
+#   just build-static macos-x86
 #
 # Prerequisites on Debian/Ubuntu:
 #   apt install gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mingw-w64 pkg-config libssl-dev build-essential
 #   rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64gc-unknown-linux-gnu x86_64-pc-windows-gnu
+# Prerequisites on macOS:
+#   rustup target add x86_64-apple-darwin aarch64-apple-darwin
 build-static target="all":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -126,8 +130,28 @@ build-static target="all":
             echo "✓ Built static x86_64-pc-windows-gnu successfully"
             echo "Binary location: target/binaries/ricochet-windows.exe"
             ;;
+        "macos-arm64"|"macos-arm"|"darwin-arm64")
+            echo "Building binary for aarch64-apple-darwin..."
+            rustup target add aarch64-apple-darwin || true
+            # macOS uses different RUSTFLAGS (no static linking flags)
+            RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-apple-darwin
+            cp target/aarch64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-arm64
+            cleanup_assets
+            echo "✓ Built aarch64-apple-darwin successfully"
+            echo "Binary location: target/binaries/ricochet-macos-arm64"
+            ;;
+        "macos-x86"|"macos-x64"|"darwin-x86")
+            echo "Building binary for x86_64-apple-darwin..."
+            rustup target add x86_64-apple-darwin || true
+            # macOS uses different RUSTFLAGS (no static linking flags)
+            RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-apple-darwin
+            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-x86
+            cleanup_assets
+            echo "✓ Built x86_64-apple-darwin successfully"
+            echo "Binary location: target/binaries/ricochet-macos-x86"
+            ;;
         "all")
-            echo "Building static binaries for all Linux targets..."
+            echo "Building binaries for all targets..."
 
             echo "Building static x86_64-unknown-linux-gnu..."
             rustup target add x86_64-unknown-linux-gnu || true
@@ -149,18 +173,37 @@ build-static target="all":
             RUSTFLAGS="-C target-feature=+crt-static" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-pc-windows-gnu
             cp target/x86_64-pc-windows-gnu/$PROFILE/ricochet.exe target/binaries/ricochet-windows.exe
 
+            echo "Building aarch64-apple-darwin..."
+            rustup target add aarch64-apple-darwin || true
+            RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target aarch64-apple-darwin
+            cp target/aarch64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-arm64
+
+            echo "Building x86_64-apple-darwin..."
+            rustup target add x86_64-apple-darwin || true
+            RUSTFLAGS="" cargo build --profile "$PROFILE" --locked --bin ricochet --target x86_64-apple-darwin
+            cp target/x86_64-apple-darwin/$PROFILE/ricochet target/binaries/ricochet-macos-x86
+
             cleanup_assets
 
-            echo "All static binaries built successfully!"
+            echo "All binaries built successfully!"
             echo "Binaries location:"
-            echo "  - x86_64:  target/binaries/ricochet-x86_64"
-            echo "  - aarch64: target/binaries/ricochet-aarch64"
-            echo "  - riscv64: target/binaries/ricochet-riscv64"
-            echo "  - windows: target/binaries/ricochet-windows.exe"
+            echo "  - Linux x86_64:    target/binaries/ricochet-x86_64"
+            echo "  - Linux aarch64:   target/binaries/ricochet-aarch64"
+            echo "  - Linux riscv64:   target/binaries/ricochet-riscv64"
+            echo "  - Windows x86_64:  target/binaries/ricochet-windows.exe"
+            echo "  - macOS ARM64:     target/binaries/ricochet-macos-arm64"
+            echo "  - macOS x86_64:    target/binaries/ricochet-macos-x86"
             ;;
         *)
             echo "Unknown target: {{target}}"
-            echo "Available targets: x86_64, aarch64, riscv64 (or riscv), windows (or win), all"
+            echo "Available targets:"
+            echo "  - x86_64             Linux x86_64"
+            echo "  - aarch64            Linux ARM64"
+            echo "  - riscv64 (riscv)    Linux RISC-V 64"
+            echo "  - windows (win)      Windows x86_64"
+            echo "  - macos-arm64        macOS ARM64"
+            echo "  - macos-x86          macOS x86_64"
+            echo "  - all                All targets"
             exit 1
             ;;
     esac
