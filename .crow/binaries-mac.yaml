@@ -1,8 +1,6 @@
 when:
   - event: tag
   - event: deployment
-  - event: manual
-    evaluate: "task == 'mac'"
 
 labels:
   backend: local
@@ -13,32 +11,15 @@ matrix:
     - TARGET: macos-arm64
 
 steps:
-  # cache:
-    # image: codeberg.org/crow-plugins/sccache:0.2.0
-    # settings:
-      # s3-endpoint: https://hel1.your-objectstorage.com
-      # s3-bucket: ricochet-sccache
-      # s3-region: hel1
-      # s3-key-prefix: ${CI_REPO_NAME}-${TARGET}
-      # s3-access-key:
-        # from_secret: s3_access_key
-      # s3-secret-key:
-        # from_secret: s3_secret_key
-
   build:
     image: bash
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
       SCCACHE_DIR: /var/root/Library/Caches/Mozilla.sccache
-    # depends_on:
-      # - cache
     commands:
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-      # sccache
-      # - export PATH=".sccache-cache:$PATH"
-      # - . ./.sccache
       # build
       - just build-static $TARGET
       - tree target/binaries/
