@@ -1,7 +1,6 @@
 when:
   - event: tag
   - event: deployment
-  # - event: manual
 
 labels:
   type: autoscale
@@ -11,8 +10,6 @@ matrix:
     - TARGET: x86_64
     - TARGET: aarch64
     - TARGET: windows
-    # - TARGET: macos-x64
-    # - TARGET: macos-arm64
 
 steps:
   cache:
