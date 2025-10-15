@@ -1,7 +1,7 @@
 when:
   - event: tag
   - event: deployment
-  - event: manual
+  # - event: manual
 
 labels:
   type: autoscale

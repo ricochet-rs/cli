@@ -1,0 +1,143 @@
+when:
+  - event: tag
+  - event: deployment
+
+labels:
+  backend: local
+
+matrix:
+  include:
+    - TARGET: macos-x86_64
+    - TARGET: macos-arm64
+
+steps:
+  build:
+    image: bash
+    environment:
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
+      SCCACHE_DIR: /var/root/Library/Caches/Mozilla.sccache
+    commands:
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # build
+      - just build-static $TARGET
+      - tree target/binaries/
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        # Determine version string
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          VERSION="${CI_COMMIT_TAG#v}"
+        else
+          # Use commit SHA if available, otherwise use date only
+          if [ -n "${CI_COMMIT_SHA:-}" ]; then
+            COMMIT_SHORT=$(echo "${CI_COMMIT_SHA}" | cut -c1-8)
+            VERSION="$(date +%Y%m%d).$COMMIT_SHORT"
+          else
+            VERSION="$(date +%Y%m%d)"
+          fi
+        fi
+
+        echo "VERSION: $VERSION"
+
+        # Get macOS version for bottle naming
+        MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1,2)
+        case "$MACOS_VERSION" in
+          15.*) MACOS_NAME="sequoia" ;;
+          14.*) MACOS_NAME="sonoma" ;;
+          13.*) MACOS_NAME="ventura" ;;
+          12.*) MACOS_NAME="monterey" ;;
+          *) MACOS_NAME="sequoia" ;;  # default to sequoia
+        esac
+
+        echo "MACOS_NAME: $MACOS_NAME"
+
+        outdir="target/binaries/$VERSION"
+        mkdir -p "$outdir"
+
+        # Process each binary and create Homebrew-compatible bottles
+        for file in target/binaries/ricochet-*; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+
+            echo "Processing: $filename"
+
+            # Determine architecture from filename
+            case "$filename" in
+              *arm64*)
+                ARCH="arm64"
+                ;;
+              *x86_64*|*x86*)
+                ARCH="x86_64"
+                ;;
+              *)
+                echo "Unknown architecture for $filename"
+                continue
+                ;;
+            esac
+
+            echo "ARCH: $ARCH"
+
+            # Map to Rust target triple names
+            case "$ARCH" in
+              arm64)
+                TARGET_TRIPLE="aarch64-apple-darwin"
+                ;;
+              x86_64)
+                TARGET_TRIPLE="x86_64-apple-darwin"
+                ;;
+            esac
+
+            echo "TARGET_TRIPLE: $TARGET_TRIPLE"
+
+            # Create Homebrew bottle structure: ricochet/{VERSION}/bin/ricochet
+            # Use Rust target triple for bottle name
+            bottle_name=$(printf "ricochet-%s.%s.bottle" "$VERSION" "$TARGET_TRIPLE")
+            echo "Creating bottle: $bottle_name"
+
+            bottle_dir="$outdir/$bottle_name"
+            mkdir -p "$bottle_dir/ricochet/$VERSION/bin"
+
+            # Copy binary into bottle structure
+            cp "$file" "$bottle_dir/ricochet/$VERSION/bin/ricochet"
+            chmod +x "$bottle_dir/ricochet/$VERSION/bin/ricochet"
+
+            # Create the tarball with proper structure
+            # Get absolute path for output since we're changing directories
+            tarball_name="$bottle_name.tar.gz"
+            abs_outdir=$(cd "$outdir" && pwd)
+            (cd "$bottle_dir" && gtar -czf "$abs_outdir/$tarball_name" ricochet)
+
+            # Clean up temporary bottle directory
+            rm -rf "$bottle_dir"
+
+            echo "Created bottle: $bottle_name.tar.gz"
+          fi
+        done
+
+        # Clean up original binaries
+        rm -f target/binaries/ricochet-*
+
+        echo "Bottles created in: $outdir/"
+        ls -lah "$outdir/"
+
+        sccache -s
+
+  "Upload to S3":
+    image: bash
+    environment:
+      RCLONE_CONFIG_S3_TYPE: s3
+      RCLONE_CONFIG_S3_PROVIDER: Minio
+      RCLONE_CONFIG_S3_ENDPOINT: https://hel1.your-objectstorage.com
+      RCLONE_CONFIG_S3_REGION: hel1
+      RCLONE_CONFIG_S3_ACCESS_KEY_ID:
+        from_secret: s3_access_key
+      RCLONE_CONFIG_S3_SECRET_ACCESS_KEY:
+        from_secret: s3_secret_key
+    depends_on:
+      - build
+    commands:
+      - export VERSION=$(basename "$(ls -d target/binaries/*/ | head -1)")
+      - rclone copyto target/binaries/$VERSION/ s3:ricochet-cli/$VERSION/
