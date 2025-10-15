@@ -30,6 +30,7 @@ steps:
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
+      SCCACHE_DIR: /var/root/Library/Caches/Mozilla.sccache
     # depends_on:
       # - cache
     commands:
@@ -75,6 +76,8 @@ steps:
 
         # Compress binaries
         gtar -czvf "$outdir/$new_name.tar.gz" -C "$outdir" "$new_name" --remove-files
+
+        sccache -s
 
   # "Upload to S3":
     # image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
