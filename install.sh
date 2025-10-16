@@ -67,14 +67,23 @@ case "${OS}" in
                 TARBALL="ricochet-${VERSION}-windows-x86_64.exe.tar.gz"
                 BINARY_NAME="ricochet-${VERSION}-windows-x86_64.exe"
                 BASE_URL="${GITHUB_RELEASES_BASE}"
-                # On Windows, default to user's local bin if it exists, otherwise current directory
+                # On Windows, use AppData\Local\Programs if not specified
                 if [ -z "${RICOCHET_INSTALL_DIR:-}" ]; then
-                    if [ -d "$HOME/bin" ]; then
-                        INSTALL_DIR="$HOME/bin"
-                    elif [ -d "$HOME/.local/bin" ]; then
-                        INSTALL_DIR="$HOME/.local/bin"
-                    else
-                        INSTALL_DIR="."
+                    # C:\Users\<username>\AppData\Local\Programs is typically in PATH
+                    INSTALL_DIR="$HOME/AppData/Local/Programs"
+                    mkdir -p "$INSTALL_DIR" 2>/dev/null || true
+                    
+                    # If that doesn't exist or isn't writable, try other locations
+                    if [ ! -w "$INSTALL_DIR" ]; then
+                        if [ -d "$HOME/.local/bin" ] && [ -w "$HOME/.local/bin" ]; then
+                            INSTALL_DIR="$HOME/.local/bin"
+                        elif [ -d "$HOME/bin" ] && [ -w "$HOME/bin" ]; then
+                            INSTALL_DIR="$HOME/bin"
+                        else
+                            # Create .local/bin as fallback
+                            INSTALL_DIR="$HOME/.local/bin"
+                            mkdir -p "$INSTALL_DIR"
+                        fi
                     fi
                 fi
                 ;;
@@ -112,9 +121,6 @@ fi
 echo "Extracting..."
 tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
 
-# Install binary
-echo "Installing to ${INSTALL_DIR}..."
-
 # Determine final binary name
 if [ "${IS_WINDOWS}" = "1" ]; then
     FINAL_NAME="ricochet.exe"
@@ -139,10 +145,24 @@ fi
 chmod +x "${INSTALL_DIR}/${FINAL_NAME}"
 
 echo "✓ Ricochet CLI installed successfully!"
+echo "Binary installed to: ${INSTALL_DIR}/${FINAL_NAME}"
 echo ""
-if [ "${IS_WINDOWS}" = "1" ] && [ "${INSTALL_DIR}" = "." ]; then
-    echo "Binary installed to current directory: ${FINAL_NAME}"
-    echo "Run './${FINAL_NAME} --help' to get started."
+
+if [ "${IS_WINDOWS}" = "1" ]; then
+    # Check if directory is in PATH
+    if echo "$PATH" | grep -q "${INSTALL_DIR}"; then
+        echo "Run 'ricochet --help' to get started."
+    else
+        echo "⚠️  Note: ${INSTALL_DIR} is not in your PATH."
+        echo ""
+        echo "To add it to your PATH, run:"
+        echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+        echo ""
+        echo "Or add this line to your ~/.bashrc or ~/.bash_profile:"
+        echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+        echo ""
+        echo "For now, you can run: ${INSTALL_DIR}/${FINAL_NAME} --help"
+    fi
 else
     echo "Run 'ricochet --help' to get started."
 fi
