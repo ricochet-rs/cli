@@ -5,7 +5,7 @@
 ### Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ricochet/cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.sh | sh
 ```
 
 The installer will automatically detect your OS and architecture and download the appropriate binary from the release artifacts.
