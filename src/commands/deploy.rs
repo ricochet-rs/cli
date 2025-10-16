@@ -80,7 +80,7 @@ pub async fn deploy(
                 if content_id.is_none() {
                     // Read the original file content
                     let original_content = std::fs::read_to_string(&toml_path)?;
-                    
+
                     // Find the [content] section and add/update the id field
                     let updated_content = if original_content.contains("id =") {
                         // Replace existing id field
@@ -93,7 +93,7 @@ pub async fn deploy(
                         let re = Regex::new(r#"(?m)^\[content\]$"#)?;
                         re.replace(&original_content, format!("[content]\nid = \"{}\"", id)).to_string()
                     };
-                    
+
                     std::fs::write(&toml_path, updated_content)?;
                 }
 
@@ -121,7 +121,7 @@ pub async fn deploy(
         }
         Err(e) => {
             pb.finish_and_clear();
-            
+
             // Provide helpful context for 403 errors when updating existing content
             if let Some(id) = content_id.as_ref()
                 && e.to_string().contains("403") {

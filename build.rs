@@ -47,7 +47,7 @@ fn set_git_hash() {
     println!("cargo:rustc-env=GIT_HASH={}", git_hash);
     println!("cargo:rustc-env=HAS_GIT_TAG={}", has_tag);
     println!("cargo:rustc-env=BUILD_DATE={}", build_date);
-    
+
     // Re-run if git HEAD changes
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/tags");

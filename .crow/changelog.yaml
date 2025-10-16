@@ -12,7 +12,7 @@ labels:
   type: static
 
 steps:
-  - name: "Upcoming Changelog"
+  - name: 'Upcoming Changelog'
     environment:
       GH_TOKEN:
         from_secret: ricochet_issue_token

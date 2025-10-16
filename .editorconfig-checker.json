@@ -1,0 +1,15 @@
+{
+  "Exclude": [
+    ".git",
+    "go.mod",
+    "go.sum",
+    "vendor",
+    "LICENSE",
+    "node_modules",
+    "Makefile",
+    "Justfile",
+    "venv",
+    "site",
+    ".vue"
+  ]
+}

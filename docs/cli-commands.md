@@ -1,3 +1,4 @@
+
 # Command-Line Help for `ricochet`
 
 This document contains the help content for the `ricochet` command-line program.
@@ -127,4 +128,3 @@ Show configuration
     This document was generated automatically by
     <a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
 </i></small>
-

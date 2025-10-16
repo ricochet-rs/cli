@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
         let git_hash = env!("GIT_HASH");
         let has_tag = env!("HAS_GIT_TAG");
         let build_date = env!("BUILD_DATE");
-        
+
         if has_tag == "true" || git_hash.is_empty() {
             // Tagged release or not in git repo - just show version
             println!("{}", version);

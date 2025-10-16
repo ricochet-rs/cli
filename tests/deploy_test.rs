@@ -177,7 +177,7 @@ shinyApp(ui = ui, server = server)"#,
         // Create a temporary directory with invalid _ricochet.toml
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path();
-        
+
         // Create invalid TOML (missing content section)
         fs::write(
             project_path.join("_ricochet.toml"),
@@ -254,7 +254,7 @@ key = "value"
         // This test verifies the multipart form structure matches the R function
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path();
-        
+
         // Test new deployment (should include 'bundle' and 'config' fields)
         create_test_project(project_path, None).unwrap();
 
@@ -301,7 +301,7 @@ key = "value"
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path();
         let existing_id = "01JZA237920RN65T2XHCCV7296";
-        
+
         create_test_project(project_path, Some(existing_id)).unwrap();
 
         // Create mock server

@@ -125,7 +125,7 @@ steps:
 
         sccache -s
 
-  "Upload to S3":
+  'Upload to S3':
     image: bash
     environment:
       RCLONE_CONFIG_S3_TYPE: s3

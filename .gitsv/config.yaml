@@ -1,4 +1,4 @@
-version: "1.1" # Configuration version.
+version: '1.1' # Configuration version.
 
 versioning:
   update-major: [breaking] # Commit types used to bump major.
@@ -9,8 +9,8 @@ versioning:
   ignore-unknown: false
 
 tag:
-  pattern: "v%d.%d.%d" # Pattern used to create git tag.
-  filter: "" # Enables you to filter for considerable tags using git pattern syntax.
+  pattern: 'v%d.%d.%d' # Pattern used to create git tag.
+  filter: '' # Enables you to filter for considerable tags using git pattern syntax.
 
 release-notes:
   sections: # Array with each section of release note. Check template section for more information.
@@ -41,9 +41,8 @@ branches: # Git branches config.
 
 commit-message:
   # Supported commit types.
-  types:
-    [build, ci, chore, docs, feat, fix, perf, refactor, revert, style, test]
-  header-selector: "" # You can put in a regex here to select only a certain part of the commit message. Please define a regex group 'header'.
+  types: [build, ci, chore, docs, feat, fix, perf, refactor, revert, style, test]
+  header-selector: '' # You can put in a regex here to select only a certain part of the commit message. Please define a regex group 'header'.
   scope:
     # Define supported scopes, if blank, scope will not be validated, if not, only scope listed will be valid.
     # Don't forget to add "" on your list if you need to define scopes and keep it optional.
@@ -53,6 +52,6 @@ commit-message:
       key: jira # Name used to define an issue on footer metadata.
       key-synonyms: [Jira, JIRA] # Supported variations for footer metadata.
       use-hash: false # If false, use :<space> separator. If true, use <space># separator.
-      add-value-prefix: "" # Add a prefix to issue value.
+      add-value-prefix: '' # Add a prefix to issue value.
   issue:
-    regex: "[A-Z]+-[0-9]+" # Regex for issue id.
+    regex: '[A-Z]+-[0-9]+' # Regex for issue id.

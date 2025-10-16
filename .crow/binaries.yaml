@@ -56,7 +56,7 @@ steps:
         echo -e "All binaries processed in $outdir/"
         ls -la "$outdir/"
 
-  "Upload to S3":
+  'Upload to S3':
     image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
     depends_on:
       - build
@@ -85,7 +85,7 @@ steps:
     when:
       event: tag
 
-  "Create release":
+  'Create release':
     image: reg.devxy.io/docker.io/woodpeckerci/plugin-release:0.2.6
     depends_on:
       - changelog
@@ -99,7 +99,7 @@ steps:
     when:
       event: tag
 
-  "Clone homebrew-tap":
+  'Clone homebrew-tap':
     image: alpine:3.22
     depends_on:
       - changelog
@@ -109,10 +109,10 @@ steps:
     when:
       event: tag
 
-  "Push changes to homebrew-tap":
+  'Push changes to homebrew-tap':
     image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
     depends_on:
-      - "Push changes to homebrew-tap"
+      - 'Push changes to homebrew-tap'
     settings:
       path: homebrew-tap
       remote: git@github.com:ricochet-rs/homebrew-tap.git

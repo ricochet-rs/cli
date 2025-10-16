@@ -24,10 +24,10 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
         let result = Pin::new(&mut self.reader).poll_read(cx, buf);
         let after = buf.filled().len();
         let bytes_read = (after - before) as u64;
-        
+
         self.bytes_read += bytes_read;
         self.progress_bar.set_position(self.bytes_read);
-        
+
         result
     }
 }
@@ -79,7 +79,7 @@ impl RicochetClient {
             anyhow::bail!("Request failed with status {}: {}", status, error_text)
         }
     }
-    
+
     fn mask_api_key(key: &str) -> String {
         if key.is_empty() {
             "No API key provided".to_string()
@@ -140,10 +140,10 @@ impl RicochetClient {
         let tar_path =
             std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
         crate::utils::create_bundle(path, &tar_path, debug)?;
-        
+
         // Get file size for progress tracking
         let file_size = tokio::fs::metadata(&tar_path).await?.len();
-        
+
         // Change to progress bar with bytes
         pb.set_style(
             indicatif::ProgressStyle::default_bar()
@@ -154,7 +154,7 @@ impl RicochetClient {
         pb.set_length(file_size);
         pb.set_position(0);
         pb.set_message("Uploading to server");
-        
+
         let bundle_file = tokio::fs::File::open(&tar_path).await?;
         let progress_reader = ProgressReader {
             reader: bundle_file,

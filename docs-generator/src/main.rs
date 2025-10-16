@@ -88,4 +88,3 @@ fn main() {
     let markdown = clap_markdown::help_markdown::<Cli>();
     println!("{}", markdown);
 }
-

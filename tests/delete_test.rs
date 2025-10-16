@@ -126,7 +126,7 @@ mod delete_tests {
         let mut server = Server::new_async().await;
 
         let content_id = "01K66JV2Q123456789ABCDEF";
-        
+
         // Mock should match the exact endpoint pattern
         let _m = server
             .mock("DELETE", format!("/api/v0/content/{}", content_id).as_str())

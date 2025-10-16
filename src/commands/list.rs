@@ -12,7 +12,7 @@ fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -
             .or_else(|| a.get("last_deployment_status")),
         _ => a.get(field),
     };
-    
+
     let b_val = match field {
         "status" => b.get("status")
             .or_else(|| b.get("deployment_status"))
@@ -117,7 +117,7 @@ pub async fn list(
             // Display server name in italics above the table
             let server_url = config.server_url()?;
             println!("{}", server_url.italic().dimmed());
-            
+
             if filtered_items.is_empty() {
                 println!("{}", "No content items found".yellow());
                 return Ok(());
