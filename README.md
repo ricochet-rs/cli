@@ -4,8 +4,16 @@
 
 ### Quick Install
 
+Linux, macOS, Windows (Git Bash/WSL):
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/ricochet-rs/cli/main/install.ps1 | iex
 ```
 
 The installer will automatically detect your OS and architecture and download the appropriate binary from the release artifacts.
@@ -16,12 +24,22 @@ The installer will automatically detect your OS and architecture and download th
 
 You can customize the installation with environment variables:
 
+**Bash/sh:**
 ```bash
 # Install a specific version
-RICOCHET_VERSION=0.2.0 curl -fsSL https://raw.githubusercontent.com/ricochet/cli/main/install.sh | sh
+RICOCHET_VERSION=0.2.0 curl -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.sh | sh
 
 # Install to a custom directory
-RICOCHET_INSTALL_DIR=$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/ricochet/cli/main/install.sh | sh
+RICOCHET_INSTALL_DIR=$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.sh | sh
+```
+
+**PowerShell:**
+```powershell
+# Install a specific version
+$env:RICOCHET_VERSION="0.2.0"; irm https://raw.githubusercontent.com/ricochet-rs/cli/main/install.ps1 | iex
+
+# Install to a custom directory
+$env:RICOCHET_INSTALL_DIR="$HOME\.local\bin"; irm https://raw.githubusercontent.com/ricochet-rs/cli/main/install.ps1 | iex
 ```
 
 ## Commands
