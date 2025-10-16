@@ -21,6 +21,18 @@ Or using Git Bash/WSL:
 curl -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.sh | sh
 ```
 
+Windows (Manual):
+
+If you cannot execute PowerShell scripts, download and install manually:
+
+```cmd
+set VERSION=0.1.0
+curl.exe -fsSL -O https://github.com/ricochet-rs/cli/releases/download/v%VERSION%/ricochet-%VERSION%-windows-x86_64.exe.tar.gz
+tar -xzf ricochet-%VERSION%-windows-x86_64.exe.tar.gz
+move ricochet-%VERSION%-windows-x86_64.exe "%USERPROFILE%\bin\ricochet.exe"
+del ricochet-%VERSION%-windows-x86_64.exe.tar.gz
+```
+
 The installer will automatically detect your OS and architecture and download the appropriate binary from the release artifacts.
 
 > [!TIP]
