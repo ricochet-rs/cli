@@ -1,0 +1,25 @@
+when:
+  - event: manual
+
+labels:
+  type: static
+
+steps:
+  "Clone homebrew-tap":
+    image: alpine:3.22
+    commands:
+      - apk add --no-cache -q git
+      - git clone https://github.com/ricochet-rs/homebrew-tap.git
+
+  "Push changes to homebrew-tap":
+    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
+    settings:
+      path: homebrew-tap
+      remote: git@github.com:ricochet-rs/homebrew-tap.git
+      branch: main
+      tag: test
+      followtags: true
+      ssh_key:
+        from_secret: ricochet-bot-ssh-key
+      author_name: ricochet-bot
+      author_email: droid@ricochet.rs
