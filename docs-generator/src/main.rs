@@ -85,6 +85,14 @@ enum Commands {
 }
 
 fn main() {
-    let markdown = clap_markdown::help_markdown::<Cli>();
-    println!("{}", markdown);
+    let mut markdown = clap_markdown::help_markdown::<Cli>();
+
+    // Remove leading blank lines
+    markdown = markdown.trim_start().to_string();
+
+    // Ensure exactly one trailing newline
+    markdown = markdown.trim_end().to_string();
+    markdown.push('\n');
+
+    print!("{}", markdown);
 }

@@ -1,4 +1,3 @@
-
 # Command-Line Help for `ricochet`
 
 This document contains the help content for the `ricochet` command-line program.
