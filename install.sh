@@ -108,11 +108,7 @@ echo "Extracting..."
 tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
 
 # Determine final binary name
-if [ "${IS_WINDOWS}" = "1" ]; then
-    FINAL_NAME="ricochet.exe"
-else
-    FINAL_NAME="ricochet"
-fi
+FINAL_NAME="ricochet"
 
 # Move the binary
 if [ -w "${INSTALL_DIR}" ]; then

@@ -41,7 +41,7 @@ try {
     tar -xzf $TarballPath -C $TmpDir
 
     # Install binary
-    $FinalName = "ricochet.exe"
+    $FinalName = "ricochet"
     $SourcePath = Join-Path $TmpDir $BinaryName
     $DestPath = Join-Path $InstallDir $FinalName
     
@@ -60,12 +60,10 @@ try {
     if ($CombinedPath -like "*$InstallDir*") {
         Write-Host "Run 'ricochet --help' to get started." -ForegroundColor Cyan
     } else {
-        Write-Host "WarningWarning: $InstallDir is not in your PATH." -ForegroundColor Yellow
+        Write-Host "Warning: $InstallDir is not in your PATH." -ForegroundColor Yellow
         Write-Host ""
         Write-Host "To add it to your PATH for current session:" -ForegroundColor Gray
-        Write-Host '  $env:Path += ";' -NoNewline -ForegroundColor White
-        Write-Host $InstallDir -NoNewline -ForegroundColor White
-        Write-Host '"' -ForegroundColor White
+        Write-Host "  `$env:Path += `";$InstallDir`"" -ForegroundColor White
         Write-Host ""
         Write-Host "To add it permanently, run:" -ForegroundColor Gray
         Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$InstallDir', 'User')" -ForegroundColor White
