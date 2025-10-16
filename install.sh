@@ -56,7 +56,7 @@ case "${OS}" in
                 ;;
         esac
         ;;
-    Windows*)
+    Windows)
         case "${ARCH}" in
             x86_64|x86-64)
                 TARBALL="ricochet-${VERSION}-windows-x86_64.tar.gz"
