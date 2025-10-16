@@ -67,24 +67,10 @@ case "${OS}" in
                 TARBALL="ricochet-${VERSION}-windows-x86_64.exe.tar.gz"
                 BINARY_NAME="ricochet-${VERSION}-windows-x86_64.exe"
                 BASE_URL="${GITHUB_RELEASES_BASE}"
-                # On Windows, use AppData\Local\Programs if not specified
+                # On Windows, use ~/bin (C:\Users\<username>\bin) if not specified
                 if [ -z "${RICOCHET_INSTALL_DIR:-}" ]; then
-                    # C:\Users\<username>\AppData\Local\Programs is typically in PATH
-                    INSTALL_DIR="$HOME/AppData/Local/Programs"
+                    INSTALL_DIR="$HOME/bin"
                     mkdir -p "$INSTALL_DIR" 2>/dev/null || true
-                    
-                    # If that doesn't exist or isn't writable, try other locations
-                    if [ ! -w "$INSTALL_DIR" ]; then
-                        if [ -d "$HOME/.local/bin" ] && [ -w "$HOME/.local/bin" ]; then
-                            INSTALL_DIR="$HOME/.local/bin"
-                        elif [ -d "$HOME/bin" ] && [ -w "$HOME/bin" ]; then
-                            INSTALL_DIR="$HOME/bin"
-                        else
-                            # Create .local/bin as fallback
-                            INSTALL_DIR="$HOME/.local/bin"
-                            mkdir -p "$INSTALL_DIR"
-                        fi
-                    fi
                 fi
                 ;;
             *)
