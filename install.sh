@@ -6,7 +6,8 @@ set -e
 
 VERSION="${RICOCHET_VERSION:-0.1.0}"
 INSTALL_DIR="${RICOCHET_INSTALL_DIR:-/usr/local/bin}"
-BASE_URL="https://hel1.your-objectstorage.com/ricochet-cli/v${VERSION}"
+GITHUB_RELEASES_BASE="https://github.com/ricochet-rs/cli/releases/download/v${VERSION}"
+S3_BASE_URL="https://hel1.your-objectstorage.com/ricochet-cli/v${VERSION}"
 
 # Detect OS and architecture
 OS="$(uname -s)"
@@ -29,10 +30,12 @@ case "${OS}" in
             arm64|aarch64)
                 TARBALL="ricochet-${VERSION}-darwin-arm64.tar.gz"
                 BINARY_NAME="ricochet"
+                BASE_URL="${S3_BASE_URL}"
                 ;;
             x86_64)
                 TARBALL="ricochet-${VERSION}-darwin-x86_64.tar.gz"
                 BINARY_NAME="ricochet"
+                BASE_URL="${S3_BASE_URL}"
                 ;;
             *)
                 echo "Unsupported macOS architecture: ${ARCH}"
@@ -44,11 +47,13 @@ case "${OS}" in
         case "${ARCH}" in
             x86_64)
                 TARBALL="ricochet-${VERSION}-linux-x86_64.tar.gz"
-                BINARY_NAME="ricochet"
+                BINARY_NAME="ricochet-${VERSION}-linux-x86_64"
+                BASE_URL="${GITHUB_RELEASES_BASE}"
                 ;;
             aarch64|arm64)
                 TARBALL="ricochet-${VERSION}-linux-aarch64.tar.gz"
-                BINARY_NAME="ricochet"
+                BINARY_NAME="ricochet-${VERSION}-linux-aarch64"
+                BASE_URL="${GITHUB_RELEASES_BASE}"
                 ;;
             *)
                 echo "Unsupported Linux architecture: ${ARCH}"
@@ -59,8 +64,9 @@ case "${OS}" in
     Windows)
         case "${ARCH}" in
             x86_64|x86-64)
-                TARBALL="ricochet-${VERSION}-windows-x86_64.tar.gz"
+                TARBALL="ricochet-${VERSION}-windows-x86_64.exe.tar.gz"
                 BINARY_NAME="ricochet-${VERSION}-windows-x86_64.exe"
+                BASE_URL="${GITHUB_RELEASES_BASE}"
                 # On Windows, default to user's local bin if it exists, otherwise current directory
                 if [ -z "${RICOCHET_INSTALL_DIR:-}" ]; then
                     if [ -d "$HOME/bin" ]; then
