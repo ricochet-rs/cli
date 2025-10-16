@@ -44,7 +44,7 @@ try {
     $FinalName = "ricochet"
     $SourcePath = Join-Path $TmpDir $BinaryName
     $DestPath = Join-Path $InstallDir $FinalName
-    
+
     Move-Item -Path $SourcePath -Destination $DestPath -Force
 
     Write-Host ""
