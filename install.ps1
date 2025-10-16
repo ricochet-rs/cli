@@ -1,5 +1,5 @@
 # Ricochet CLI installer for Windows PowerShell
-# Usage: irm https://raw.githubusercontent.com/ricochet-rs/cli/main/install.ps1 | iex
+# Usage: curl.exe -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.ps1 -o install.ps1; .\install.ps1; Remove-Item install.ps1
 
 $ErrorActionPreference = 'Stop'
 
@@ -14,7 +14,7 @@ if ($Arch -eq "AMD64" -or $Arch -eq "x64") {
     $Tarball = "ricochet-$Version-windows-x86_64.exe.tar.gz"
     $BinaryName = "ricochet-$Version-windows-x86_64.exe"
 } else {
-    Write-Error "Unsupported Windows architecture: $Arch"
+    Write-Host "Unsupported Windows architecture: $Arch" -ForegroundColor Red
     exit 1
 }
 
@@ -47,29 +47,37 @@ try {
     
     Move-Item -Path $SourcePath -Destination $DestPath -Force
 
-    Write-Host "`n✓ Ricochet CLI installed successfully!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Ricochet CLI installed successfully!" -ForegroundColor Green
     Write-Host "Binary installed to: $DestPath" -ForegroundColor Gray
     Write-Host ""
 
     # Check if directory is in PATH
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $MachinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    $FullPath = "$UserPath;$MachinePath"
+    $CombinedPath = "$UserPath;$MachinePath"
 
-    if ($FullPath -like "*$InstallDir*") {
+    if ($CombinedPath -like "*$InstallDir*") {
         Write-Host "Run 'ricochet --help' to get started." -ForegroundColor Cyan
     } else {
-        Write-Host "⚠️  Note: $InstallDir is not in your PATH." -ForegroundColor Yellow
+        Write-Host "WarningWarning: $InstallDir is not in your PATH." -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "To add it to your PATH permanently, run:" -ForegroundColor Gray
-        Write-Host "  `$env:Path += `";$InstallDir`"; [Environment]::SetEnvironmentVariable('Path', `$env:Path, 'User')" -ForegroundColor White
+        Write-Host "To add it to your PATH for current session:" -ForegroundColor Gray
+        Write-Host '  $env:Path += ";' -NoNewline -ForegroundColor White
+        Write-Host $InstallDir -NoNewline -ForegroundColor White
+        Write-Host '"' -ForegroundColor White
         Write-Host ""
-        Write-Host "Or for current session only:" -ForegroundColor Gray
-        Write-Host "  `$env:Path += `";$InstallDir`"" -ForegroundColor White
+        Write-Host "To add it permanently, run:" -ForegroundColor Gray
+        Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$InstallDir', 'User')" -ForegroundColor White
         Write-Host ""
         Write-Host "For now, you can run: $DestPath --help" -ForegroundColor Gray
     }
+} catch {
+    Write-Host "Error: $_" -ForegroundColor Red
+    exit 1
 } finally {
     # Cleanup
-    Remove-Item -Path $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $TmpDir) {
+        Remove-Item -Path $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
