@@ -98,3 +98,30 @@ steps:
       title: ${CI_COMMIT_TAG}
     when:
       event: tag
+
+  "Clone homebrew-tap":
+    image: alpine:3.22
+    depends_on:
+      - changelog
+    commands:
+      - apk add --no-cache -q git
+      - git clone https://github.com/ricochet-rs/homebrew-tap.git
+    when:
+      event: tag
+
+  "Push changes to homebrew-tap":
+    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
+    depends_on:
+      - "Push changes to homebrew-tap"
+    settings:
+      path: homebrew-tap
+      remote: git@github.com:ricochet-rs/homebrew-tap.git
+      branch: main
+      tag: ${CI_COMMIT_TAG}
+      followtags: true
+      ssh_key:
+        from_secret: ricochet-bot-ssh-key
+      author_name: ricochet-bot
+      author_email: droid@ricochet.rs
+    when:
+      event: tag
