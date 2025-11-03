@@ -7,7 +7,7 @@ labels:
 
 steps:
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.90-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.91-slim
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
