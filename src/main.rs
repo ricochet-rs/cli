@@ -11,11 +11,24 @@ struct Cli {
     command: Option<Commands>,
 
     /// Server URL (can also be set with RICOCHET_SERVER environment variable)
-    #[arg(global = true, short = 'S', long, env = "RICOCHET_SERVER", help_heading = "Global Options")]
+    #[arg(
+        global = true,
+        short = 'S',
+        long,
+        env = "RICOCHET_SERVER",
+        help_heading = "Global Options"
+    )]
     server: Option<String>,
 
     /// Output format
-    #[arg(global = true, short = 'F', long, default_value = "table", value_enum, help_heading = "Global Options")]
+    #[arg(
+        global = true,
+        short = 'F',
+        long,
+        default_value = "table",
+        value_enum,
+        help_heading = "Global Options"
+    )]
     format: OutputFormat,
 
     /// Enable debug output
@@ -75,6 +88,12 @@ enum Commands {
         /// Show full configuration including sensitive values
         #[arg(short = 'A', long)]
         show_all: bool,
+    },
+    /// Initialize a new Ricochet project
+    Init {
+        /// Directory to initialize (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: std::path::PathBuf,
     },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
@@ -137,6 +156,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
+        }
+        Some(Commands::Init { path }) => {
+            commands::init::init_rico_toml(&path)?;
         }
         Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
