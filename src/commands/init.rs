@@ -1,15 +1,12 @@
-use dialoguer::{Input, Select, theme::ColorfulTheme};
+use anyhow::bail;
+use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
-    content::{AccessType, ContentType},
-    language::Language,
+    content::{AccessType, Content, ContentItem, ContentType},
+    language::{Language, LanguageConfig, Package},
+    settings::{ScheduleSettings, ServeSettings, StaticSettings},
 };
 use std::path::PathBuf;
-
-// Prompts:
-//
-// Choose a language:
-//  - choose a content type from a subset
-//  - Give the item a name
+use walkdir::WalkDir;
 
 pub fn choose_language() -> Language {
     let languages = vec![Language::R, Language::Python, Language::Julia];
@@ -25,7 +22,7 @@ pub fn choose_language() -> Language {
     languages[selection].clone()
 }
 
-pub fn choose_content_type(language: &Language) -> ContentType {
+pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
     let opts = match language {
         Language::R => {
             vec![
@@ -47,7 +44,9 @@ pub fn choose_content_type(language: &Language) -> ContentType {
                 ContentType::QuartoJl,
             ]
         }
-        Language::Python => unimplemented!("Python support is not yet implemented"),
+        Language::Python => {
+            bail!("Python is not yet implemented")
+        }
     };
 
     let selection = Select::with_theme(&ColorfulTheme::default())
@@ -57,7 +56,7 @@ pub fn choose_content_type(language: &Language) -> ContentType {
         .interact()
         .unwrap_or(0);
 
-    opts[selection]
+    Ok(opts[selection])
 }
 
 fn choose_item_name() -> String {
@@ -78,7 +77,8 @@ fn choose_item_name() -> String {
         .unwrap_or_default()
 }
 
-/// Find files with the given extension in the specified directory and one level deep
+/// FIXME: replace with WalkDir:
+/// https://docs.rs/walkdir/latest/walkdir/struct.WalkDir.html#method.max_depth
 fn find_files_by_extension(extension: &str, search_dir: &PathBuf) -> Vec<PathBuf> {
     use std::fs;
 
@@ -129,36 +129,17 @@ fn find_files_by_extension(extension: &str, search_dir: &PathBuf) -> Vec<PathBuf
     files
 }
 
-fn custom_entrypoint(prompt: &str, extension: &str) -> anyhow::Result<PathBuf> {
-    let error_msg = format!("Path must end with {}", extension);
-
-    let path = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt)
-        .validate_with(move |input: &String| -> Result<(), String> {
-            if input.trim().is_empty() {
-                Err("Path cannot be empty".to_string())
-            } else if !input.ends_with(extension) {
-                Err(error_msg.clone())
-            } else {
-                Ok(())
-            }
-        })
-        .interact_text()?;
-
-    Ok(PathBuf::from(path))
-}
-
 fn choose_r_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
     let r_files = find_files_by_extension("R", dir);
 
     if r_files.is_empty() {
-        println!("No .R files found in {}", dir.display());
-        custom_entrypoint("Enter path to R entrypoint", ".R")
+        bail!("No .R files found in {}", dir.display());
     } else {
         let display_items: Vec<String> = r_files.iter().map(|p| p.display().to_string()).collect();
 
         let selection = dialoguer::FuzzySelect::with_theme(&ColorfulTheme::default())
             .with_prompt("Choose R entrypoint")
+            .highlight_matches(true)
             .items(&display_items)
             .default(0)
             .interact()?;
@@ -204,13 +185,158 @@ fn choose_access_type() -> AccessType {
     opts[selection].clone()
 }
 
-pub fn init_rico_toml(dir: &PathBuf) -> anyhow::Result<()> {
-    let lang = choose_language();
-    let content_type = choose_content_type(&lang);
-    let entrypoint = choose_entrypoint(&content_type, dir)?;
-    let content_name = choose_item_name();
-    let at = choose_access_type();
+fn static_settings(
+    path: &PathBuf,
+    content_type: &ContentType,
+) -> anyhow::Result<Option<StaticSettings>> {
+    if !content_type.maybe_static() {
+        return Ok(None);
+    }
 
-    println!("Language: {lang}\nItem type: {content_type}\nName: {content_name}");
-    Ok(())
+    let theme = ColorfulTheme::default();
+
+    // if they skip non static html
+    let Some(opt) = Confirm::with_theme(&theme)
+        .with_prompt("Serve this item as a static HTML site?")
+        .interact_opt()?
+    else {
+        return Ok(None);
+    };
+
+    // if they do not confirm then no static html
+    if !opt {
+        return Ok(None);
+    };
+
+    let mut static_settings = StaticSettings::default();
+
+    let dirs = WalkDir::new(path)
+        .max_depth(1)
+        .sort_by_file_name()
+        .into_iter()
+        .filter(|v| v.as_ref().is_ok_and(|vv| vv.file_type().is_dir()))
+        .filter_map(|vi| vi.ok().map(|ii| ii.file_name().display().to_string()))
+        .collect::<Vec<_>>();
+
+    let Some(opt) = FuzzySelect::with_theme(&theme)
+        .with_prompt("Which directory should be served?")
+        .items(&dirs)
+        .highlight_matches(true)
+        .interact_opt()?
+    else {
+        return Ok(None);
+    };
+
+    let serve_dir = dirs[opt].to_string();
+
+    let entrypoint = Input::with_theme(&theme)
+        .with_prompt("Which file should be served?")
+        .default("index.html".to_string())
+        .show_default(true)
+        .with_initial_text("index.html")
+        .interact_text()?;
+    static_settings.index = Some(entrypoint);
+    static_settings.output_dir = Some(serve_dir);
+
+    Ok(Some(static_settings))
+}
+
+fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSettings>> {
+    if !content_type.is_invokable() {
+        return Ok(None);
+    }
+    let theme = ColorfulTheme::default();
+
+    // if they skip non static html
+    let Some(opt) = Confirm::with_theme(&theme)
+        .with_prompt("Schedule this item?")
+        .interact_opt()?
+    else {
+        return Ok(None);
+    };
+
+    // if they do not confirm then no static html
+    if !opt {
+        return Ok(None);
+    };
+
+    let mut sched = ScheduleSettings::default();
+    let opts = ["@hourly", "@daily", "@weekly", "Custom (enter cron)"];
+    let opt = FuzzySelect::with_theme(&theme)
+        .with_prompt("Schedule item")
+        .items(opts)
+        .default(0)
+        .interact()?;
+
+    if opt.eq(&0usize) {
+        return Ok(None);
+    }
+
+    if opt.eq(&3usize) {
+        let cron = Input::with_theme(&theme)
+            .with_prompt("Enter cron schedule")
+            .with_initial_text("0 0 * * *")
+            .validate_with(|v: &String| {
+                let mut sched = ScheduleSettings::default();
+                sched.cron = Some(v.to_string());
+                sched.validate_cron().map_err(|e| match e {
+                    ricochet_core::content::ContentError::InvalidSchedule(ee) => ee.to_string(),
+                    _ => "Invalid cron schedule".to_string(),
+                })
+            })
+            .allow_empty(false)
+            .with_post_completion_text("Schedule saved!")
+            .interact_text()?;
+        sched.cron = Some(cron);
+    } else {
+        sched.cron = Some(opts[opt].to_string());
+    }
+    Ok(Some(sched))
+}
+
+pub fn init_rico_toml(dir: &PathBuf) -> anyhow::Result<ContentItem> {
+    let lang = choose_language();
+    let content_type = choose_content_type(&lang)?;
+    let entrypoint = choose_entrypoint(&content_type, dir)?;
+    let schedule = schedule(&content_type)?;
+    let static_ = static_settings(dir, &content_type)?;
+    let name = choose_item_name();
+    let access_type = choose_access_type();
+
+    let packages = Package::from(&lang);
+
+    let language = LanguageConfig {
+        name: lang,
+        packages,
+    };
+
+    let serve = if content_type.is_service() {
+        Some(ServeSettings::default())
+    } else {
+        None
+    };
+
+    let res = ContentItem {
+        content: Content {
+            id: None,
+            name,
+            slug: None,
+            entrypoint,
+            access_type,
+            content_type,
+            summary: None,
+            thumbnail: None,
+            tags: None,
+            include: None,
+            exclude: None,
+        },
+        language,
+        env_vars: None,
+        schedule,
+        serve,
+        static_,
+    };
+
+    println!("{}", toml::to_string_pretty(&res)?);
+    Ok(res)
 }
