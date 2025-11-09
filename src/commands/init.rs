@@ -1,4 +1,5 @@
 use anyhow::bail;
+use colored::Colorize;
 use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
     content::{AccessType, Content, ContentItem, ContentType},
@@ -9,12 +10,12 @@ use std::path::PathBuf;
 use walkdir::WalkDir;
 
 pub fn choose_language() -> Language {
-    let languages = vec![Language::R, Language::Python, Language::Julia];
-    let language_names = vec!["R", "Python", "Julia"];
+    let languages = [Language::R, Language::Python, Language::Julia];
+    let language_names = ["R", "Python", "Julia"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Choose a language")
-        .items(&language_names)
+        .items(language_names)
         .default(0)
         .interact()
         .unwrap_or(0);
@@ -49,8 +50,9 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
         }
     };
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Choose content type")
+        .highlight_matches(true)
         .items(&opts)
         .default(0)
         .interact()
@@ -77,74 +79,115 @@ fn choose_item_name() -> String {
         .unwrap_or_default()
 }
 
-/// FIXME: replace with WalkDir:
-/// https://docs.rs/walkdir/latest/walkdir/struct.WalkDir.html#method.max_depth
-fn find_files_by_extension(extension: &str, search_dir: &PathBuf) -> Vec<PathBuf> {
-    use std::fs;
+// Not case sensitive
+fn find_files_by_extension(extension: &str, search_dir: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
+    let extension_lower = extension.to_lowercase();
 
-    let mut files = Vec::new();
+    let res = WalkDir::new(search_dir)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(|entry| !entry.file_name().eq("renv"))
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry.file_type().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext.to_lowercase() == extension_lower)
+                    .unwrap_or(false)
+        })
+        .filter_map(|entry| {
+            entry
+                .path()
+                .strip_prefix(search_dir)
+                .ok()
+                .map(|inner| inner.to_path_buf())
+        })
+        .collect::<Vec<_>>();
 
-    // Search in specified directory
-    if let Ok(entries) = fs::read_dir(search_dir) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            let path = entry.path();
+    Ok(res)
+}
 
-            // Add files with matching extension in current directory
-            if path.is_file() {
-                if let Some(ext) = path.extension() {
-                    if ext == extension {
-                        if let Ok(relative) = path.strip_prefix(search_dir) {
-                            files.push(relative.to_path_buf());
-                        }
-                    }
-                }
-            }
+fn find_candidate_entrypoints(extension: &str, search_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+    let candidates = find_files_by_extension(extension, search_dir)?;
 
-            // Search one level deep in non-hidden directories
-            if path.is_dir() {
-                if let Some(dir_name) = path.file_name() {
-                    if !dir_name.to_string_lossy().starts_with('.') {
-                        if let Ok(sub_entries) = fs::read_dir(&path) {
-                            for sub_entry in sub_entries.filter_map(|e| e.ok()) {
-                                let sub_path = sub_entry.path();
-                                if sub_path.is_file() {
-                                    if let Some(ext) = sub_path.extension() {
-                                        if ext == extension {
-                                            if let Ok(relative) = sub_path.strip_prefix(search_dir)
-                                            {
-                                                files.push(relative.to_path_buf());
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+    if candidates.is_empty() {
+        bail!(
+            "No valid entrypoint files found in {}",
+            search_dir.display()
+        );
+    }
+
+    let display_candidates = candidates.iter().map(|i| i.display()).collect::<Vec<_>>();
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select entrypoint file")
+        .highlight_matches(true)
+        .items(display_candidates)
+        .interact()?;
+
+    Ok(candidates[selection].clone())
+}
+
+fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
+    let mut candidates = Vec::new();
+
+    // Find all app.R files
+    let app_files = find_files_by_extension("R", dir)?.into_iter().filter(|p| {
+        p.file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.eq_ignore_ascii_case("app.R"))
+            .unwrap_or(false)
+    });
+    candidates.extend(app_files);
+
+    // Find directories with both ui.R and server.R
+    for entry in WalkDir::new(dir)
+        .min_depth(0)
+        .max_depth(2)
+        .into_iter()
+        .filter_entry(|entry| !entry.file_name().eq("renv"))
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_dir())
+    {
+        let ui_path = entry.path().join("ui.R");
+        let server_path = entry.path().join("server.R");
+
+        if ui_path.exists() && server_path.exists() {
+            // Add the directory path (relative to search_dir)
+            if let Ok(relative) = entry.path().strip_prefix(dir) {
+                candidates.push(relative.to_path_buf());
             }
         }
     }
 
-    files.sort();
-    files
-}
-
-fn choose_r_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
-    let r_files = find_files_by_extension("R", dir);
-
-    if r_files.is_empty() {
-        bail!("No .R files found in {}", dir.display());
-    } else {
-        let display_items: Vec<String> = r_files.iter().map(|p| p.display().to_string()).collect();
-
-        let selection = dialoguer::FuzzySelect::with_theme(&ColorfulTheme::default())
-            .with_prompt("Choose R entrypoint")
-            .highlight_matches(true)
-            .items(&display_items)
-            .default(0)
-            .interact()?;
-        Ok(r_files[selection].clone())
+    if candidates.is_empty() {
+        bail!(
+            "No Shiny app found in {}. Looking for app.R or a directory with ui.R and server.R",
+            dir.display()
+        );
     }
+
+    let display_candidates: Vec<String> = candidates
+        .iter()
+        .map(|p| {
+            if p.to_str() == Some("") || p == &PathBuf::from(".") {
+                "./ (ui.R + server.R)".to_string()
+            } else if p.file_name().and_then(|n| n.to_str()) == Some("app.R") {
+                format!("{}", p.display())
+            } else {
+                format!("{}/ (ui.R + server.R)", p.display())
+            }
+        })
+        .collect();
+
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select Shiny app entrypoint")
+        .highlight_matches(true)
+        .items(&display_candidates)
+        .interact()?;
+
+    Ok(candidates[selection].clone())
 }
 
 fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Result<PathBuf> {
@@ -152,19 +195,17 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         ContentType::R
         | ContentType::Plumber
         | ContentType::RService
-        | ContentType::ServerlessR => choose_r_entrypoint(dir),
-        ContentType::Ambiorix => todo!(),
-        ContentType::Shiny => todo!(),
-        ContentType::Rmd => todo!(),
-        ContentType::RmdShiny => todo!(),
-        ContentType::Julia => todo!(),
-        ContentType::JuliaService => todo!(),
-        ContentType::QuartoR => todo!(),
-        ContentType::QuartoRShiny => todo!(),
-        ContentType::QuartoJl => todo!(),
-        ContentType::ServerlessJl => todo!(),
-        ContentType::Python => todo!(),
-        ContentType::PythonService => todo!(),
+        | ContentType::ServerlessR
+        | ContentType::Ambiorix => find_candidate_entrypoints("R", dir),
+        ContentType::Shiny => choose_shiny_entrypoint(dir),
+        ContentType::Rmd | ContentType::RmdShiny => find_candidate_entrypoints("Rmd", dir),
+        ContentType::Julia | ContentType::JuliaService => find_candidate_entrypoints("jl", dir),
+        ContentType::QuartoR | ContentType::QuartoRShiny | ContentType::QuartoJl => {
+            find_candidate_entrypoints("qmd", dir)
+        }
+        ContentType::ServerlessJl | ContentType::Python | ContentType::PythonService => {
+            bail!("Requested content type not yet implemented")
+        }
     }
 }
 
@@ -277,8 +318,11 @@ fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSetting
             .with_prompt("Enter cron schedule")
             .with_initial_text("0 0 * * *")
             .validate_with(|v: &String| {
-                let mut sched = ScheduleSettings::default();
-                sched.cron = Some(v.to_string());
+                let sched = ScheduleSettings {
+                    cron: Some(v.to_string()),
+                    ..Default::default()
+                };
+
                 sched.validate_cron().map_err(|e| match e {
                     ricochet_core::content::ContentError::InvalidSchedule(ee) => ee.to_string(),
                     _ => "Invalid cron schedule".to_string(),
@@ -294,7 +338,28 @@ fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSetting
     Ok(Some(sched))
 }
 
-pub fn init_rico_toml(dir: &PathBuf) -> anyhow::Result<ContentItem> {
+pub fn init_rico_toml(
+    dir: &PathBuf,
+    overwrite: bool,
+    dry_run: bool,
+) -> anyhow::Result<ContentItem> {
+    // Check if _ricochet.toml already exists
+    let toml_path = dir.join("_ricochet.toml");
+
+    if !dry_run && toml_path.exists() && !overwrite {
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "_ricochet.toml already exists at {}. Overwrite?",
+                toml_path.display()
+            ))
+            .default(false)
+            .interact()?;
+
+        if !confirmed {
+            bail!("Cancelled: _ricochet.toml already exists");
+        }
+    }
+
     let lang = choose_language();
     let content_type = choose_content_type(&lang)?;
     let entrypoint = choose_entrypoint(&content_type, dir)?;
@@ -337,6 +402,18 @@ pub fn init_rico_toml(dir: &PathBuf) -> anyhow::Result<ContentItem> {
         static_,
     };
 
-    println!("{}", toml::to_string_pretty(&res)?);
+    let toml_content = toml::to_string_pretty(&res)?;
+
+    if dry_run {
+        // Only print to terminal, don't save
+        println!("{}", toml_content);
+    } else {
+        std::fs::write(&toml_path, &toml_content)?;
+        println!(
+            "{} Created _ricochet.toml",
+            unicode_icons::icons::symbols::check_mark().0.green()
+        );
+    }
+
     Ok(res)
 }
