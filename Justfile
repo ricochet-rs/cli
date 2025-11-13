@@ -291,6 +291,10 @@ build-static target="all":
 build-local PROFILE="release":
     cargo build --profile {{PROFILE}} --bin ricochet
 
+# Development installation
+install: 
+	cargo install --path . --debug
+	
 # Move built binary to local bin
 move-cli-local PROFILE="release": (build-local PROFILE)
     sudo cp target/{{PROFILE}}/ricochet ~/.local/bin/ricochet-dev
