@@ -48,11 +48,16 @@ pub async fn deploy(
     let content_type = ricochet_toml.content.content_type.clone();
 
     if content_id.is_none() && content_type.is_none() {
-        anyhow::bail!("Invalid _ricochet.toml: either 'content.id' or 'content.content_type' must be present");
+        anyhow::bail!(
+            "Invalid _ricochet.toml: either 'content.id' or 'content.content_type' must be present"
+        );
     }
 
     if let Some(ref id) = content_id {
-        println!("📦 Creating new deployment for content item: {}\n", id.bright_cyan());
+        println!(
+            "📦 Creating new deployment for content item: {}\n",
+            id.bright_cyan()
+        );
     } else if let Some(ref ctype) = content_type {
         println!("📦 Deploying new {} content item\n", ctype.bright_cyan());
     } else {
@@ -69,7 +74,10 @@ pub async fn deploy(
 
     let client = RicochetClient::new(config)?;
 
-    match client.deploy(&path, content_id.clone(), &toml_path, &pb, debug).await {
+    match client
+        .deploy(&path, content_id.clone(), &toml_path, &pb, debug)
+        .await
+    {
         Ok(response) => {
             pb.finish_and_clear();
 
@@ -86,12 +94,14 @@ pub async fn deploy(
                         // Replace existing id field
                         use regex::Regex;
                         let re = Regex::new(r#"(?m)^(\s*)id\s*=\s*.*$"#)?;
-                        re.replace(&original_content, format!("${{1}}id = \"{}\"", id)).to_string()
+                        re.replace(&original_content, format!("${{1}}id = \"{}\"", id))
+                            .to_string()
                     } else {
                         // Add id field after [content] section
                         use regex::Regex;
                         let re = Regex::new(r#"(?m)^\[content\]$"#)?;
-                        re.replace(&original_content, format!("[content]\nid = \"{}\"", id)).to_string()
+                        re.replace(&original_content, format!("[content]\nid = \"{}\"", id))
+                            .to_string()
                     };
 
                     std::fs::write(&toml_path, updated_content)?;
@@ -104,9 +114,11 @@ pub async fn deploy(
                 println!("\n{}", "Links:".bold());
 
                 // Show deployment link if deployment_id is available
-                if let Some(deployment_id) = response.get("deployment_id")
+                if let Some(deployment_id) = response
+                    .get("deployment_id")
                     .or_else(|| response.get("deploymentId"))
-                    .and_then(|v| v.as_str()) {
+                    .and_then(|v| v.as_str())
+                {
                     println!("  Deployment: {}/deployments/{}", base_url, deployment_id);
                 }
 
@@ -124,18 +136,30 @@ pub async fn deploy(
 
             // Provide helpful context for 403 errors when updating existing content
             if let Some(id) = content_id.as_ref()
-                && e.to_string().contains("403") {
+                && e.to_string().contains("403")
+            {
                 eprintln!("{} Deployment failed: {}\n", "✗".red().bold(), e);
                 eprintln!("{}", "Hint:".yellow().bold());
-                eprintln!("  You're trying to update content item: {}", id.bright_cyan());
+                eprintln!(
+                    "  You're trying to update content item: {}",
+                    id.bright_cyan()
+                );
                 eprintln!("  This error usually means:");
                 eprintln!("    • The content ID doesn't exist on this server");
                 eprintln!("    • Your API key lacks permission to modify this content item");
                 eprintln!("    • The content item was created on a different server\n");
                 eprintln!("  Try:");
-                eprintln!("    1. Run {} to verify the content item exists", "ricochet list".bright_cyan());
-                eprintln!("    2. Check if you're connected to the correct server: {}", config.server_url().unwrap_or_default().bright_cyan());
-                eprintln!("    3. Remove the 'id' field from _ricochet.toml to create a new content item instead");
+                eprintln!(
+                    "    1. Run {} to verify the content item exists",
+                    "ricochet list".bright_cyan()
+                );
+                eprintln!(
+                    "    2. Check if you're connected to the correct server: {}",
+                    config.server_url().unwrap_or_default().bright_cyan()
+                );
+                eprintln!(
+                    "    3. Remove the 'id' field from _ricochet.toml to create a new content item instead"
+                );
                 anyhow::bail!("")
             }
             anyhow::bail!("Deployment failed: {}", e)
