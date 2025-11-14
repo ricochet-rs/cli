@@ -1,0 +1,23 @@
+[package]
+name = "ricochet-docs-generator"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+clap-markdown = "0.1"
+
+# Testing profile: faster compilation for CI/testing
+[profile.testing]
+inherits = "release"
+opt-level = 2
+lto = false
+strip = false
+debug = 0
+
+# Release profile: full optimization
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
