@@ -49,7 +49,8 @@ shinyApp(ui = ui, server = server)"#,
         let mut server = Server::new_async().await;
 
         // Mock the server response for new content deployment
-        let _m = server.mock("POST", "/api/v0/content/upload")
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
             .match_header("authorization", "Key test_api_key")
             .match_body(Matcher::Any) // Multipart form data
             .with_status(200)
@@ -100,7 +101,8 @@ shinyApp(ui = ui, server = server)"#,
         let mut server = Server::new_async().await;
 
         // Mock the server response for updating existing content
-        let _m = server.mock("POST", "/api/v0/content/upload")
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
             .match_header("authorization", "Key test_api_key")
             .match_body(Matcher::Any) // Should contain id field
             .with_status(200)
@@ -166,10 +168,12 @@ shinyApp(ui = ui, server = server)"#,
         .await;
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No _ricochet.toml found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No _ricochet.toml found")
+        );
     }
 
     #[tokio::test]
@@ -221,7 +225,8 @@ key = "value"
         let mut server = Server::new_async().await;
 
         // Mock the server response with 403 error
-        let _m = server.mock("POST", "/api/v0/content/upload")
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
             .match_header("authorization", "Key invalid_key")
             .with_status(403)
             .with_body(json!({"error": "Invalid API key"}).to_string())
@@ -246,7 +251,9 @@ key = "value"
 
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Authentication failed") || error_msg.contains("Invalid API key"));
+        assert!(
+            error_msg.contains("Authentication failed") || error_msg.contains("Invalid API key")
+        );
     }
 
     #[tokio::test]
@@ -261,10 +268,15 @@ key = "value"
         // Create mock server
         let mut server = Server::new_async().await;
 
-        let _m = server.mock("POST", "/api/v0/content/upload")
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
             .match_header("authorization", "Key test_api_key")
-            .match_body(Matcher::Regex(r#"Content-Disposition: form-data; name="bundle""#.to_string()))
-            .match_body(Matcher::Regex(r#"Content-Disposition: form-data; name="config""#.to_string()))
+            .match_body(Matcher::Regex(
+                r#"Content-Disposition: form-data; name="bundle""#.to_string(),
+            ))
+            .match_body(Matcher::Regex(
+                r#"Content-Disposition: form-data; name="config""#.to_string(),
+            ))
             .with_status(200)
             .with_body(
                 json!({
@@ -307,10 +319,15 @@ key = "value"
         // Create mock server
         let mut server = Server::new_async().await;
 
-        let _m = server.mock("POST", "/api/v0/content/upload")
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
             .match_header("authorization", "Key test_api_key")
-            .match_body(Matcher::Regex(r#"Content-Disposition: form-data; name="bundle""#.to_string()))
-            .match_body(Matcher::Regex(r#"Content-Disposition: form-data; name="id""#.to_string()))
+            .match_body(Matcher::Regex(
+                r#"Content-Disposition: form-data; name="bundle""#.to_string(),
+            ))
+            .match_body(Matcher::Regex(
+                r#"Content-Disposition: form-data; name="id""#.to_string(),
+            ))
             .with_status(200)
             .with_body(
                 json!({
