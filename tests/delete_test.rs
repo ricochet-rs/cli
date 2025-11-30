@@ -26,8 +26,7 @@ mod delete_tests {
         };
 
         // Test delete with force flag (no confirmation)
-        let result =
-            ricochet_cli::commands::delete::delete(&config, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(&config, content_id, true).await;
 
         assert!(result.is_ok());
     }
@@ -54,8 +53,7 @@ mod delete_tests {
         };
 
         // Test delete with non-existent content
-        let result =
-            ricochet_cli::commands::delete::delete(&config, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(&config, content_id, true).await;
 
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
@@ -84,8 +82,7 @@ mod delete_tests {
         };
 
         // Test delete with invalid API key
-        let result =
-            ricochet_cli::commands::delete::delete(&config, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(&config, content_id, true).await;
 
         assert!(result.is_err());
     }
@@ -112,8 +109,7 @@ mod delete_tests {
         };
 
         // Test delete with server error
-        let result =
-            ricochet_cli::commands::delete::delete(&config, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(&config, content_id, true).await;
 
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
@@ -140,8 +136,7 @@ mod delete_tests {
             default_format: Some("table".to_string()),
         };
 
-        let result =
-            ricochet_cli::commands::delete::delete(&config, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(&config, content_id, true).await;
 
         assert!(result.is_ok());
     }
@@ -155,13 +150,19 @@ mod delete_tests {
         let content_id2 = "01K66JV2Q222222222222222";
 
         let _m1 = server
-            .mock("DELETE", format!("/api/v0/content/{}", content_id1).as_str())
+            .mock(
+                "DELETE",
+                format!("/api/v0/content/{}", content_id1).as_str(),
+            )
             .match_header("authorization", "Key test_api_key")
             .with_status(200)
             .create();
 
         let _m2 = server
-            .mock("DELETE", format!("/api/v0/content/{}", content_id2).as_str())
+            .mock(
+                "DELETE",
+                format!("/api/v0/content/{}", content_id2).as_str(),
+            )
             .match_header("authorization", "Key test_api_key")
             .with_status(200)
             .create();
@@ -173,13 +174,11 @@ mod delete_tests {
         };
 
         // Delete first item
-        let result1 =
-            ricochet_cli::commands::delete::delete(&config, content_id1, true).await;
+        let result1 = ricochet_cli::commands::delete::delete(&config, content_id1, true).await;
         assert!(result1.is_ok());
 
         // Delete second item
-        let result2 =
-            ricochet_cli::commands::delete::delete(&config, content_id2, true).await;
+        let result2 = ricochet_cli::commands::delete::delete(&config, content_id2, true).await;
         assert!(result2.is_ok());
     }
 }
