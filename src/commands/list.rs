@@ -7,14 +7,16 @@ use std::cmp::Ordering;
 // Helper function to compare items by a specific field
 fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -> Ordering {
     let a_val = match field {
-        "status" => a.get("status")
+        "status" => a
+            .get("status")
             .or_else(|| a.get("deployment_status"))
             .or_else(|| a.get("last_deployment_status")),
         _ => a.get(field),
     };
 
     let b_val = match field {
-        "status" => b.get("status")
+        "status" => b
+            .get("status")
             .or_else(|| b.get("deployment_status"))
             .or_else(|| b.get("last_deployment_status")),
         _ => b.get(field),
@@ -125,7 +127,15 @@ pub async fn list(
 
             let mut table = Table::new();
             table.load_preset(UTF8_FULL);
-            table.set_header(vec!["ID", "Name", "Type", "Language", "Visibility", "Status", "Updated"]);
+            table.set_header(vec![
+                "ID",
+                "Name",
+                "Type",
+                "Language",
+                "Visibility",
+                "Status",
+                "Updated",
+            ]);
 
             for item in &filtered_items {
                 let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
@@ -134,16 +144,14 @@ pub async fn list(
                     .get("content_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("-");
-                let language = item
-                    .get("language")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
+                let language = item.get("language").and_then(|v| v.as_str()).unwrap_or("-");
                 let visibility = item
                     .get("visibility")
                     .and_then(|v| v.as_str())
                     .unwrap_or("private");
                 // Try multiple possible status field names
-                let status = item.get("status")
+                let status = item
+                    .get("status")
                     .or_else(|| item.get("deployment_status"))
                     .or_else(|| item.get("last_deployment_status"))
                     .and_then(|v| v.as_str())

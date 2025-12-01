@@ -11,11 +11,24 @@ struct Cli {
     command: Option<Commands>,
 
     /// Server URL (can also be set with RICOCHET_SERVER environment variable)
-    #[arg(global = true, short = 'S', long, env = "RICOCHET_SERVER", help_heading = "Global Options")]
+    #[arg(
+        global = true,
+        short = 'S',
+        long,
+        env = "RICOCHET_SERVER",
+        help_heading = "Global Options"
+    )]
     server: Option<String>,
 
     /// Output format
-    #[arg(global = true, short = 'F', long, default_value = "table", value_enum, help_heading = "Global Options")]
+    #[arg(
+        global = true,
+        short = 'F',
+        long,
+        default_value = "table",
+        value_enum,
+        help_heading = "Global Options"
+    )]
     format: OutputFormat,
 
     /// Enable debug output
@@ -69,6 +82,11 @@ enum Commands {
         /// Skip confirmation
         #[arg(short = 'f', long)]
         force: bool,
+    },
+    /// Invoke a task
+    Invoke {
+        /// Content item ID (ULID)
+        id: String,
     },
     /// Show configuration
     Config {
@@ -134,6 +152,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, &id, force).await?;
+        }
+        Some(Commands::Invoke { id }) => {
+            commands::invoke::invoke(&config, &id, cli.format).await?;
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
