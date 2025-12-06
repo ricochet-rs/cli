@@ -28,6 +28,10 @@ struct Cli {
     #[arg(global = true, short = 'F', long, default_value = "table", value_enum, help_heading = "Global Options")]
     format: OutputFormat,
 
+    /// Enable debug output
+    #[arg(global = true, long, help_heading = "Global Options")]
+    debug: bool,
+
     /// Print version
     #[arg(short = 'V', long)]
     version: bool,
@@ -81,6 +85,18 @@ enum Commands {
         /// Show full configuration including sensitive values
         #[arg(short = 'A', long)]
         show_all: bool,
+    },
+    /// Initialize a new Ricochet deployment
+    Init {
+        /// Directory to initialize (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: std::path::PathBuf,
+        /// Overwrite existing _ricochet.toml file without confirmation
+        #[arg(long)]
+        overwrite: bool,
+        /// Preview the _ricochet.toml without saving to file
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 

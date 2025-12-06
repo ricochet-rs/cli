@@ -137,8 +137,7 @@ impl RicochetClient {
 
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
-        let tar_path =
-            std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
+        let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
         crate::utils::create_bundle(path, &tar_path, debug)?;
 
         // Get file size for progress tracking
@@ -161,7 +160,8 @@ impl RicochetClient {
             progress_bar: pb.clone(),
             bytes_read: 0,
         };
-        let bundle_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(progress_reader));
+        let bundle_body =
+            reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(progress_reader));
 
         let mut form = reqwest::multipart::Form::new().part(
             "bundle",
@@ -176,7 +176,8 @@ impl RicochetClient {
         } else {
             // Creating new content - include the config file
             let toml_file = tokio::fs::File::open(toml_path).await?;
-            let toml_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
+            let toml_body =
+                reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
             form = form.part(
                 "config",
                 reqwest::multipart::Part::stream(toml_body)

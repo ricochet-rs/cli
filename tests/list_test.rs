@@ -11,7 +11,8 @@ mod list_tests {
         let mut server = Server::new_async().await;
 
         // Mock the server response for list items
-        let _m = server.mock("GET", "/api/v0/user/items")
+        let _m = server
+            .mock("GET", "/api/v0/user/items")
             .match_header("authorization", "Key test_api_key")
             .with_status(200)
             .with_body(
@@ -112,7 +113,8 @@ mod list_tests {
         let mut server = Server::new_async().await;
 
         // Mock the server response
-        let _m = server.mock("GET", "/api/v0/user/items")
+        let _m = server
+            .mock("GET", "/api/v0/user/items")
             .match_header("authorization", "Key test_api_key")
             .with_status(200)
             .with_body(
@@ -178,7 +180,8 @@ mod list_tests {
         let mut server = Server::new_async().await;
 
         // Mock empty response
-        let _m = server.mock("GET", "/api/v0/user/items")
+        let _m = server
+            .mock("GET", "/api/v0/user/items")
             .match_header("authorization", "Key test_api_key")
             .with_status(200)
             .with_body(json!([]).to_string())
