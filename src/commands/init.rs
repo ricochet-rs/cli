@@ -394,12 +394,14 @@ pub fn init_rico_toml(
             tags: None,
             include: None,
             exclude: None,
+            exec_env: None,
         },
         language,
         env_vars: None,
         schedule,
         serve,
         static_,
+        resources: None,
     };
 
     let toml_content = toml::to_string_pretty(&res)?;

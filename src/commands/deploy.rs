@@ -2,21 +2,8 @@ use crate::{client::RicochetClient, config::Config};
 use anyhow::Result;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use serde::{Deserialize, Serialize};
+use ricochet_core::content::ContentItem;
 use std::path::PathBuf;
-
-#[derive(Debug, Deserialize, Serialize)]
-struct RicochetToml {
-    #[serde(default)]
-    content: ContentSection,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-struct ContentSection {
-    id: Option<String>,
-    content_type: Option<String>,
-}
 
 pub async fn deploy(
     config: &Config,
@@ -42,26 +29,21 @@ pub async fn deploy(
 
     // Read and parse _ricochet.toml
     let toml_content = std::fs::read_to_string(&toml_path)?;
-    let ricochet_toml: RicochetToml = toml::from_str(&toml_content)?;
+    let ricochet_toml = ContentItem::from_toml(&toml_content)?;
 
     let content_id = ricochet_toml.content.id.clone();
-    let content_type = ricochet_toml.content.content_type.clone();
-
-    if content_id.is_none() && content_type.is_none() {
-        anyhow::bail!(
-            "Invalid _ricochet.toml: either 'content.id' or 'content.content_type' must be present"
-        );
-    }
+    let content_type = ricochet_toml.content.content_type;
 
     if let Some(ref id) = content_id {
         println!(
             "📦 Creating new deployment for content item: {}\n",
             id.bright_cyan()
         );
-    } else if let Some(ref ctype) = content_type {
-        println!("📦 Deploying new {} content item\n", ctype.bright_cyan());
     } else {
-        println!("📦 Deploying content from: {}\n", path.display());
+        println!(
+            "📦 Deploying new {} content item\n",
+            content_type.to_string().bright_cyan()
+        );
     }
 
     let pb = ProgressBar::new_spinner();
@@ -97,6 +79,7 @@ pub async fn deploy(
                         re.replace(&original_content, format!("${{1}}id = \"{}\"", id))
                             .to_string()
                     } else {
+                        // FIXME: use toml-edit here
                         // Add id field after [content] section
                         use regex::Regex;
                         let re = Regex::new(r#"(?m)^\[content\]$"#)?;

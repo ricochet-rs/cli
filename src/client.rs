@@ -1,7 +1,9 @@
 use crate::config::Config;
 use anyhow::{Context, Result};
 use reqwest::{Client, Response, StatusCode};
+use ricochet_core::content::ContentItem;
 use serde::de::DeserializeOwned;
+use std::fs::read_to_string;
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context as TaskContext, Poll};
@@ -135,10 +137,14 @@ impl RicochetClient {
     ) -> Result<serde_json::Value> {
         let url = format!("{}/api/v0/content/upload", self.base_url);
 
+        let content_item = ContentItem::from_toml(&read_to_string(toml_path)?)?;
+        let include = content_item.content.include;
+        let exclude = content_item.content.exclude;
+
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
         let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
-        crate::utils::create_bundle(path, &tar_path, debug)?;
+        crate::utils::create_bundle(path, &tar_path, include, exclude, debug)?;
 
         // Get file size for progress tracking
         let file_size = tokio::fs::metadata(&tar_path).await?.len();
