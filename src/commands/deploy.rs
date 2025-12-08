@@ -33,7 +33,7 @@ pub async fn deploy(
             .interact()?;
 
         if !confirmed {
-            anyhow::bail!("No _ricochet.toml found in {}", path.display());
+            anyhow::bail!("No _ricochet.toml provided. Please create one with `ricochet init`");
         }
 
         // Create _ricochet.toml using init command
