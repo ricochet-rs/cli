@@ -1,6 +1,7 @@
 use crate::{client::RicochetClient, config::Config};
 use anyhow::Result;
 use colored::Colorize;
+use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::content::ContentItem;
 use std::path::PathBuf;
@@ -24,7 +25,19 @@ pub async fn deploy(
     };
 
     if !toml_path.exists() {
-        anyhow::bail!("No _ricochet.toml found in {}", path.display());
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "No _ricochet.toml found. Would you like to create one?"
+            ))
+            .default(true)
+            .interact()?;
+
+        if !confirmed {
+            anyhow::bail!("No _ricochet.toml found in {}", path.display());
+        }
+
+        // Create _ricochet.toml using init command
+        crate::commands::init::init_rico_toml(&path, false, false)?;
     }
 
     // Read and parse _ricochet.toml
