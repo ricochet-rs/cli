@@ -56,9 +56,6 @@ mockito = "1.5"
 tempfile = "3.8"
 tokio-test = "0.4"
 
-[patch."https://github.com/ricochet-rs/ricochet"]
-ricochet-core = { path = "../ricochet/ricochet-core" }
-
 # Optimize dependencies even in dev mode for better test performance
 [profile.dev.package."*"]
 opt-level = 3
