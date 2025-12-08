@@ -4,6 +4,7 @@ use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::content::ContentItem;
+
 use std::path::PathBuf;
 
 pub async fn deploy(
@@ -13,6 +14,8 @@ pub async fn deploy(
     _description: Option<String>,
     debug: bool,
 ) -> Result<()> {
+    use std::io::IsTerminal;
+
     if !path.exists() {
         anyhow::bail!("Path does not exist: {}", path.display());
     }
@@ -25,19 +28,28 @@ pub async fn deploy(
     };
 
     if !toml_path.exists() {
-        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "No _ricochet.toml found. Would you like to create one?"
-            ))
-            .default(true)
-            .interact()?;
+        // Check if we're in an interactive terminal
+        if std::io::stdin().is_terminal() {
+            let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt(format!(
+                    "No _ricochet.toml found. Would you like to create one?"
+                ))
+                .default(true)
+                .interact()?;
 
-        if !confirmed {
-            anyhow::bail!("No _ricochet.toml provided. Please create one with `ricochet init`");
+            if !confirmed {
+                anyhow::bail!("No _ricochet.toml provided. Please create one with `ricochet init`");
+            }
+
+            // Create _ricochet.toml using init command
+            crate::commands::init::init_rico_toml(&path, false, false)?;
+        } else {
+            // Non-interactive mode (tests, CI, etc.)
+            anyhow::bail!(
+                "No _ricochet.toml found in {}. Please create one with `ricochet init`",
+                path.display()
+            );
         }
-
-        // Create _ricochet.toml using init command
-        crate::commands::init::init_rico_toml(&path, false, false)?;
     }
 
     // Read and parse _ricochet.toml
