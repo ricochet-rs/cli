@@ -164,6 +164,41 @@ shinyApp(ui = ui, server = server)"#,
     }
 
     #[tokio::test]
+    async fn test_deploy_missing_toml() {
+        // Create a temporary directory without _ricochet.toml
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+
+        // Create mock server (not used but needed for config)
+        let server = Server::new_async().await;
+
+        // Create test config
+        let config = ricochet_cli::config::Config {
+            server: Some(server.url()),
+            api_key: Some("test_api_key".to_string()),
+            default_format: Some("table".to_string()),
+        };
+
+        // Run deploy command - should fail
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No _ricochet.toml found")
+        );
+    }
+
+    #[tokio::test]
     async fn test_deploy_invalid_toml() {
         // Create a temporary directory with invalid _ricochet.toml
         let temp_dir = TempDir::new().unwrap();
