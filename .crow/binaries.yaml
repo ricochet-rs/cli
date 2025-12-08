@@ -3,7 +3,7 @@ when:
   - event: deployment
 
 labels:
-  type: autoscale
+  group: ccx
 
 steps:
   build:

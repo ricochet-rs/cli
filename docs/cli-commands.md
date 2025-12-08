@@ -11,6 +11,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet list`↴](#ricochet-list)
 * [`ricochet delete`↴](#ricochet-delete)
 * [`ricochet config`↴](#ricochet-config)
+* [`ricochet init`↴](#ricochet-init)
 
 ## `ricochet`
 
@@ -26,6 +27,7 @@ Ricochet CLI
 * `list` — List all content items
 * `delete` — Delete a content item
 * `config` — Show configuration
+* `init` — Initialize a new Ricochet deployment
 
 ###### **Options:**
 
@@ -36,6 +38,7 @@ Ricochet CLI
 
   Possible values: `table`, `json`, `yaml`
 
+* `--debug` — Enable debug output
 * `-V`, `--version` — Print version
 
 
@@ -118,6 +121,25 @@ Show configuration
 ###### **Options:**
 
 * `-A`, `--show-all` — Show full configuration including sensitive values
+
+
+
+## `ricochet init`
+
+Initialize a new Ricochet deployment
+
+**Usage:** `ricochet init [OPTIONS] [PATH]`
+
+###### **Arguments:**
+
+* `<PATH>` — Directory to initialize (defaults to current directory)
+
+  Default value: `.`
+
+###### **Options:**
+
+* `--overwrite` — Overwrite existing _ricochet.toml file without confirmation
+* `--dry-run` — Preview the _ricochet.toml without saving to file
 
 
 

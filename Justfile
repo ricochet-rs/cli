@@ -288,6 +288,10 @@ build-static target="all":
     esac
 
 
+# Install debug version locally
+install:
+	cargo install --path . --debug
+
 build-local PROFILE="release":
     cargo build --profile {{PROFILE}} --bin ricochet
 
@@ -303,14 +307,14 @@ move-cli-local PROFILE="release": (build-local PROFILE)
 docs:
     @echo "Generating CLI documentation..."
     @mkdir -p docs
-    @cargo run --quiet --manifest-path docs-generator/Cargo.toml > docs/cli-commands.md 2>/dev/null
+    @cargo run --quiet -- generate-docs > docs/cli-commands.md 2>/dev/null
     @echo "✓ Documentation generated: docs/cli-commands.md"
 
 # check if CLI documentation is up-to-date
 docs-check:
     @echo "Checking if CLI documentation is up-to-date..."
     @mkdir -p docs
-    @cargo run --quiet --manifest-path docs-generator/Cargo.toml > /tmp/cli-commands-generated.md 2>/dev/null
+    @cargo run --quiet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null
     @if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then \
         echo "❌ ERROR: CLI documentation is out of date!"; \
         echo ""; \

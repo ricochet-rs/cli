@@ -94,6 +94,18 @@ enum Commands {
         #[arg(short = 'A', long)]
         show_all: bool,
     },
+    /// Initialize a new Ricochet deployment
+    Init {
+        /// Directory to initialize (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: std::path::PathBuf,
+        /// Overwrite existing _ricochet.toml file without confirmation
+        #[arg(long)]
+        overwrite: bool,
+        /// Preview the _ricochet.toml without saving to file
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
     GenerateDocs,
@@ -158,6 +170,13 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
+        }
+        Some(Commands::Init {
+            path,
+            overwrite,
+            dry_run,
+        }) => {
+            commands::init::init_rico_toml(&path, overwrite, dry_run)?;
         }
         Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
