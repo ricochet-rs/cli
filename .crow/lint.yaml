@@ -61,7 +61,7 @@ steps:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
       # Generate docs using the same command as 'just docs'
-      - cargo run --quiet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
+      - cargo run --quiet -- generate-docs > /tmp/cli-commands-generated.md || (echo "Failed to generate docs" && exit 1)
       # Check if docs are up-to-date
       - |
         if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then
