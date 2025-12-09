@@ -57,7 +57,7 @@ pub async fn invoke(config: &Config, id: &str, format: OutputFormat) -> Result<(
             Ok(())
         }
         Err(e) => {
-            anyhow::bail!("Failed to invoke task: {}", e)
+            anyhow::bail!("Failed to invoke task: {e}")
         }
     }
 }

@@ -10,6 +10,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet deploy`↴](#ricochet-deploy)
 * [`ricochet list`↴](#ricochet-list)
 * [`ricochet delete`↴](#ricochet-delete)
+* [`ricochet invoke`↴](#ricochet-invoke)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet init`↴](#ricochet-init)
 
@@ -26,6 +27,7 @@ Ricochet CLI
 * `deploy` — Deploy content to the server
 * `list` — List all content items
 * `delete` — Delete a content item
+* `invoke` — Invoke a task
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
 
@@ -112,6 +114,18 @@ Delete a content item
 
 
 
+## `ricochet invoke`
+
+Invoke a task
+
+**Usage:** `ricochet invoke <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+
+
+
 ## `ricochet config`
 
 Show configuration
@@ -149,3 +163,4 @@ Initialize a new Ricochet deployment
     This document was generated automatically by
     <a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
 </i></small>
+
