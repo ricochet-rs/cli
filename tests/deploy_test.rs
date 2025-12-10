@@ -14,13 +14,27 @@ mod deploy_tests {
             format!(
                 r#"[content]
 id = "{}"
-content_type = "api"
+name = "test-app"
+content_type = "shiny"
+entrypoint = "app.R"
+access_type = "private"
+
+[language]
+name = "r"
+packages = "renv.lock"
 "#,
                 id
             )
         } else {
             r#"[content]
-content_type = "api"
+content_type = "shiny"
+name = "test-app"
+entrypoint = "app.R"
+access_type = "private"
+
+[language]
+name = "r"
+packages = "renv.lock"
 "#
             .to_string()
         };
@@ -58,7 +72,7 @@ shinyApp(ui = ui, server = server)"#,
                 json!({
                     "id": "01JZA237920RN65T2XHCCV7296",
                     "name": "test-content",
-                    "content_type": "api",
+                    "content_type": "shiny",
                     "status": "deployed"
                 })
                 .to_string(),
@@ -81,6 +95,10 @@ shinyApp(ui = ui, server = server)"#,
             false,
         )
         .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        };
 
         assert!(result.is_ok());
 
@@ -110,7 +128,7 @@ shinyApp(ui = ui, server = server)"#,
                 json!({
                     "id": existing_id,
                     "name": "test-content",
-                    "content_type": "api",
+                    "content_type": "shiny",
                     "status": "deployed"
                 })
                 .to_string(),
@@ -133,6 +151,10 @@ shinyApp(ui = ui, server = server)"#,
             false,
         )
         .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        };
 
         assert!(result.is_ok());
 
@@ -250,6 +272,7 @@ key = "value"
         .await;
 
         assert!(result.is_err());
+
         let error_msg = result.unwrap_err().to_string();
         assert!(
             error_msg.contains("Authentication failed") || error_msg.contains("Invalid API key")
@@ -282,7 +305,7 @@ key = "value"
                 json!({
                     "id": "01JZA237920RN65T2XHCCV7296",
                     "name": "test-content",
-                    "content_type": "api",
+                    "content_type": "shiny",
                     "status": "deployed"
                 })
                 .to_string(),
@@ -303,6 +326,10 @@ key = "value"
             false,
         )
         .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        };
 
         assert!(result.is_ok());
     }
@@ -333,7 +360,7 @@ key = "value"
                 json!({
                     "id": existing_id,
                     "name": "test-content",
-                    "content_type": "api",
+                    "content_type": "shiny",
                     "status": "deployed"
                 })
                 .to_string(),

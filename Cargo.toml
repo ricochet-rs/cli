@@ -24,6 +24,7 @@ comfy-table = "7.1"
 dialoguer = { version = "0.12", features = ["fuzzy-select"] }
 dirs = "6.0"
 flate2 = "1.0"
+globset = "0.4"
 html-escape = "0.2"
 indicatif = "0.18"
 prefixed-api-key = "0.3"
@@ -60,12 +61,10 @@ tokio-test = "0.4"
 opt-level = 3
 debug = 2
 
-# Release profile: full optimization for production builds (matches ricochet repo)
-# Only used for tagged releases
 [profile.release]
-strip = "symbols"  # Strip symbols for smaller binaries
-lto = true  # Full LTO for maximum optimization
-codegen-units = 1  # Single unit for best optimization
+strip = "symbols"
+lto = true
+codegen-units = 1
 
 # Testing profile: faster compilation for CI/testing (matches ricochet repo)
 # Use with: cargo build --profile testing
