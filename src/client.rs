@@ -150,6 +150,10 @@ impl RicochetClient {
         let include = content_item.content.include;
         let exclude = content_item.content.exclude;
 
+        let content_item = ContentItem::from_toml(&read_to_string(toml_path)?)?;
+        let include = content_item.content.include;
+        let exclude = content_item.content.exclude;
+
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
         let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
