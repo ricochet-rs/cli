@@ -83,6 +83,11 @@ enum Commands {
         #[arg(short = 'f', long)]
         force: bool,
     },
+    /// Invoke a task
+    Invoke {
+        /// Content item ID (ULID)
+        id: String,
+    },
     /// Show configuration
     Config {
         /// Show full configuration including sensitive values
@@ -159,6 +164,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, &id, force).await?;
+        }
+        Some(Commands::Invoke { id }) => {
+            commands::invoke::invoke(&config, &id, cli.format).await?;
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
