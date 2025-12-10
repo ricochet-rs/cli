@@ -41,7 +41,7 @@ steps:
     environment:
       SQLX_OFFLINE: true
       GITHUB_TOKEN:
-        from_secret: ricochet_bot_token
+        from_secret: github_token
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
@@ -59,7 +59,7 @@ steps:
     depends_on: cache
     environment:
       GITHUB_TOKEN:
-        from_secret: ricochet_bot_token
+        from_secret: github_token
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
