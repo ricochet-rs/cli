@@ -57,14 +57,16 @@ steps:
   check-docs:
     image: reg.ricochet.rs/docker.io/library/rust:1.91
     depends_on: cache
+    environment:
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
     commands:
       - export PATH=".sccache-cache:$PATH"
       - . ./.sccache
-      # Build only the lightweight docs generator (no heavy dependencies needed)
-      # Use CI profile for faster builds
-      - cargo build --quiet --manifest-path docs-generator/Cargo.toml --profile testing
-      # Generate new docs using the fast generator
-      - cargo run --quiet --manifest-path docs-generator/Cargo.toml --profile testing > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
+      # git auth
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # Generate docs using the same command as 'just docs'
+      - cargo run --quiet -- generate-docs > /tmp/cli-commands-generated.md 2>/dev/null || (echo "Failed to generate docs" && exit 1)
       # Check if docs are up-to-date
       - |
         if ! diff -q docs/cli-commands.md /tmp/cli-commands-generated.md > /dev/null 2>&1; then

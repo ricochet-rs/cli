@@ -4,7 +4,6 @@ use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::content::ContentItem;
-
 use std::path::PathBuf;
 
 pub async fn deploy(

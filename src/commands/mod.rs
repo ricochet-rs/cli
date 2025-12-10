@@ -3,4 +3,5 @@ pub mod config;
 pub mod delete;
 pub mod deploy;
 pub mod init;
+pub mod invoke;
 pub mod list;
