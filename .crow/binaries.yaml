@@ -100,7 +100,7 @@ steps:
       event: tag
 
   'Clone homebrew-tap':
-    image: alpine:3.22
+    image: alpine:3.23
     depends_on:
       - changelog
     commands:
