@@ -1,6 +1,9 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ricochet_cli::{OutputFormat, commands, config::Config};
+use ricochet_cli::{
+    OutputFormat, commands,
+    config::{Config, parse_server_url},
+};
 
 #[derive(Parser)]
 #[command(name = "ricochet")]
@@ -123,10 +126,10 @@ async fn main() -> Result<()> {
         let build_date = env!("BUILD_DATE");
 
         if has_tag == "true" || git_hash.is_empty() {
-            // Tagged release or not in git repo - just show version
+            // Tagged release
             println!("{}", version);
         } else {
-            // Untagged build - append git hash and build date
+            // Untagged build
             println!("{}-{} ({})", version, git_hash, build_date);
         }
         return Ok(());
@@ -137,7 +140,7 @@ async fn main() -> Result<()> {
 
     // Override server if provided via CLI
     if let Some(server) = cli.server {
-        config.server = Some(server);
+        config.server = parse_server_url(&server)?;
     }
 
     // Execute command

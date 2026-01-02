@@ -3,6 +3,7 @@ use serde_json::json;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
+use url::Url;
 
 #[cfg(test)]
 mod deploy_tests {
@@ -81,7 +82,7 @@ shinyApp(ui = ui, server = server)"#,
 
         // Create test config
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -137,7 +138,7 @@ shinyApp(ui = ui, server = server)"#,
 
         // Create test config
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -169,17 +170,13 @@ shinyApp(ui = ui, server = server)"#,
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path();
 
-        // Create mock server (not used but needed for config)
-        let server = Server::new_async().await;
-
         // Create test config
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse("http://localhost:3000").unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
 
-        // Run deploy command - should fail
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
             project_path.to_path_buf(),
@@ -189,12 +186,13 @@ shinyApp(ui = ui, server = server)"#,
         )
         .await;
 
+        dbg!(&result);
         assert!(result.is_err());
         assert!(
             result
                 .unwrap_err()
                 .to_string()
-                .contains("No _ricochet.toml found")
+                .contains("No _ricochet.toml")
         );
     }
 
@@ -218,7 +216,7 @@ key = "value"
 
         // Create test config
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -256,7 +254,7 @@ key = "value"
 
         // Create test config with invalid key
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("invalid_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -313,7 +311,7 @@ key = "value"
             .create();
 
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -368,7 +366,7 @@ key = "value"
             .create();
 
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };

@@ -46,7 +46,7 @@ tokio-util = { version = "0.7", features = ["io"] }
 toml = "0.9"
 ulid = "1.1"
 unicode-icons = "2.0"
-url = "2.5"
+url = { version = "2.5", features = ["serde"] }
 urlencoding = "2.1"
 walkdir = "2.5"
 webbrowser = "1.0"

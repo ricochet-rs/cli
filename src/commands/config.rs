@@ -8,11 +8,7 @@ pub fn show(config: &Config, show_all: bool) -> Result<()> {
     println!("Config file: {}", Config::config_path()?.display());
     println!();
 
-    if let Some(server) = &config.server {
-        println!("Server URL: {}", server.bright_cyan());
-    } else {
-        println!("Server URL: {}", "Not configured".yellow());
-    }
+    println!("Server URL: {}", config.server.as_str().bright_cyan());
 
     if let Some(api_key) = &config.api_key {
         if show_all {

@@ -1,5 +1,6 @@
 use mockito::{Matcher, Server};
 use serde_json::json;
+use url::Url;
 
 #[cfg(test)]
 mod invoke_tests {
@@ -31,7 +32,7 @@ mod invoke_tests {
             .create();
 
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -68,7 +69,7 @@ mod invoke_tests {
 
         // Create test config with invalid key
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("invalid_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -104,7 +105,7 @@ mod invoke_tests {
 
         // Create test config
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("table".to_string()),
         };
@@ -149,7 +150,7 @@ mod invoke_tests {
             .create();
 
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("json".to_string()),
         };
@@ -197,7 +198,7 @@ mod invoke_tests {
             .create();
 
         let config = ricochet_cli::config::Config {
-            server: Some(server.url()),
+            server: Url::parse(&server.url()).unwrap(),
             api_key: Some("test_api_key".to_string()),
             default_format: Some("yaml".to_string()),
         };
