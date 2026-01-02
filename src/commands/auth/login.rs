@@ -2,11 +2,12 @@ use super::auth_ui;
 use crate::{client::RicochetClient, config::Config};
 use anyhow::Result;
 use colored::Colorize;
-use dialoguer::{Confirm, Input, Password};
+use dialoguer::Password;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use unicode_icons::icons::symbols;
+use url::Url;
 
 #[derive(Debug)]
 struct AuthState {
@@ -35,106 +36,50 @@ pub(crate) struct ApiKeyResponse {
 pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
     println!("🔐 Authenticating against ricochet server\n");
 
-    // First check if API key is set via environment variable
-    if let Ok(env_key) = std::env::var("RICOCHET_API_KEY")
-        && let Ok(server) = std::env::var("RICOCHET_SERVER")
-    {
-        println!("Using API key from environment variable");
-
-        // Validate the key
-        let client = RicochetClient::new_with_key(server.clone(), env_key.clone())?;
-        match client.validate_key().await {
-            Ok(true) => {
-                println!(
-                    "{} Already authenticated via environment variables",
-                    symbols::check_mark().to_string().green().bold()
-                );
-                // Note: We can't check expiration without server returning it
-                println!(
-                    "{}",
-                    "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)"
-                        .dimmed()
-                );
-                return Ok(());
-            }
-            Ok(false) | Err(_) => {
-                println!(
-                    "{} Environment API key is invalid or expired, proceeding with login...",
-                    "⚠".yellow()
-                );
-            }
-        }
-    }
-
-    // Get server URL
-    let server = if let Ok(server) = std::env::var("RICOCHET_SERVER") {
-        println!(
-            "{}",
-            format!(
-                "Using server info from $RICOCHET_SERVER env var: {}",
-                server
-            )
-            .dimmed()
-        );
-        server
-    } else if let Some(server) = config.server.clone() {
-        let use_existing = Confirm::new()
-            .with_prompt(format!("Use server: {}?", server))
-            .default(true)
-            .interact()?;
-
-        if use_existing {
-            server
+    // Try to create a client - this automatically checks env vars via
+    // config.server_url() and config.api_key()
+    if let Ok(client) = RicochetClient::new(config) {
+        if client.validate_key().await.unwrap_or(false) {
+            println!(
+                "{} Already authenticated",
+                symbols::check_mark().to_string().green().bold()
+            );
+            // Note: We can't check expiration without server returning it
+            println!(
+                "{}",
+                "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)".dimmed()
+            );
+            return Ok(());
         } else {
-            Input::new()
-                .with_prompt("Server URL")
-                .default("http://localhost:3000".to_string())
-                .interact_text()?
+            println!(
+                "{} Existing credentials are invalid or expired, proceeding with login...",
+                "⚠".yellow()
+            );
         }
-    } else {
-        Input::new()
-            .with_prompt("Server URL")
-            .default("http://localhost:3000".to_string())
-            .interact_text()?
-    };
+    }
 
-    // If an API key was provided directly, use it
+    // Get server URL (checks env var first, then uses config.server)
+    let server = config.server_url()?;
+
+    // If an API key was provided directly, try to validate it
     if let Some(key) = api_key {
-        println!("\n{}", "Validating provided API key...".dimmed());
-        let client = RicochetClient::new_with_key(server.clone(), key.clone())?;
-
-        match client.validate_key().await {
-            Ok(true) => {
-                config.server = Some(server);
-                config.api_key = Some(key);
-                config.save()?;
-
-                println!(
-                    "\n{} Successfully authenticated!",
-                    symbols::check_mark().to_string().green().bold()
-                );
-                println!(
-                    "Configuration saved to: {}",
-                    Config::config_path()?.display()
-                );
-                return Ok(());
-            }
-            Ok(false) => {
-                anyhow::bail!("Invalid API key")
-            }
+        match validate_and_save_key(config, server.clone(), key).await {
+            Ok(()) => return Ok(()),
             Err(e) => {
-                anyhow::bail!("Failed to validate credentials: {}", e)
+                println!("{} Provided API key is invalid: {}", "⚠".yellow(), e);
+                println!("Proceeding with OAuth authentication...\n");
+                // Continue to OAuth flow below
             }
         }
     }
 
-    // Always use OAuth with local callback server
+    // Use OAuth with local callback server
     oauth_login_with_callback(config, server).await?;
 
     Ok(())
 }
 
-async fn oauth_login_with_callback(config: &mut Config, server: String) -> Result<()> {
+async fn oauth_login_with_callback(config: &mut Config, server: url::Url) -> Result<()> {
     use axum::{Router, extract::Query, response::Html, routing::get};
     use std::collections::HashMap;
     use tokio::net::TcpListener;
@@ -144,7 +89,7 @@ async fn oauth_login_with_callback(config: &mut Config, server: String) -> Resul
     // First, try to check if there's an existing valid API key
     if let Some(existing_key) = &config.api_key {
         println!("{}", "Checking existing credentials...".dimmed());
-        let client = RicochetClient::new_with_key(server.clone(), existing_key.clone())?;
+        let client = RicochetClient::new_with_key(server.to_string(), existing_key.clone())?;
         if client.validate_key().await.unwrap_or(false) {
             println!(
                 "{} Already authenticated with valid API key",
@@ -219,20 +164,15 @@ async fn oauth_login_with_callback(config: &mut Config, server: String) -> Resul
     // Start the local server
     let server_handle = tokio::spawn(async move { axum::serve(listener, app).await });
 
-    // Build OAuth URL with our callback
-    // Note: Server should handle the redirect_uri properly and use ? for first param
-    let oauth_url = format!(
-        "{}/oauth/authorize?redirect_uri={}&response_type=code&client_id=cli",
-        server,
-        urlencoding::encode(&callback_url)
-    );
+    // Build OAuth URL with our callback using Url methods to properly handle trailing slashes
+    let oauth_url = config.build_authorize_url(&callback_url)?;
 
     println!("\nOpening browser for authentication...");
     println!("If browser doesn't open, visit:");
-    println!("  {}", oauth_url.bright_cyan().underline());
+    println!("  {}", oauth_url.to_string().bright_cyan().underline());
 
     // Open browser
-    if webbrowser::open(&oauth_url).is_err() {
+    if webbrowser::open(oauth_url.as_str()).is_err() {
         println!("\n{}", "Could not open browser automatically".dimmed());
     }
 
@@ -286,9 +226,10 @@ async fn oauth_login_with_callback(config: &mut Config, server: String) -> Resul
         );
         println!("Please create an API key manually in the browser");
 
-        let dashboard_url = format!("{}/dashboard/api-keys", server);
-        if webbrowser::open(&dashboard_url).is_err() {
-            println!("Open: {}", dashboard_url.bright_cyan().underline());
+        let mut keys_url = server.clone();
+        keys_url.set_path("/keys");
+        if webbrowser::open(keys_url.as_str()).is_err() {
+            println!("Open: {}", keys_url.as_str().bright_cyan().underline());
         }
 
         let key = Password::new()
@@ -303,7 +244,7 @@ async fn oauth_login_with_callback(config: &mut Config, server: String) -> Resul
 
 async fn create_api_key_with_session(
     config: &mut Config,
-    server: String,
+    server: Url,
     session_token: String,
 ) -> Result<()> {
     println!("\n{}", "Creating API key using session...".dimmed());
@@ -312,7 +253,8 @@ async fn create_api_key_with_session(
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
 
-    let api_key_url = format!("{}/api/v0/api-keys", server);
+    let mut api_key_url = server.clone();
+    api_key_url.set_path("/api/v0/api-keys");
 
     // Calculate expiration time (8 hours from now)
     let expires_at = chrono::Utc::now() + chrono::Duration::hours(8);
@@ -327,7 +269,7 @@ async fn create_api_key_with_session(
     };
 
     let response = client
-        .post(&api_key_url)
+        .post(api_key_url.as_str())
         .header("Cookie", format!("tower.session={}", session_token))
         .json(&key_request)
         .send()
@@ -337,7 +279,7 @@ async fn create_api_key_with_session(
         let api_key_data: ApiKeyResponse = response.json().await?;
 
         // Save the API key
-        config.server = Some(server.clone());
+        config.server = server.clone();
         config.api_key = Some(api_key_data.key.clone());
         config.save()?;
 
@@ -386,13 +328,13 @@ async fn create_api_key_with_session(
     }
 }
 
-async fn validate_and_save_key(config: &mut Config, server: String, key: String) -> Result<()> {
+async fn validate_and_save_key(config: &mut Config, server: url::Url, key: String) -> Result<()> {
     println!("\n{}", "Validating credentials...".dimmed());
-    let client = RicochetClient::new_with_key(server.clone(), key.clone())?;
+    let client = RicochetClient::new_with_key(server.to_string(), key.clone())?;
 
     match client.validate_key().await {
         Ok(true) => {
-            config.server = Some(server);
+            config.server = server.clone();
             config.api_key = Some(key.clone());
             config.save()?;
 

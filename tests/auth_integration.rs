@@ -2,6 +2,7 @@ use mockito::Server;
 use ricochet_cli::config::Config;
 use std::env;
 use tempfile::TempDir;
+use url::Url;
 
 /// Helper to create a test config with a temporary directory
 fn create_test_config() -> (Config, TempDir) {
@@ -49,7 +50,7 @@ async fn test_client_creation_with_valid_key() {
 }
 
 #[tokio::test]
-async fn test_client_with_invalid_server() {
+async fn test_client_with_invalid_server() -> anyhow::Result<()> {
     cleanup_env();
 
     // Client creation doesn't validate URL format upfront
@@ -59,20 +60,41 @@ async fn test_client_with_invalid_server() {
         "rico_test_key_123".to_string(),
     );
 
+    // this should cause an error because the url is invalid
     assert!(
-        client.is_ok(),
+        client.is_err(),
         "Client creation succeeds even with invalid URL"
     );
 
-    // But validation should fail when trying to use the client
-    let client = client.unwrap();
-    let validation = client.validate_key().await;
+    // But validation should fail when trying to use a valid client
+    // with an invalid key
+    let mut server = Server::new_async().await;
+
+    // Mock the check_key endpoint to return 401 Unauthorized (invalid key)
+    let _mock = server
+        .mock("GET", "/api/v0/check_key")
+        .with_status(401)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"error": "Invalid API key"}"#)
+        .create_async()
+        .await;
+
+    // this tests with a valid url from the mock server
+    let client = ricochet_cli::client::RicochetClient::new_with_key(
+        server.url(),
+        "invalid_api_key".to_string(),
+    )?;
+
+    let validation = client.validate_key().await?;
+
     assert!(
-        validation.is_err(),
-        "Validation should fail with invalid URL"
+        !validation,
+        "Validation should return false with invalid API key"
     );
 
     cleanup_env();
+
+    Ok(())
 }
 
 #[tokio::test]
@@ -108,7 +130,7 @@ fn test_config_persistence() {
     // Create a config and save it
     let config1 = Config {
         api_key: Some("rico_test_key".to_string()),
-        server: Some("https://test.server.com".to_string()),
+        server: Url::parse("https://test.server.com").unwrap(),
         ..Default::default()
     };
 
@@ -125,7 +147,7 @@ fn test_config_persistence() {
 
     let config2 = config2.unwrap();
     assert_eq!(config2.api_key, Some("rico_test_key".to_string()));
-    assert_eq!(config2.server, Some("https://test.server.com".to_string()));
+    assert_eq!(config2.server.as_str(), "https://test.server.com/");
 
     cleanup_env();
 }

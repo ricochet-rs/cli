@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, parse_server_url};
 use anyhow::{Context, Result};
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::content::ContentItem;
@@ -37,7 +37,7 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
 
 pub struct RicochetClient {
     pub(crate) client: Client,
-    pub(crate) base_url: String,
+    pub(crate) base_url: Url,
     pub(crate) api_key: String,
 }
 
@@ -47,9 +47,11 @@ impl RicochetClient {
             .timeout(std::time::Duration::from_secs(300))
             .build()?;
 
+        let base_url = config.server_url()?;
+
         Ok(Self {
             client,
-            base_url: config.server_url()?,
+            base_url,
             api_key: config.api_key()?,
         })
     }
@@ -59,9 +61,11 @@ impl RicochetClient {
             .timeout(std::time::Duration::from_secs(300))
             .build()?;
 
+        let base_url = parse_server_url(&server)?;
+
         Ok(Self {
             client,
-            base_url: server,
+            base_url,
             api_key,
         })
     }
@@ -94,7 +98,7 @@ impl RicochetClient {
     }
 
     pub async fn validate_key(&self) -> Result<bool> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path("/api/v0/check_key");
         let response = self
             .client
@@ -107,7 +111,7 @@ impl RicochetClient {
     }
 
     pub async fn list_items(&self) -> Result<Vec<serde_json::Value>> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path("/api/v0/user/items");
         let response = self
             .client
@@ -138,17 +142,13 @@ impl RicochetClient {
         pb: &indicatif::ProgressBar,
         debug: bool,
     ) -> Result<serde_json::Value> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path("/api/v0/content/upload");
 
         if debug {
             eprintln!("Debug: API URL: {url:?}");
             eprintln!("Debug: Base URL: {}", self.base_url);
         }
-
-        let content_item = ContentItem::from_toml(&read_to_string(toml_path)?)?;
-        let include = content_item.content.include;
-        let exclude = content_item.content.exclude;
 
         let content_item = ContentItem::from_toml(&read_to_string(toml_path)?)?;
         let include = content_item.content.include;
@@ -229,7 +229,7 @@ impl RicochetClient {
 
     pub async fn get_status(&self, id: &str) -> Result<serde_json::Value> {
         // Get deployments for the item
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/deployments", id));
         let response = self
             .client
@@ -242,7 +242,7 @@ impl RicochetClient {
     }
 
     pub async fn invoke(&self, id: &str, params: Option<String>) -> Result<serde_json::Value> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/invoke", id));
 
         let body = if let Some(params) = params {
@@ -263,7 +263,7 @@ impl RicochetClient {
     }
 
     pub async fn stop_invocation(&self, id: &str, invocation_id: &str) -> Result<()> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!(
             "/api/v0/content/{}/invocations/{}/stop",
             id, invocation_id
@@ -288,7 +288,7 @@ impl RicochetClient {
     }
 
     pub async fn stop_instance(&self, id: &str, pid: &str) -> Result<()> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/instances/{}/stop", id, pid));
 
         let response = self
@@ -310,7 +310,7 @@ impl RicochetClient {
     }
 
     pub async fn delete(&self, id: &str) -> Result<()> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}", id));
 
         let response = self
@@ -332,7 +332,7 @@ impl RicochetClient {
     }
 
     pub async fn update_schedule(&self, id: &str, schedule: Option<String>) -> Result<()> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/schedule", id));
 
         let body = serde_json::json!({
@@ -359,7 +359,7 @@ impl RicochetClient {
     }
 
     pub async fn update_settings(&self, id: &str, settings: &str) -> Result<()> {
-        let mut url = Url::parse(&self.base_url)?;
+        let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/settings", id));
 
         let body: serde_json::Value = serde_json::from_str(settings)?;

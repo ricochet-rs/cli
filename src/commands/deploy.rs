@@ -30,9 +30,7 @@ pub async fn deploy(
         // Check if we're in an interactive terminal
         if std::io::stdin().is_terminal() {
             let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt(format!(
-                    "No _ricochet.toml found. Would you like to create one?"
-                ))
+                .with_prompt("No _ricochet.toml found. Would you like to create one?")
                 .default(true)
                 .interact()?;
 
@@ -116,7 +114,7 @@ pub async fn deploy(
 
                 // Get server URL and construct links
                 let server_url = config.server_url()?;
-                let base_url = server_url.trim_end_matches('/');
+                let base_url = server_url.as_str().trim_end_matches('/');
 
                 println!("\n{}", "Links:".bold());
 
@@ -162,7 +160,7 @@ pub async fn deploy(
                 );
                 eprintln!(
                     "    2. Check if you're connected to the correct server: {}",
-                    config.server_url().unwrap_or_default().bright_cyan()
+                    config.server.as_str().bright_cyan()
                 );
                 eprintln!(
                     "    3. Remove the 'id' field from _ricochet.toml to create a new content item instead"

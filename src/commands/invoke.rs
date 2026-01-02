@@ -22,7 +22,7 @@ pub async fn invoke(config: &Config, id: &str, format: OutputFormat) -> Result<(
                 OutputFormat::Table => {
                     // Display server name in italics above the table
                     let server_url = config.server_url()?;
-                    println!("{}", server_url.italic().dimmed());
+                    println!("{}", server_url.as_str().italic().dimmed());
 
                     let mut table = Table::new();
                     table.load_preset(UTF8_FULL);

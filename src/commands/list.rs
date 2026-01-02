@@ -118,7 +118,7 @@ pub async fn list(
         OutputFormat::Table => {
             // Display server name in italics above the table
             let server_url = config.server_url()?;
-            println!("{}", server_url.italic().dimmed());
+            println!("{}", server_url.as_str().italic().dimmed());
 
             if filtered_items.is_empty() {
                 println!("{}", "No content items found".yellow());
