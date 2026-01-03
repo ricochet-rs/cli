@@ -4,7 +4,7 @@
 $ErrorActionPreference = 'Stop'
 
 # Configuration
-$Version = if ($env:RICOCHET_VERSION) { $env:RICOCHET_VERSION } else { "0.1.0" }
+$Version = if ($env:RICOCHET_VERSION) { $env:RICOCHET_VERSION } else { "0.2.0" }
 $InstallDir = if ($env:RICOCHET_INSTALL_DIR) { $env:RICOCHET_INSTALL_DIR } else { "$HOME\bin" }
 $GithubReleasesBase = "https://github.com/ricochet-rs/cli/releases/download/v$Version"
 
