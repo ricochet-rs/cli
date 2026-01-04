@@ -109,9 +109,26 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Manage deployed content items
+    Item {
+        #[command(subcommand)]
+        command: ItemCommands,
+    },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
     GenerateDocs,
+}
+
+#[derive(Subcommand)]
+enum ItemCommands {
+    /// Fetch the remote _ricochet.toml for an item
+    Toml {
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -181,6 +198,11 @@ async fn main() -> Result<()> {
         }) => {
             commands::init::init_rico_toml(&path, overwrite, dry_run)?;
         }
+        Some(Commands::Item { command }) => match command {
+            ItemCommands::Toml { id, path } => {
+                commands::item::toml::get_toml(&config, id, path).await?;
+            }
+        },
         Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
             println!("{}", markdown);
