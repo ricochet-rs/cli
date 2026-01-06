@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="${RICOCHET_VERSION:-0.1.0}"
+VERSION="${RICOCHET_VERSION:-0.2.0}"
 INSTALL_DIR="${RICOCHET_INSTALL_DIR:-/usr/local/bin}"
 GITHUB_RELEASES_BASE="https://github.com/ricochet-rs/cli/releases/download/v${VERSION}"
 S3_BASE_URL="https://hel1.your-objectstorage.com/ricochet-cli/v${VERSION}"
