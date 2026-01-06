@@ -91,6 +91,7 @@ steps:
       - changelog
     settings:
       note: CHANGELOG.md
+      overwrite: true
       api_key:
         from_secret: ricochet_issue_token
       files:
@@ -105,7 +106,10 @@ steps:
       - changelog
     commands:
       - apk add --no-cache -q git
+      - git config --global user.name "ricochet-bot"
+      - git config --global user.email "droid@ricochet.rs"
       - git clone https://github.com/ricochet-rs/homebrew-tap.git
+      - cd homebrew-tap && git tag -f -a ${CI_COMMIT_TAG} -m ${CI_COMMIT_TAG}
     when:
       event: tag
 
@@ -117,8 +121,8 @@ steps:
       path: homebrew-tap
       remote: git@github.com:ricochet-rs/homebrew-tap.git
       branch: main
-      tag: ${CI_COMMIT_TAG}
       followtags: true
+      force: true
       ssh_key:
         from_secret: ricochet-bot-ssh-key
       author_name: ricochet-bot
