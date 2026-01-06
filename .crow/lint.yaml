@@ -10,7 +10,7 @@ labels:
 
 steps:
   editor-config:
-    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.4.1
+    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.6.0
     depends_on: []
 
   cache:
