@@ -1,12 +1,15 @@
 use crate::config::{Config, parse_server_url};
 use anyhow::{Context, Result};
+use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::content::ContentItem;
 use serde::de::DeserializeOwned;
-use std::fs::read_to_string;
-use std::path::Path;
-use std::pin::Pin;
-use std::task::{Context as TaskContext, Poll};
+use std::{
+    fs::read_to_string,
+    path::Path,
+    pin::Pin,
+    task::{Context as TaskContext, Poll},
+};
 use tokio::io::{AsyncRead, ReadBuf};
 use url::Url;
 
@@ -108,6 +111,29 @@ impl RicochetClient {
             .await?;
 
         Ok(response.status() == StatusCode::OK)
+    }
+
+    /// Check if a key is expired and report if so
+    /// Use this as a pre-flight check for all API calls where appropriate
+    pub async fn preflight_key_check(&self) -> Result<()> {
+        match self.validate_key().await {
+            Ok(v) => {
+                if !v {
+                    anyhow::bail!(
+                        "{} Existing credentials are invalid or expired.",
+                        "⚠".yellow()
+                    );
+                } else {
+                    Ok(())
+                }
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "{} Failed to validate credential with error {e}",
+                    "!".bright_red()
+                );
+            }
+        }
     }
 
     pub async fn list_items(&self) -> Result<Vec<serde_json::Value>> {
@@ -381,5 +407,28 @@ impl RicochetClient {
         }
 
         Ok(())
+    }
+
+    pub async fn get_ricochet_toml(&self, id: &str) -> Result<String> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/toml", id));
+
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to fetch ricochet.toml: {}", error_text)
+        }
+
+        let toml_content = response.text().await?;
+        Ok(toml_content)
     }
 }

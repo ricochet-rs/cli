@@ -13,6 +13,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet invoke`↴](#ricochet-invoke)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet init`↴](#ricochet-init)
+* [`ricochet item`↴](#ricochet-item)
+* [`ricochet item toml`↴](#ricochet-item-toml)
 
 ## `ricochet`
 
@@ -30,6 +32,7 @@ Ricochet CLI
 * `invoke` — Invoke a task
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
+* `item` — Manage deployed content items
 
 ###### **Options:**
 
@@ -154,6 +157,34 @@ Initialize a new Ricochet deployment
 
 * `--overwrite` — Overwrite existing _ricochet.toml file without confirmation
 * `--dry-run` — Preview the _ricochet.toml without saving to file
+
+
+
+## `ricochet item`
+
+Manage deployed content items
+
+**Usage:** `ricochet item <COMMAND>`
+
+###### **Subcommands:**
+
+* `toml` — Fetch the remote _ricochet.toml for an item
+
+
+
+## `ricochet item toml`
+
+Fetch the remote _ricochet.toml for an item
+
+**Usage:** `ricochet item toml [OPTIONS] [ID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
 
 
 
