@@ -16,7 +16,7 @@ steps:
     environment:
       GH_TOKEN:
         from_secret: ricochet_issue_token
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.0.4
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.0.9
     commands: |
       apk add -q --no-cache jq github-cli
 
