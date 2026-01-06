@@ -100,6 +100,44 @@ steps:
     when:
       event: tag
 
+  'Update install script versions':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    depends_on:
+      - build
+    commands:
+      - apk add --no-cache -q git sed
+      - |
+        VERSION="${CI_COMMIT_TAG#v}"
+        echo "Updating install scripts to version $VERSION"
+
+        # Update install.sh - replace the default version
+        sed -i "s/VERSION=\"\${RICOCHET_VERSION:-[^\"]*}\"/VERSION=\"\${RICOCHET_VERSION:-$VERSION}\"/" install.sh
+
+        # Update install.ps1 - replace the default version
+        sed -i "s/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"[^\"]*\" }/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"$VERSION\" }/" install.ps1
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+        git add install.sh install.ps1
+        git commit -m "chore: bump install script versions to $VERSION"
+    when:
+      event: tag
+
+  'Push install script updates':
+    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
+    depends_on:
+      - 'Update install script versions'
+    settings:
+      path: .
+      remote: git@github.com:ricochet-rs/cli.git
+      branch: main
+      ssh_key:
+        from_secret: ricochet-bot-ssh-key
+      author_name: ricochet-bot
+      author_email: droid@ricochet.rs
+    when:
+      event: tag
+
   'Clone homebrew-tap':
     image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
