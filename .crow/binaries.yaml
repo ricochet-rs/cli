@@ -73,7 +73,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.devxy.io/docker.io/thegeeklab/git-sv:2.0.7
+    image: reg.devxy.io/docker.io/thegeeklab/git-sv:2.0.9
     depends_on:
       - build
     commands:
