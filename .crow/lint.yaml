@@ -80,3 +80,11 @@ steps:
         else
           echo "✓ CLI documentation is up-to-date"
         fi
+
+  commitlint:
+    when:
+      - event: pull_request
+      - event: pull_request_edited
+    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.1.0
+    commands:
+      - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
