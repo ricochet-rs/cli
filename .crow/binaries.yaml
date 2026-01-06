@@ -110,7 +110,7 @@ steps:
       event: tag
 
   'Push changes to homebrew-tap':
-    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
+    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.2.1
     depends_on:
       - 'Clone homebrew-tap'
     settings:
