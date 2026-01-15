@@ -36,7 +36,8 @@ reqwest = { version = "0.12", default-features = false, features = [
   "rustls-tls",
   "stream"
 ] }
-ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", default-features = false }
+# ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", default-features = false }
+ricochet-core = { path = "../ricochet/ricochet-core", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
