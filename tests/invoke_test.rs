@@ -31,11 +31,10 @@ mod invoke_tests {
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
         let result = client.invoke(content_id, None).await;
@@ -68,11 +67,10 @@ mod invoke_tests {
             .create();
 
         // Create test config with invalid key
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("invalid_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("invalid_key".to_string()),
+        );
 
         // Create client and invoke
         let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
@@ -104,11 +102,10 @@ mod invoke_tests {
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Create client and invoke
         let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
@@ -149,11 +146,10 @@ mod invoke_tests {
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("json".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
         let result = client.invoke(content_id, None).await.unwrap();
@@ -197,11 +193,10 @@ mod invoke_tests {
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("yaml".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
         let result = client.invoke(content_id, None).await.unwrap();

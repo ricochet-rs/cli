@@ -4,58 +4,87 @@ mod tests {
     use std::env;
     use tempfile::TempDir;
 
-    /// Test that logout clears the API key
-    #[test]
-    fn test_logout_clears_api_key() {
+    /// Helper to set up test environment with proper config directory
+    fn setup_test_env() -> TempDir {
         let temp_dir = TempDir::new().unwrap();
         unsafe {
             env::set_var("HOME", temp_dir.path());
         }
-
-        let mut config = Config {
-            api_key: Some("rico_test_key".to_string()),
-            ..Default::default()
-        };
-
-        // Call logout
-        let result = super::super::logout(&mut config);
-
-        assert!(result.is_ok(), "Logout should succeed");
-        assert_eq!(
-            config.api_key, None,
-            "API key should be cleared after logout"
+        // Create the config directory structure
+        // On macOS, dirs::config_dir() might use Library/Application Support
+        // On Linux, it uses .config
+        // By setting HOME and creating both, we cover both cases
+        let _ = std::fs::create_dir_all(temp_dir.path().join(".config").join("ricochet"));
+        let _ = std::fs::create_dir_all(
+            temp_dir
+                .path()
+                .join("Library")
+                .join("Application Support")
+                .join("ricochet"),
         );
+        temp_dir
+    }
 
+    fn cleanup_test_env() {
         unsafe {
             env::remove_var("HOME");
         }
     }
 
+    /// Test that logout clears the API key
+    #[test]
+    fn test_logout_clears_api_key() {
+        let _temp_dir = setup_test_env();
+
+        let mut config = Config::default();
+        // Set API key on the default server
+        if let Some(server) = config.servers.get_mut("default") {
+            server.api_key = Some("rico_test_key".to_string());
+        }
+
+        // Call logout with no server specified (uses default)
+        let result = super::super::logout(&mut config, None);
+
+        assert!(result.is_ok(), "Logout should succeed");
+        // Check that the default server's API key is cleared
+        let default_server = config
+            .servers
+            .get("default")
+            .expect("default server should exist");
+        assert_eq!(
+            default_server.api_key, None,
+            "API key should be cleared after logout"
+        );
+
+        cleanup_test_env();
+    }
+
     /// Test that logout handles already logged out state
     #[test]
     fn test_logout_when_not_logged_in() {
-        let temp_dir = TempDir::new().unwrap();
-        unsafe {
-            env::set_var("HOME", temp_dir.path());
+        let _temp_dir = setup_test_env();
+
+        let mut config = Config::default();
+        // Clear any API key from default server
+        if let Some(server) = config.servers.get_mut("default") {
+            server.api_key = None;
         }
 
-        let mut config = Config {
-            api_key: None,
-            ..Default::default()
-        };
-
         // Call logout when already logged out
-        let result = super::super::logout(&mut config);
+        let result = super::super::logout(&mut config, None);
 
         assert!(
             result.is_ok(),
             "Logout should succeed even when not logged in"
         );
-        assert_eq!(config.api_key, None, "API key should remain None");
+        // Check that the default server's API key is still None
+        let default_server = config
+            .servers
+            .get("default")
+            .expect("default server should exist");
+        assert_eq!(default_server.api_key, None, "API key should remain None");
 
-        unsafe {
-            env::remove_var("HOME");
-        }
+        cleanup_test_env();
     }
 
     /// Test API key validation format
@@ -228,5 +257,155 @@ mod tests {
 
         let response_no_expiry: ApiKeyResponse = serde_json::from_str(json_no_expiry).unwrap();
         assert_eq!(response_no_expiry.expires_at, None);
+    }
+
+    // ==================== Logout with --server parameter tests ====================
+
+    /// Helper to create a multi-server config for testing
+    fn create_multi_server_config() -> Config {
+        use crate::config::ServerConfig;
+        use std::collections::HashMap;
+        use url::Url;
+
+        let mut servers = HashMap::new();
+        servers.insert(
+            "prod".to_string(),
+            ServerConfig {
+                url: Url::parse("https://prod.ricochet.com").unwrap(),
+                api_key: Some("rico_prod_key".to_string()),
+            },
+        );
+        servers.insert(
+            "staging".to_string(),
+            ServerConfig {
+                url: Url::parse("https://staging.ricochet.com").unwrap(),
+                api_key: Some("rico_staging_key".to_string()),
+            },
+        );
+        servers.insert(
+            "local".to_string(),
+            ServerConfig {
+                url: Url::parse("http://localhost:3000").unwrap(),
+                api_key: None,
+            },
+        );
+        Config {
+            server: None,
+            api_key: None,
+            servers,
+            default_server: Some("prod".to_string()),
+            default_format: Some("table".to_string()),
+        }
+    }
+
+    /// Test logout from a specific named server
+    #[test]
+    fn test_logout_from_named_server() {
+        let _temp_dir = setup_test_env();
+        let mut config = create_multi_server_config();
+
+        // Verify staging has an API key
+        assert!(config.servers.get("staging").unwrap().api_key.is_some());
+
+        // Logout from staging (not the default)
+        let result = super::super::logout(&mut config, Some("staging"));
+
+        assert!(result.is_ok());
+
+        // Staging should now have no API key
+        let staging = config.servers.get("staging").unwrap();
+        assert!(staging.api_key.is_none());
+
+        // Prod should still have its API key
+        let prod = config.servers.get("prod").unwrap();
+        assert!(prod.api_key.is_some());
+
+        cleanup_test_env();
+    }
+
+    /// Test logout from server specified by URL
+    #[test]
+    fn test_logout_from_server_by_url() {
+        let _temp_dir = setup_test_env();
+        let mut config = create_multi_server_config();
+
+        // Logout using URL
+        let result = super::super::logout(&mut config, Some("https://staging.ricochet.com"));
+
+        assert!(result.is_ok());
+
+        // Staging should now have no API key
+        let staging = config.servers.get("staging").unwrap();
+        assert!(staging.api_key.is_none());
+
+        cleanup_test_env();
+    }
+
+    /// Test logout from nonexistent server fails
+    #[test]
+    fn test_logout_from_nonexistent_server() {
+        let _temp_dir = setup_test_env();
+        let mut config = create_multi_server_config();
+
+        let result = super::super::logout(&mut config, Some("nonexistent"));
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+
+        cleanup_test_env();
+    }
+
+    /// Test logout from server with no matching URL
+    #[test]
+    fn test_logout_from_unknown_url() {
+        let _temp_dir = setup_test_env();
+        let mut config = create_multi_server_config();
+
+        let result = super::super::logout(&mut config, Some("https://unknown.server.com"));
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No server found"));
+
+        cleanup_test_env();
+    }
+
+    /// Test logout uses default server when none specified
+    #[test]
+    fn test_logout_uses_default_server() {
+        let _temp_dir = setup_test_env();
+        let mut config = create_multi_server_config();
+
+        // Verify prod (default) has an API key
+        assert!(config.servers.get("prod").unwrap().api_key.is_some());
+
+        // Logout without specifying server
+        let result = super::super::logout(&mut config, None);
+
+        assert!(result.is_ok());
+
+        // Prod (default) should now have no API key
+        let prod = config.servers.get("prod").unwrap();
+        assert!(prod.api_key.is_none());
+
+        // Other servers should be unaffected
+        let staging = config.servers.get("staging").unwrap();
+        assert!(staging.api_key.is_some());
+
+        cleanup_test_env();
+    }
+
+    /// Test logout when already logged out from specified server
+    #[test]
+    fn test_logout_when_already_logged_out_from_server() {
+        let _temp_dir = setup_test_env();
+        let mut config = create_multi_server_config();
+
+        // local has no API key
+        let result = super::super::logout(&mut config, Some("local"));
+
+        // Should succeed without error (just a warning)
+        assert!(result.is_ok());
+
+        cleanup_test_env();
     }
 }

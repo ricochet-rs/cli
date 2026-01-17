@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 pub async fn deploy(
     config: &Config,
+    server_ref: Option<&str>,
     path: PathBuf,
     _name: Option<String>,
     _description: Option<String>,
@@ -76,7 +77,9 @@ pub async fn deploy(
     );
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
-    let client = RicochetClient::new(config)?;
+    // Resolve server configuration
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new_with_server_config(&server_config)?;
 
     match client
         .deploy(&path, content_id.clone(), &toml_path, &pb, debug)
@@ -113,8 +116,7 @@ pub async fn deploy(
                 }
 
                 // Get server URL and construct links
-                let server_url = config.server_url()?;
-                let base_url = server_url.as_str().trim_end_matches('/');
+                let base_url = server_config.url.as_str().trim_end_matches('/');
 
                 println!("\n{}", "Links:".bold());
 
@@ -160,7 +162,7 @@ pub async fn deploy(
                 );
                 eprintln!(
                     "    2. Check if you're connected to the correct server: {}",
-                    config.server.as_str().bright_cyan()
+                    server_config.url.as_str().bright_cyan()
                 );
                 eprintln!(
                     "    3. Remove the 'id' field from _ricochet.toml to create a new content item instead"

@@ -1,4 +1,4 @@
-use crate::config::{Config, parse_server_url};
+use crate::config::{parse_server_url, Config, ServerConfig};
 use anyhow::{Context, Result};
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::content::ContentItem;
@@ -66,6 +66,23 @@ impl RicochetClient {
         Ok(Self {
             client,
             base_url,
+            api_key,
+        })
+    }
+
+    pub fn new_with_server_config(server_config: &ServerConfig) -> Result<Self> {
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()?;
+
+        let api_key = server_config
+            .api_key
+            .clone()
+            .context("No API key configured. Use 'ricochet login' to authenticate")?;
+
+        Ok(Self {
+            client,
+            base_url: server_config.url.clone(),
             api_key,
         })
     }
