@@ -42,15 +42,15 @@ mod list_tests {
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Test JSON output format
         let result = ricochet_cli::commands::list::list(
             &config,
+            None,
             None,
             false,
             None, // no sorting
@@ -87,15 +87,15 @@ mod list_tests {
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Test table output format - should not truncate
         let result = ricochet_cli::commands::list::list(
             &config,
+            None,
             None,
             false,
             None, // no sorting
@@ -144,15 +144,15 @@ mod list_tests {
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Test filtering by content type
         let result = ricochet_cli::commands::list::list(
             &config,
+            None,
             Some("shiny".to_string()),
             false,
             None, // no sorting
@@ -165,6 +165,7 @@ mod list_tests {
         // Test filtering by active only
         let result2 = ricochet_cli::commands::list::list(
             &config,
+            None,
             None,
             true,
             None, // no sorting
@@ -189,15 +190,15 @@ mod list_tests {
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Test empty list
         let result = ricochet_cli::commands::list::list(
             &config,
+            None,
             None,
             false,
             None, // no sorting

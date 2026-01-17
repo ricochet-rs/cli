@@ -43,12 +43,15 @@ fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -
 
 pub async fn list(
     config: &Config,
+    server_ref: Option<&str>,
     content_type: Option<String>,
     active_only: bool,
     sort_fields: Option<String>,
     format: OutputFormat,
 ) -> Result<()> {
-    let client = RicochetClient::new(config)?;
+    // Resolve server configuration
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new_with_server_config(&server_config)?;
 
     let items = client.list_items().await?;
 
@@ -116,9 +119,8 @@ pub async fn list(
             println!("{}", serde_yaml::to_string(&filtered_items)?);
         }
         OutputFormat::Table => {
-            // Display server name in italics above the table
-            let server_url = config.server_url()?;
-            println!("{}", server_url.as_str().italic().dimmed());
+            // Display server URL above the table
+            println!("{}", server_config.url.as_str().italic().dimmed());
 
             if filtered_items.is_empty() {
                 println!("{}", "No content items found".yellow());
