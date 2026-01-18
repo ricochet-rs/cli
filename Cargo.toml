@@ -33,7 +33,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "cookies",
   "json",
   "multipart",
-  "rustls-tls",
+  "rustls",
   "stream"
 ] }
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", default-features = false }
