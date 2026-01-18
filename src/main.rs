@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use ricochet_cli::{
     OutputFormat, commands,
-    config::{Config, parse_server_url},
+    config::Config,
 };
 
 #[derive(Parser)]
@@ -45,7 +45,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Authenticate with the Ricochet server
+    /// Authenticate with a Ricochet server
     Login {
         /// API key (can also be provided interactively)
         #[arg(short = 'k', long)]
@@ -53,7 +53,7 @@ enum Commands {
     },
     /// Remove stored credentials
     Logout,
-    /// Deploy content to the server
+    /// Deploy content to a Ricochet server
     Deploy {
         /// Path to the content directory or bundle
         #[arg(default_value = ".")]
@@ -109,9 +109,43 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Manage configured Ricochet servers
+    Servers {
+        #[command(subcommand)]
+        command: ServersCommands,
+    },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
     GenerateDocs,
+}
+
+#[derive(Subcommand)]
+enum ServersCommands {
+    /// List all configured servers
+    List,
+    /// Add a new server
+    Add {
+        /// Server name (e.g., 'production', 'staging', 'local')
+        name: String,
+        /// Server URL (must include http:// or https://)
+        url: String,
+        /// Set this server as the default
+        #[arg(long)]
+        default: bool,
+    },
+    /// Remove a server
+    Remove {
+        /// Server name to remove
+        name: String,
+        /// Skip confirmation prompt
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+    /// Set the default server
+    SetDefault {
+        /// Server name to set as default
+        name: String,
+    },
 }
 
 #[tokio::main]
@@ -138,38 +172,33 @@ async fn main() -> Result<()> {
     // Load or initialize config
     let mut config = Config::load()?;
 
-    // Override server if provided via CLI
-    if let Some(server) = cli.server {
-        config.server = parse_server_url(&server)?;
-    }
-
     // Execute command
     match cli.command {
         Some(Commands::Login { api_key }) => {
-            commands::auth::login(&mut config, api_key).await?;
+            commands::auth::login(&mut config, cli.server.as_deref(), api_key).await?;
         }
         Some(Commands::Logout) => {
-            commands::auth::logout(&mut config)?;
+            commands::auth::logout(&mut config, cli.server.as_deref())?;
         }
         Some(Commands::Deploy {
             path,
             name,
             description,
         }) => {
-            commands::deploy::deploy(&config, path, name, description, cli.debug).await?;
+            commands::deploy::deploy(&config, cli.server.as_deref(), path, name, description, cli.debug).await?;
         }
         Some(Commands::List {
             content_type,
             active_only,
             sort,
         }) => {
-            commands::list::list(&config, content_type, active_only, sort, cli.format).await?;
+            commands::list::list(&config, cli.server.as_deref(), content_type, active_only, sort, cli.format).await?;
         }
         Some(Commands::Delete { id, force }) => {
-            commands::delete::delete(&config, &id, force).await?;
+            commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
         }
         Some(Commands::Invoke { id }) => {
-            commands::invoke::invoke(&config, &id, cli.format).await?;
+            commands::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
@@ -181,6 +210,20 @@ async fn main() -> Result<()> {
         }) => {
             commands::init::init_rico_toml(&path, overwrite, dry_run)?;
         }
+        Some(Commands::Servers { command }) => match command {
+            ServersCommands::List => {
+                commands::servers::list(&config)?;
+            }
+            ServersCommands::Add { name, url, default } => {
+                commands::servers::add(&mut config, name, url, default)?;
+            }
+            ServersCommands::Remove { name, force } => {
+                commands::servers::remove(&mut config, name, force)?;
+            }
+            ServersCommands::SetDefault { name } => {
+                commands::servers::set_default(&mut config, name)?;
+            }
+        },
         Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
             println!("{}", markdown);

@@ -128,11 +128,10 @@ fn test_config_persistence() {
     let (_config, temp_dir) = create_test_config();
 
     // Create a config and save it
-    let config1 = Config {
-        api_key: Some("rico_test_key".to_string()),
-        server: Url::parse("https://test.server.com").unwrap(),
-        ..Default::default()
-    };
+    let config1 = Config::for_test(
+        Url::parse("https://test.server.com").unwrap(),
+        Some("rico_test_key".to_string()),
+    );
 
     // Mock the config path to use temp directory
     unsafe {
@@ -146,8 +145,10 @@ fn test_config_persistence() {
     assert!(config2.is_ok(), "Config load should succeed");
 
     let config2 = config2.unwrap();
-    assert_eq!(config2.api_key, Some("rico_test_key".to_string()));
-    assert_eq!(config2.server.as_str(), "https://test.server.com/");
+    // With multi-server config, server info is in the servers map under "default"
+    let default_server = config2.servers.get("default").expect("default server should exist");
+    assert_eq!(default_server.api_key, Some("rico_test_key".to_string()));
+    assert_eq!(default_server.url.as_str(), "https://test.server.com/");
 
     cleanup_env();
 }
