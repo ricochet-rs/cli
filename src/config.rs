@@ -295,7 +295,6 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
     use std::env;
 
     fn cleanup_env() {
@@ -630,43 +629,8 @@ mod tests {
         assert!(err.contains("Available servers"));
     }
 
-    #[test]
-    #[serial]
-    fn test_resolve_server_env_var_override() {
-        cleanup_env();
-        let config = create_test_config();
-
-        unsafe {
-            env::set_var("RICOCHET_SERVER", "staging");
-        }
-
-        let result = config.resolve_server(Some("prod")); // Should be ignored
-
-        assert!(result.is_ok());
-        let server = result.unwrap();
-        assert_eq!(server.url.as_str(), "https://staging.ricochet.com/");
-
-        cleanup_env();
-    }
-
-    #[test]
-    #[serial]
-    fn test_resolve_server_api_key_env_override() {
-        cleanup_env();
-        let config = create_test_config();
-
-        unsafe {
-            env::set_var("RICOCHET_API_KEY", "rico_env_override");
-        }
-
-        let result = config.resolve_server(Some("prod"));
-
-        assert!(result.is_ok());
-        let server = result.unwrap();
-        assert_eq!(server.api_key, Some("rico_env_override".to_string()));
-
-        cleanup_env();
-    }
+    // Note: env var override tests (RICOCHET_SERVER, RICOCHET_API_KEY) are in
+    // tests/servers_test.rs to avoid race conditions between unit and integration tests.
 
     // ==================== legacy migration tests ====================
 

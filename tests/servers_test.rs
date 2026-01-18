@@ -10,12 +10,21 @@ fn cleanup_env() {
     unsafe {
         env::remove_var("RICOCHET_API_KEY");
         env::remove_var("RICOCHET_SERVER");
-        env::remove_var("HOME");
+        // Note: Don't remove HOME - it causes race conditions with parallel tests.
+        // Each test sets HOME to its own temp dir which is cleaned up when TempDir drops.
     }
 }
 
-/// Helper to set up test environment with proper config directory
+/// Helper to set up test environment with proper config directory for tests that need file system access.
+/// Note: This does NOT set HOME anymore to avoid race conditions in parallel tests.
+/// Tests that need Config::save()/load() should use setup_test_env_with_home() instead.
 fn setup_test_env() -> TempDir {
+    TempDir::new().unwrap()
+}
+
+/// Helper to set up test environment WITH HOME modification.
+/// Only use this in tests marked with #[serial(env_tests)] that actually need Config::save()/load().
+fn setup_test_env_with_home() -> TempDir {
     let temp_dir = TempDir::new().unwrap();
     unsafe {
         env::set_var("HOME", temp_dir.path());
@@ -357,7 +366,7 @@ mod servers_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env_tests)]
     fn test_resolve_server_env_var_overrides_arg() {
         cleanup_env();
         let config = create_multi_server_config();
@@ -375,7 +384,7 @@ mod servers_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(env_tests)]
     fn test_resolve_server_api_key_env_override() {
         cleanup_env();
         let config = create_multi_server_config();
@@ -395,9 +404,10 @@ mod servers_tests {
     // ==================== Config persistence tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_config_save_and_load_multi_server() {
         cleanup_env();
-        let _temp_dir = setup_test_env();
+        let _temp_dir = setup_test_env_with_home();
 
         // Create and save a multi-server config
         let mut config = Config {

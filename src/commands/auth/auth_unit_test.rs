@@ -145,7 +145,7 @@ mod tests {
 
     /// Test environment variable handling
     #[test]
-    #[serial]
+    #[serial(env_tests)]
     fn test_env_var_handling() {
         unsafe {
             // Clean environment first
