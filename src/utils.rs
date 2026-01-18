@@ -1,7 +1,24 @@
 use anyhow::{Context, Result};
 use globset::{Glob, GlobSetBuilder};
 use std::fs::File;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+
+/// Check if we're running in a non-interactive environment (tests, CI, etc.)
+///
+/// This function checks multiple indicators to reliably detect non-interactive environments:
+/// - stdin is not a terminal
+/// - CI environment variable is set
+/// - RUST_TEST_THREADS is set (cargo test parallel execution)
+/// - CARGO_MANIFEST_DIR is set (cargo test environment)
+/// - RICOCHET_NON_INTERACTIVE is explicitly set
+pub fn is_non_interactive() -> bool {
+    !std::io::stdin().is_terminal()
+        || std::env::var("CI").is_ok()
+        || std::env::var("RUST_TEST_THREADS").is_ok()
+        || std::env::var("CARGO_MANIFEST_DIR").is_ok()
+        || std::env::var("RICOCHET_NON_INTERACTIVE").is_ok()
+}
 
 /// Prepare a list of files to bundle based on include/exclude patterns
 ///

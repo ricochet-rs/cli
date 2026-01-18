@@ -295,6 +295,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::env;
 
     fn cleanup_env() {
@@ -630,7 +631,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_server_env_var_override() {
+        cleanup_env();
         let config = create_test_config();
 
         unsafe {
@@ -647,22 +650,22 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_server_api_key_env_override() {
-        // Clean up any lingering env vars first
         cleanup_env();
         let config = create_test_config();
 
-        // Set and immediately use the env var to minimize race conditions
         unsafe {
             env::set_var("RICOCHET_API_KEY", "rico_env_override");
         }
+
         let result = config.resolve_server(Some("prod"));
-        // Clean up immediately after reading
-        cleanup_env();
 
         assert!(result.is_ok());
         let server = result.unwrap();
         assert_eq!(server.api_key, Some("rico_env_override".to_string()));
+
+        cleanup_env();
     }
 
     // ==================== legacy migration tests ====================

@@ -14,8 +14,6 @@ pub async fn deploy(
     _description: Option<String>,
     debug: bool,
 ) -> Result<()> {
-    use std::io::IsTerminal;
-
     if !path.exists() {
         anyhow::bail!("Path does not exist: {}", path.display());
     }
@@ -28,8 +26,8 @@ pub async fn deploy(
     };
 
     if !toml_path.exists() {
-        // Check if we're in an interactive terminal
-        if std::io::stdin().is_terminal() {
+        // Check if we're in an interactive terminal (not in tests or CI)
+        if !crate::utils::is_non_interactive() {
             let confirmed = Confirm::with_theme(&ColorfulTheme::default())
                 .with_prompt("No _ricochet.toml found. Would you like to create one?")
                 .default(true)

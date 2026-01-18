@@ -343,6 +343,13 @@ pub fn init_rico_toml(
     overwrite: bool,
     dry_run: bool,
 ) -> anyhow::Result<ContentItem> {
+    // Check for non-interactive mode (tests, CI, etc.)
+    if crate::utils::is_non_interactive() {
+        bail!(
+            "Cannot run init in non-interactive mode. Please create _ricochet.toml manually or run `ricochet init` interactively."
+        );
+    }
+
     // Check if _ricochet.toml already exists
     let toml_path = dir.join("_ricochet.toml");
 

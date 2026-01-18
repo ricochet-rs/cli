@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::config::Config;
+    use serial_test::serial;
     use std::env;
     use tempfile::TempDir;
 
@@ -26,9 +27,9 @@ mod tests {
     }
 
     fn cleanup_test_env() {
-        unsafe {
-            env::remove_var("HOME");
-        }
+        // Note: We intentionally don't remove HOME here because it causes race conditions
+        // when tests run in parallel. The TempDir will be cleaned up when dropped.
+        // Each test sets HOME to its own temp dir, so this is safe.
     }
 
     /// Test that logout clears the API key
@@ -144,6 +145,7 @@ mod tests {
 
     /// Test environment variable handling
     #[test]
+    #[serial]
     fn test_env_var_handling() {
         unsafe {
             // Clean environment first

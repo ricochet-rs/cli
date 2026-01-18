@@ -1,4 +1,5 @@
 use ricochet_cli::config::{Config, ServerConfig};
+use serial_test::serial;
 use std::collections::HashMap;
 use std::env;
 use tempfile::TempDir;
@@ -356,7 +357,9 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_server_env_var_overrides_arg() {
+        cleanup_env();
         let config = create_multi_server_config();
 
         unsafe {
@@ -372,7 +375,9 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_server_api_key_env_override() {
+        cleanup_env();
         let config = create_multi_server_config();
 
         unsafe {
