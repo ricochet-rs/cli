@@ -15,6 +15,16 @@ steps:
       - apt-get update && apt-get install -y just pkg-config musl-tools libssl-dev curl wget nodejs build-essential cmake ca-certificates musl-tools musl-dev gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mingw-w64 clang lld llvm tree git
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # Update Cargo.toml version from tag before building
+      - |
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          VERSION="${CI_COMMIT_TAG#v}"
+          echo "Updating Cargo.toml version to $VERSION"
+          sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
+          cargo generate-lockfile
+          echo "Updated Cargo.toml and Cargo.lock to version $VERSION"
+          grep "^version" Cargo.toml
+        fi
       # build sequentially to avoid file conflicts
       - just build-static linux-x86_64
       - just build-static linux-aarch64
@@ -100,7 +110,7 @@ steps:
     when:
       event: tag
 
-  'Update install script versions':
+  'Update version files':
     image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
       - build
@@ -108,7 +118,7 @@ steps:
       - apk add --no-cache -q git sed
       - |
         VERSION="${CI_COMMIT_TAG#v}"
-        echo "Updating install scripts to version $VERSION"
+        echo "Updating version files to $VERSION"
 
         # Update install.sh - replace the default version
         sed -i "s/VERSION=\"\${RICOCHET_VERSION:-[^\"]*}\"/VERSION=\"\${RICOCHET_VERSION:-$VERSION}\"/" install.sh
@@ -118,15 +128,15 @@ steps:
 
         git config user.name "ricochet-bot"
         git config user.email "droid@ricochet.rs"
-        git add install.sh install.ps1
-        git commit -m "chore: bump install script versions to $VERSION"
+        git add Cargo.toml Cargo.lock install.sh install.ps1
+        git commit -m "chore: bump version to $VERSION"
     when:
       event: tag
 
-  'Push install script updates':
-    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
+  'Push version updates':
+    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.2.1
     depends_on:
-      - 'Update install script versions'
+      - 'Update version files'
     settings:
       path: .
       remote: git@github.com:ricochet-rs/cli.git
@@ -162,7 +172,7 @@ steps:
       followtags: true
       force: true
       ssh_key:
-        from_secret: ricochet-bot-ssh-key
+        from_secret: github-actions-bot-deploy-key
       author_name: ricochet-bot
       author_email: droid@ricochet.rs
     when:

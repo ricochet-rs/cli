@@ -72,6 +72,17 @@ impl Config {
         }
     }
 
+    /// Check if the server URL is explicitly configured (via env var or non-default config)
+    pub fn has_explicit_server(&self) -> bool {
+        // Check env var first
+        if std::env::var("RICOCHET_SERVER").is_ok() {
+            return true;
+        }
+        // Check if config server differs from default
+        let default_server = Url::parse("http://localhost:3000").unwrap();
+        self.server != default_server
+    }
+
     pub fn api_key(&self) -> Result<String> {
         std::env::var("RICOCHET_API_KEY")
             .ok()

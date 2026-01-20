@@ -20,6 +20,30 @@ steps:
     commands:
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # Update Cargo.toml version from tag before building
+      - |
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          # Set up Rust environment (same as Justfile)
+          if [ -d "/var/root/.cargo" ]; then
+            export PATH="/var/root/.cargo/bin:$PATH"
+            export CARGO_HOME="/var/root/.cargo"
+            export RUSTUP_HOME="/var/root/.rustup"
+          elif [ -d "$HOME/.cargo" ]; then
+            export PATH="$HOME/.cargo/bin:$PATH"
+            export CARGO_HOME="$HOME/.cargo"
+            export RUSTUP_HOME="$HOME/.rustup"
+          else
+            echo "Error: Cannot find cargo installation"
+            exit 1
+          fi
+
+          VERSION="${CI_COMMIT_TAG#v}"
+          echo "Updating Cargo.toml version to $VERSION"
+          sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
+          cargo generate-lockfile
+          echo "Updated Cargo.toml and Cargo.lock to version $VERSION"
+          grep "^version" Cargo.toml
+        fi
       # build
       - just build-static $TARGET
       - tree target/binaries/

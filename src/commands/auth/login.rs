@@ -2,7 +2,7 @@ use super::auth_ui;
 use crate::{client::RicochetClient, config::Config};
 use anyhow::Result;
 use colored::Colorize;
-use dialoguer::Password;
+use dialoguer::{Input, Password};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -34,6 +34,30 @@ pub(crate) struct ApiKeyResponse {
 }
 
 pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
+    // Check if server URL is configured - if not, prompt the user
+    if !config.has_explicit_server() {
+        println!(
+            "{} No server URL configured.",
+            "⚠".yellow()
+        );
+        println!(
+            "{}",
+            "Set RICOCHET_SERVER environment variable or enter a server URL below.".dimmed()
+        );
+
+        let server_input: String = Input::new()
+            .with_prompt("Server URL (e.g., https://ricochet.example.com)")
+            .interact_text()?;
+
+        let server_url = crate::config::parse_server_url(&server_input)?;
+        config.server = server_url;
+        config.save()?;
+        println!(
+            "{} Server URL saved to config.\n",
+            symbols::check_mark().to_string().green()
+        );
+    }
+
     println!("🔐 Authenticating against ricochet server\n");
 
     // Try to create a client - this automatically checks env vars via

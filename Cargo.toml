@@ -1,6 +1,6 @@
 [package]
 name = "ricochet-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 build = "build.rs"
 resolver = "3"
@@ -29,11 +29,11 @@ html-escape = "0.2"
 indicatif = "0.18"
 prefixed-api-key = "0.3"
 regex = "1.11.3"
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, features = [
   "cookies",
   "json",
   "multipart",
-  "rustls-tls",
+  "rustls",
   "stream"
 ] }
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", default-features = false }
