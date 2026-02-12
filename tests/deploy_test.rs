@@ -1,5 +1,7 @@
 use mockito::{Matcher, Server};
+use ricochet_cli::config::{Config, ServerConfig};
 use serde_json::json;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -8,6 +10,35 @@ use url::Url;
 #[cfg(test)]
 mod deploy_tests {
     use super::*;
+
+    /// Create a multi-server config for testing --server parameter
+    fn create_multi_server_config(
+        prod_url: &str,
+        staging_url: &str,
+    ) -> Config {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "prod".to_string(),
+            ServerConfig {
+                url: Url::parse(prod_url).unwrap(),
+                api_key: Some("prod_api_key".to_string()),
+            },
+        );
+        servers.insert(
+            "staging".to_string(),
+            ServerConfig {
+                url: Url::parse(staging_url).unwrap(),
+                api_key: Some("staging_api_key".to_string()),
+            },
+        );
+        Config {
+            server: None,
+            api_key: None,
+            servers,
+            default_server: Some("prod".to_string()),
+            default_format: Some("table".to_string()),
+        }
+    }
 
     fn create_test_project(dir: &Path, content_id: Option<&str>) -> std::io::Result<()> {
         // Create _ricochet.toml
@@ -81,15 +112,15 @@ shinyApp(ui = ui, server = server)"#,
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Run deploy command
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -137,15 +168,15 @@ shinyApp(ui = ui, server = server)"#,
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Run deploy command
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -171,14 +202,14 @@ shinyApp(ui = ui, server = server)"#,
         let project_path = temp_dir.path();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse("http://localhost:3000").unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse("http://localhost:3000").unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -215,15 +246,15 @@ key = "value"
         let server = Server::new_async().await;
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Run deploy command - should fail
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -253,15 +284,15 @@ key = "value"
             .create();
 
         // Create test config with invalid key
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("invalid_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("invalid_key".to_string()),
+        );
 
         // Run deploy command - should fail
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -310,14 +341,14 @@ key = "value"
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -365,14 +396,14 @@ key = "value"
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         let result = ricochet_cli::commands::deploy::deploy(
             &config,
+            None,
             project_path.to_path_buf(),
             None,
             None,
@@ -381,5 +412,190 @@ key = "value"
         .await;
 
         assert!(result.is_ok());
+    }
+
+    // ==================== Deploy with --server parameter tests ====================
+
+    #[tokio::test]
+    async fn test_deploy_with_server_by_name() {
+        // Create a temporary directory for test project
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_test_project(project_path, None).unwrap();
+
+        // Create mock server for staging
+        let mut staging_server = Server::new_async().await;
+
+        // Mock the staging server response
+        let _m = staging_server
+            .mock("POST", "/api/v0/content/upload")
+            .match_header("authorization", "Key staging_api_key")
+            .match_body(Matcher::Any)
+            .with_status(200)
+            .with_body(
+                json!({
+                    "id": "01JZA237920RN65T2XHCCV7296",
+                    "name": "test-content",
+                    "content_type": "shiny",
+                    "status": "deployed"
+                })
+                .to_string(),
+            )
+            .create();
+
+        // Create multi-server config - prod is default, staging is the mock server
+        let config = create_multi_server_config(
+            "https://prod.example.com", // prod URL (not used in this test)
+            &staging_server.url(),      // staging URL (mock server)
+        );
+
+        // Deploy with --server staging
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            Some("staging"), // Use staging server
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deploy_with_server_by_url() {
+        // Create a temporary directory for test project
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_test_project(project_path, None).unwrap();
+
+        // Create mock server
+        let mut mock_server = Server::new_async().await;
+        let mock_url = mock_server.url();
+
+        // Create config with mock server URL as staging
+        let config = create_multi_server_config(
+            "https://prod.example.com",
+            &mock_url,
+        );
+
+        // Mock the server response
+        let _m = mock_server
+            .mock("POST", "/api/v0/content/upload")
+            .match_header("authorization", "Key staging_api_key")
+            .match_body(Matcher::Any)
+            .with_status(200)
+            .with_body(
+                json!({
+                    "id": "01JZA237920RN65T2XHCCV7296",
+                    "name": "test-content",
+                    "content_type": "shiny",
+                    "status": "deployed"
+                })
+                .to_string(),
+            )
+            .create();
+
+        // Deploy with --server <URL> (matching staging URL)
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            Some(&mock_url), // Use URL directly
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deploy_uses_default_server_when_none_specified() {
+        // Create a temporary directory for test project
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_test_project(project_path, None).unwrap();
+
+        // Create mock server for prod (the default)
+        let mut prod_server = Server::new_async().await;
+
+        // Mock the prod server response
+        let _m = prod_server
+            .mock("POST", "/api/v0/content/upload")
+            .match_header("authorization", "Key prod_api_key")
+            .match_body(Matcher::Any)
+            .with_status(200)
+            .with_body(
+                json!({
+                    "id": "01JZA237920RN65T2XHCCV7296",
+                    "name": "test-content",
+                    "content_type": "shiny",
+                    "status": "deployed"
+                })
+                .to_string(),
+            )
+            .create();
+
+        // Create multi-server config with prod as mock server and default
+        let config = create_multi_server_config(
+            &prod_server.url(),          // prod URL (mock server)
+            "https://staging.example.com", // staging URL
+        );
+
+        // Deploy without specifying --server (should use default = prod)
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None, // No server specified, should use default
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deploy_with_nonexistent_server_fails() {
+        // Create a temporary directory for test project
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_test_project(project_path, None).unwrap();
+
+        // Create config with some servers
+        let config = create_multi_server_config(
+            "https://prod.example.com",
+            "https://staging.example.com",
+        );
+
+        // Deploy with --server that doesn't exist
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            Some("nonexistent"),
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("not found") || error_msg.contains("nonexistent"));
     }
 }

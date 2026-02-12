@@ -3,10 +3,12 @@ use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 
-pub async fn invoke(config: &Config, id: &str, format: OutputFormat) -> Result<()> {
+pub async fn invoke(config: &Config, server_ref: Option<&str>, id: &str, format: OutputFormat) -> Result<()> {
     println!("Invoking task: {}", id.bright_cyan());
 
-    let client = RicochetClient::new(config)?;
+    // Resolve server configuration
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
 
     match client.invoke(id, None).await {
         Ok(result) => {
@@ -20,9 +22,8 @@ pub async fn invoke(config: &Config, id: &str, format: OutputFormat) -> Result<(
                     println!("{}", serde_yaml::to_string(&result)?);
                 }
                 OutputFormat::Table => {
-                    // Display server name in italics above the table
-                    let server_url = config.server_url()?;
-                    println!("{}", server_url.as_str().italic().dimmed());
+                    // Display server URL above the table
+                    println!("{}", server_config.url.as_str().italic().dimmed());
 
                     let mut table = Table::new();
                     table.load_preset(UTF8_FULL);

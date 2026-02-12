@@ -2,7 +2,7 @@ use super::auth_ui;
 use crate::{client::RicochetClient, config::Config};
 use anyhow::Result;
 use colored::Colorize;
-use dialoguer::{Input, Password};
+use dialoguer::Password;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -33,45 +33,37 @@ pub(crate) struct ApiKeyResponse {
     pub(crate) expires_at: Option<String>,
 }
 
-pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
-    // Check if server URL is configured - if not, prompt the user
-    if !config.has_explicit_server() {
-        println!(
-            "{} No server URL configured.",
-            "⚠".yellow()
-        );
-        println!(
-            "{}",
-            "Set RICOCHET_SERVER environment variable or enter a server URL below.".dimmed()
-        );
+pub async fn login(
+    config: &mut Config,
+    server_ref: Option<&str>,
+    api_key: Option<String>,
+) -> Result<()> {
+    println!("🔐 Authenticating against Ricochet server\n");
 
-        let server_input: String = Input::new()
-            .with_prompt("Server URL (e.g., https://ricochet.example.com)")
-            .interact_text()?;
+    // Resolve which server to authenticate with
+    let (server_url, server_name) = resolve_login_server(config, server_ref)?;
 
-        let server_url = crate::config::parse_server_url(&server_input)?;
-        config.server = server_url;
-        config.save()?;
-        println!(
-            "{} Server URL saved to config.\n",
-            symbols::check_mark().to_string().green()
-        );
+    println!("Server: {}", server_url.as_str().bright_cyan());
+    if let Some(ref name) = server_name {
+        println!("Profile: {}", name.bright_cyan());
     }
+    println!();
 
-    println!("🔐 Authenticating against ricochet server\n");
-
-    // Try to create a client - this automatically checks env vars via
-    // config.server_url() and config.api_key()
-    if let Ok(client) = RicochetClient::new(config) {
+    // Check if already authenticated with this server
+    let server_config = config.resolve_server(server_ref).ok();
+    if let Some(ref sc) = server_config
+        && let Some(ref existing_key) = sc.api_key
+    {
+        let client = RicochetClient::new_with_key(server_url.to_string(), existing_key.clone())?;
         if client.validate_key().await.unwrap_or(false) {
             println!(
                 "{} Already authenticated",
                 symbols::check_mark().to_string().green().bold()
             );
-            // Note: We can't check expiration without server returning it
             println!(
                 "{}",
-                "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)".dimmed()
+                "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)"
+                    .dimmed()
             );
             return Ok(());
         } else {
@@ -82,50 +74,72 @@ pub async fn login(config: &mut Config, api_key: Option<String>) -> Result<()> {
         }
     }
 
-    // Get server URL (checks env var first, then uses config.server)
-    let server = config.server_url()?;
-
     // If an API key was provided directly, try to validate it
     if let Some(key) = api_key {
-        match validate_and_save_key(config, server.clone(), key).await {
+        match validate_and_save_key(config, server_url.clone(), key, server_name.clone()).await {
             Ok(()) => return Ok(()),
             Err(e) => {
                 println!("{} Provided API key is invalid: {}", "⚠".yellow(), e);
                 println!("Proceeding with OAuth authentication...\n");
-                // Continue to OAuth flow below
             }
         }
     }
 
     // Use OAuth with local callback server
-    oauth_login_with_callback(config, server).await?;
+    oauth_login_with_callback(config, server_url, server_name).await?;
 
     Ok(())
 }
 
-async fn oauth_login_with_callback(config: &mut Config, server: url::Url) -> Result<()> {
-    use axum::{Router, extract::Query, response::Html, routing::get};
+/// Resolve the server URL and name for login
+fn resolve_login_server(
+    config: &Config,
+    server_ref: Option<&str>,
+) -> Result<(Url, Option<String>)> {
+    if let Some(ref_str) = server_ref {
+        // Check if it's a named server
+        if config.servers.contains_key(ref_str) {
+            let server_config = config.servers.get(ref_str).unwrap();
+            return Ok((server_config.url.clone(), Some(ref_str.to_string())));
+        }
+
+        // Check if it's a URL
+        if ref_str.starts_with("http://") || ref_str.starts_with("https://") {
+            let url = crate::config::parse_server_url(ref_str)?;
+            // Check if we have a server with this URL
+            for (name, server_config) in &config.servers {
+                if server_config.url == url {
+                    return Ok((url, Some(name.clone())));
+                }
+            }
+            // New server by URL - will be added during login
+            return Ok((url, None));
+        }
+
+        // It's a new server name - prompt for URL? For now, use default URL
+        anyhow::bail!(
+            "Server '{}' not found. Add it first with: ricochet servers add {} <url>",
+            ref_str,
+            ref_str
+        );
+    }
+
+    // Use default server
+    let server_config = config.resolve_server(None)?;
+    let server_name = config.default_server().map(|s| s.to_string());
+    Ok((server_config.url, server_name))
+}
+
+async fn oauth_login_with_callback(
+    config: &mut Config,
+    server: url::Url,
+    server_name: Option<String>,
+) -> Result<()> {
+    use axum::{extract::Query, response::Html, routing::get, Router};
     use std::collections::HashMap;
     use tokio::net::TcpListener;
 
     println!("\n{}", "Starting OAuth authentication...".yellow());
-
-    // First, try to check if there's an existing valid API key
-    if let Some(existing_key) = &config.api_key {
-        println!("{}", "Checking existing credentials...".dimmed());
-        let client = RicochetClient::new_with_key(server.to_string(), existing_key.clone())?;
-        if client.validate_key().await.unwrap_or(false) {
-            println!(
-                "{} Already authenticated with valid API key",
-                symbols::check_mark().to_string().green().bold()
-            );
-            return Ok(());
-        }
-        println!(
-            "{}",
-            "Existing API key is invalid, proceeding with OAuth...".yellow()
-        );
-    }
 
     // Find an available port
     let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -188,8 +202,14 @@ async fn oauth_login_with_callback(config: &mut Config, server: url::Url) -> Res
     // Start the local server
     let server_handle = tokio::spawn(async move { axum::serve(listener, app).await });
 
-    // Build OAuth URL with our callback using Url methods to properly handle trailing slashes
-    let oauth_url = config.build_authorize_url(&callback_url)?;
+    // Build OAuth URL with our callback
+    let mut oauth_url = server.clone();
+    oauth_url.set_path("/oauth/authorize");
+    oauth_url
+        .query_pairs_mut()
+        .append_pair("redirect_uri", &callback_url)
+        .append_pair("response_type", "code")
+        .append_pair("client_id", "cli");
 
     println!("\nOpening browser for authentication...");
     println!("If browser doesn't open, visit:");
@@ -237,10 +257,12 @@ async fn oauth_login_with_callback(config: &mut Config, server: url::Url) -> Res
                 "\n{} Received API key directly from server!",
                 symbols::check_mark().to_string().green().bold()
             );
-            validate_and_save_key(config, server.clone(), token.clone()).await?;
+            validate_and_save_key(config, server.clone(), token.clone(), server_name.clone())
+                .await?;
         } else {
             // Session token - use it to create API key
-            create_api_key_with_session(config, server.clone(), token.clone()).await?;
+            create_api_key_with_session(config, server.clone(), token.clone(), server_name.clone())
+                .await?;
         }
     } else {
         // Fall back to manual entry
@@ -260,7 +282,7 @@ async fn oauth_login_with_callback(config: &mut Config, server: url::Url) -> Res
             .with_prompt("Enter API key (starts with 'rico_')")
             .interact()?;
 
-        validate_and_save_key(config, server, key).await?;
+        validate_and_save_key(config, server, key, server_name).await?;
     }
 
     Ok(())
@@ -270,6 +292,7 @@ async fn create_api_key_with_session(
     config: &mut Config,
     server: Url,
     session_token: String,
+    server_name: Option<String>,
 ) -> Result<()> {
     println!("\n{}", "Creating API key using session...".dimmed());
 
@@ -302,14 +325,21 @@ async fn create_api_key_with_session(
     if response.status().is_success() {
         let api_key_data: ApiKeyResponse = response.json().await?;
 
-        // Save the API key
-        config.server = server.clone();
-        config.api_key = Some(api_key_data.key.clone());
+        // Determine server name for saving
+        let name = determine_server_name(config, &server, server_name);
+
+        // Save the API key to the appropriate server config
+        config.add_server(name.clone(), server.clone(), Some(api_key_data.key.clone()));
         config.save()?;
 
         println!(
             "\n{} Successfully created and saved API key!",
             symbols::check_mark().to_string().green().bold()
+        );
+        println!(
+            "Server: {} ({})",
+            name.bright_cyan(),
+            server.as_str().dimmed()
         );
 
         // Display expiration info
@@ -355,19 +385,60 @@ async fn create_api_key_with_session(
     }
 }
 
-async fn validate_and_save_key(config: &mut Config, server: url::Url, key: String) -> Result<()> {
+/// Determine the server name to use for saving credentials
+fn determine_server_name(config: &Config, server_url: &Url, server_name: Option<String>) -> String {
+    if let Some(name) = server_name {
+        return name;
+    }
+
+    // Check if we have an existing server with this URL
+    for (name, server_config) in &config.servers {
+        if server_config.url == *server_url {
+            return name.clone();
+        }
+    }
+
+    // Generate a name based on the hostname
+    if let Some(host) = server_url.host_str() {
+        if host == "localhost" || host == "127.0.0.1" {
+            return "local".to_string();
+        }
+        // Use first part of hostname
+        let parts: Vec<&str> = host.split('.').collect();
+        if !parts.is_empty() && parts[0] != "www" {
+            return parts[0].to_string();
+        }
+    }
+
+    "default".to_string()
+}
+
+async fn validate_and_save_key(
+    config: &mut Config,
+    server: url::Url,
+    key: String,
+    server_name: Option<String>,
+) -> Result<()> {
     println!("\n{}", "Validating credentials...".dimmed());
     let client = RicochetClient::new_with_key(server.to_string(), key.clone())?;
 
     match client.validate_key().await {
         Ok(true) => {
-            config.server = server.clone();
-            config.api_key = Some(key.clone());
+            // Determine server name for saving
+            let name = determine_server_name(config, &server, server_name);
+
+            // Save the API key to the appropriate server config
+            config.add_server(name.clone(), server.clone(), Some(key.clone()));
             config.save()?;
 
             println!(
                 "\n{} Successfully authenticated!",
                 symbols::check_mark().to_string().green().bold()
+            );
+            println!(
+                "Server: {} ({})",
+                name.bright_cyan(),
+                server.as_str().dimmed()
             );
             println!(
                 "Configuration saved to: {}",
@@ -388,18 +459,57 @@ async fn validate_and_save_key(config: &mut Config, server: url::Url, key: Strin
     }
 }
 
-pub fn logout(config: &mut Config) -> Result<()> {
-    if config.api_key.is_none() {
-        println!("{}", "Not currently logged in".yellow());
+pub fn logout(config: &mut Config, server_ref: Option<&str>) -> Result<()> {
+    // Resolve which server to logout from
+    let server_name = if let Some(ref_str) = server_ref {
+        // Check if it's a named server
+        if config.servers.contains_key(ref_str) {
+            ref_str.to_string()
+        } else if ref_str.starts_with("http://") || ref_str.starts_with("https://") {
+            // It's a URL - find matching server
+            let url = crate::config::parse_server_url(ref_str)?;
+            let mut found_name = None;
+            for (name, server_config) in &config.servers {
+                if server_config.url == url {
+                    found_name = Some(name.clone());
+                    break;
+                }
+            }
+            found_name.ok_or_else(|| anyhow::anyhow!("No server found with URL: {}", ref_str))?
+        } else {
+            anyhow::bail!("Server '{}' not found", ref_str);
+        }
+    } else {
+        // Use default server
+        config
+            .default_server()
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow::anyhow!("No default server configured"))?
+    };
+
+    // Check if the server has an API key
+    let server_config = config
+        .servers
+        .get_mut(&server_name)
+        .ok_or_else(|| anyhow::anyhow!("Server '{}' not found", server_name))?;
+
+    if server_config.api_key.is_none() {
+        println!(
+            "{} Not logged in to server '{}'",
+            "⚠".yellow(),
+            server_name.bright_cyan()
+        );
         return Ok(());
     }
 
-    config.api_key = None;
+    // Clear the API key
+    server_config.api_key = None;
     config.save()?;
 
     println!(
-        "{} Logged out successfully",
-        symbols::check_mark().to_string().green().bold()
+        "{} Logged out from server '{}'",
+        symbols::check_mark().to_string().green().bold(),
+        server_name.bright_cyan()
     );
     Ok(())
 }

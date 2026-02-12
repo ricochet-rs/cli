@@ -5,3 +5,4 @@ pub mod deploy;
 pub mod init;
 pub mod invoke;
 pub mod list;
+pub mod servers;
