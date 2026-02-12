@@ -26,12 +26,6 @@ mod tests {
         temp_dir
     }
 
-    fn cleanup_test_env() {
-        // Note: We intentionally don't remove HOME here because it causes race conditions
-        // when tests run in parallel. The TempDir will be cleaned up when dropped.
-        // Each test sets HOME to its own temp dir, so this is safe.
-    }
-
     /// Test that logout clears the API key
     #[test]
     fn test_logout_clears_api_key() {
@@ -57,7 +51,6 @@ mod tests {
             "API key should be cleared after logout"
         );
 
-        cleanup_test_env();
     }
 
     /// Test that logout handles already logged out state
@@ -85,7 +78,6 @@ mod tests {
             .expect("default server should exist");
         assert_eq!(default_server.api_key, None, "API key should remain None");
 
-        cleanup_test_env();
     }
 
     /// Test API key validation format
@@ -261,8 +253,6 @@ mod tests {
         assert_eq!(response_no_expiry.expires_at, None);
     }
 
-    // ==================== Logout with --server parameter tests ====================
-
     /// Helper to create a multi-server config for testing
     fn create_multi_server_config() -> Config {
         use crate::config::ServerConfig;
@@ -322,7 +312,6 @@ mod tests {
         let prod = config.servers.get("prod").unwrap();
         assert!(prod.api_key.is_some());
 
-        cleanup_test_env();
     }
 
     /// Test logout from server specified by URL
@@ -340,7 +329,6 @@ mod tests {
         let staging = config.servers.get("staging").unwrap();
         assert!(staging.api_key.is_none());
 
-        cleanup_test_env();
     }
 
     /// Test logout from nonexistent server fails
@@ -354,7 +342,6 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
-        cleanup_test_env();
     }
 
     /// Test logout from server with no matching URL
@@ -368,7 +355,6 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No server found"));
 
-        cleanup_test_env();
     }
 
     /// Test logout uses default server when none specified
@@ -393,7 +379,6 @@ mod tests {
         let staging = config.servers.get("staging").unwrap();
         assert!(staging.api_key.is_some());
 
-        cleanup_test_env();
     }
 
     /// Test logout when already logged out from specified server
@@ -408,6 +393,5 @@ mod tests {
         // Should succeed without error (just a warning)
         assert!(result.is_ok());
 
-        cleanup_test_env();
     }
 }

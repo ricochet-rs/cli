@@ -15,7 +15,7 @@ pub async fn delete(config: &Config, server_ref: Option<&str>, id: &str, force: 
 
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
-    let client = RicochetClient::new_with_server_config(&server_config)?;
+    let client = RicochetClient::new(&server_config)?;
 
     match client.delete(id).await {
         Ok(()) => {

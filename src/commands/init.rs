@@ -45,9 +45,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
                 ContentType::QuartoJl,
             ]
         }
-        Language::Python => {
-            bail!("Python is not yet implemented")
-        }
+        Language::Python => vec![ContentType::Python],
     };
 
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
@@ -203,7 +201,8 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         ContentType::QuartoR | ContentType::QuartoRShiny | ContentType::QuartoJl => {
             find_candidate_entrypoints("qmd", dir)
         }
-        ContentType::ServerlessJl | ContentType::Python | ContentType::PythonService => {
+        ContentType::Python => find_candidate_entrypoints("py", dir),
+        ContentType::ServerlessJl | ContentType::PythonService => {
             bail!("Requested content type not yet implemented")
         }
     }

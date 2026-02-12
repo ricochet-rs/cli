@@ -452,16 +452,16 @@ mod servers_tests {
         cleanup_env();
     }
 
-    // ==================== get_default_server tests ====================
+    // ==================== default server resolution tests ====================
 
     #[test]
-    fn test_get_default_server() {
+    fn test_resolve_default_server() {
         cleanup_env();
         let _temp_dir = setup_test_env();
 
         let config = create_multi_server_config();
 
-        let server = config.get_default_server().unwrap();
+        let server = config.resolve_server(None).unwrap();
 
         assert_eq!(server.url.as_str(), "https://prod.ricochet.com/");
 
@@ -469,7 +469,7 @@ mod servers_tests {
     }
 
     #[test]
-    fn test_get_default_server_fallback() {
+    fn test_resolve_default_server_fallback() {
         cleanup_env();
         let _temp_dir = setup_test_env();
 
@@ -477,14 +477,14 @@ mod servers_tests {
         config.default_server = None;
 
         // Should fallback to first available server
-        let result = config.get_default_server();
+        let result = config.resolve_server(None);
         assert!(result.is_ok());
 
         cleanup_env();
     }
 
     #[test]
-    fn test_get_default_server_no_servers() {
+    fn test_resolve_default_server_no_servers() {
         cleanup_env();
         let _temp_dir = setup_test_env();
 
@@ -496,7 +496,7 @@ mod servers_tests {
             default_format: Some("table".to_string()),
         };
 
-        let result = config.get_default_server();
+        let result = config.resolve_server(None);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -555,24 +555,4 @@ mod servers_tests {
         cleanup_env();
     }
 
-    #[test]
-    fn test_build_authorize_url_for_server() {
-        cleanup_env();
-        let _temp_dir = setup_test_env();
-
-        let config = create_multi_server_config();
-
-        let url = config
-            .build_authorize_url_for_server("http://localhost:12345/callback", Some("staging"))
-            .unwrap();
-
-        assert!(url
-            .as_str()
-            .starts_with("https://staging.ricochet.com/oauth/authorize"));
-        assert!(url.as_str().contains("redirect_uri="));
-        assert!(url.as_str().contains("response_type=code"));
-        assert!(url.as_str().contains("client_id=cli"));
-
-        cleanup_env();
-    }
 }

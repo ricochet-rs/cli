@@ -77,7 +77,7 @@ pub async fn deploy(
 
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
-    let client = RicochetClient::new_with_server_config(&server_config)?;
+    let client = RicochetClient::new(&server_config)?;
 
     match client
         .deploy(&path, content_id.clone(), &toml_path, &pb, debug)

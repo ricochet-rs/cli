@@ -8,7 +8,7 @@ pub async fn invoke(config: &Config, server_ref: Option<&str>, id: &str, format:
 
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
-    let client = RicochetClient::new_with_server_config(&server_config)?;
+    let client = RicochetClient::new(&server_config)?;
 
     match client.invoke(id, None).await {
         Ok(result) => {

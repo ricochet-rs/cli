@@ -125,8 +125,8 @@ fn resolve_login_server(
     }
 
     // Use default server
-    let server_config = config.get_default_server()?;
-    let server_name = config.get_default_server_name().map(|s| s.to_string());
+    let server_config = config.resolve_server(None)?;
+    let server_name = config.default_server().map(|s| s.to_string());
     Ok((server_config.url, server_name))
 }
 
@@ -347,14 +347,17 @@ async fn create_api_key_with_session(
             if let Ok(expiry_time) = chrono::DateTime::parse_from_rfc3339(expires_at) {
                 let now = chrono::Utc::now();
                 let duration = expiry_time.signed_duration_since(now);
-                let hours = duration.num_hours();
-                let minutes = duration.num_minutes() % 60;
 
-                println!(
-                    "API key expires in: {} hours {} minutes",
-                    hours.to_string().bright_yellow(),
-                    minutes.to_string().bright_yellow()
-                );
+                if duration.num_seconds() > 0 {
+                    let hours = duration.num_hours();
+                    let minutes = (duration.num_minutes() % 60).abs();
+
+                    println!(
+                        "API key expires in: {} hours {} minutes",
+                        hours.to_string().bright_yellow(),
+                        minutes.to_string().bright_yellow()
+                    );
+                }
                 println!(
                     "Expires at: {}",
                     expiry_time.format("%Y-%m-%d %H:%M:%S UTC")
@@ -479,7 +482,7 @@ pub fn logout(config: &mut Config, server_ref: Option<&str>) -> Result<()> {
     } else {
         // Use default server
         config
-            .get_default_server_name()
+            .default_server()
             .map(|s| s.to_string())
             .ok_or_else(|| anyhow::anyhow!("No default server configured"))?
     };

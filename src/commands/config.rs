@@ -9,7 +9,7 @@ pub fn show(config: &Config, show_all: bool) -> Result<()> {
     println!();
 
     // Show default server
-    if let Some(default_name) = config.get_default_server_name() {
+    if let Some(default_name) = config.default_server() {
         println!("Default server: {}", default_name.bright_cyan());
     } else {
         println!("Default server: {}", "Not set".yellow());
@@ -26,7 +26,7 @@ pub fn show(config: &Config, show_all: bool) -> Result<()> {
     if servers.is_empty() {
         println!("  {}", "None".dimmed());
     } else {
-        let default_name = config.get_default_server_name();
+        let default_name = config.default_server();
         let mut sorted_servers: Vec<_> = servers.into_iter().collect();
         sorted_servers.sort_by(|a, b| a.0.cmp(b.0));
 

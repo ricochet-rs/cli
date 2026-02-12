@@ -17,7 +17,7 @@ pub fn list(config: &Config) -> Result<()> {
         return Ok(());
     }
 
-    let default_server = config.get_default_server_name();
+    let default_server = config.default_server();
 
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
@@ -69,7 +69,7 @@ pub fn list(config: &Config) -> Result<()> {
 }
 
 /// Add a new server
-pub fn add(config: &mut Config, name: String, url: String, set_default: bool) -> Result<()> {
+pub fn add(config: &mut Config, name: String, url: String, default: bool) -> Result<()> {
     let parsed_url = parse_server_url(&url)?;
 
     // Check if server already exists
@@ -87,7 +87,7 @@ pub fn add(config: &mut Config, name: String, url: String, set_default: bool) ->
 
     config.add_server(name.clone(), parsed_url.clone(), None);
 
-    if set_default {
+    if default {
         config.set_default_server(&name)?;
     }
 
@@ -100,7 +100,7 @@ pub fn add(config: &mut Config, name: String, url: String, set_default: bool) ->
         parsed_url.as_str()
     );
 
-    if config.get_default_server_name() == Some(&name) {
+    if config.default_server() == Some(&name) {
         println!("  Set as default server");
     }
 
@@ -118,7 +118,7 @@ pub fn remove(config: &mut Config, name: String, force: bool) -> Result<()> {
         anyhow::bail!("Server '{}' not found", name);
     }
 
-    let is_default = config.get_default_server_name() == Some(&name);
+    let is_default = config.default_server() == Some(&name);
 
     if !force {
         let prompt = if is_default {

@@ -94,7 +94,7 @@ impl Config {
 
             // Auto-migrate legacy single-server config to multi-server format
             if config.servers.is_empty() && config.server.is_some() {
-                config.migrate_legacy_config();
+                config.migrate_v1_config();
                 config.save()?;
             }
 
@@ -104,8 +104,8 @@ impl Config {
         }
     }
 
-    /// Migrate legacy single-server config to multi-server format
-    fn migrate_legacy_config(&mut self) {
+    /// Migrate v1 single-server config to multi-server format
+    fn migrate_v1_config(&mut self) {
         if let Some(url) = self.server.take() {
             let api_key = self.api_key.take();
             self.servers.insert(
@@ -138,22 +138,14 @@ impl Config {
     /// Resolve server by name or URL
     /// Priority: 1) RICOCHET_SERVER env var 2) Provided server_ref 3) default_server
     pub fn resolve_server(&self, server_ref: Option<&str>) -> Result<ServerConfig> {
-        // Check environment variable first
-        if let Ok(server_env) = std::env::var("RICOCHET_SERVER") {
-            return self.resolve_server_string(&server_env);
-        }
+        // Check environment variable first, then provided reference
+        let server_str = std::env::var("RICOCHET_SERVER").ok();
+        let server_str = server_str.as_deref().or(server_ref);
 
-        // Check provided server reference
-        if let Some(ref_str) = server_ref {
-            return self.resolve_server_string(ref_str);
-        }
+        let Some(server_str) = server_str else {
+            return self.default_server_config();
+        };
 
-        // Use default server
-        self.get_default_server()
-    }
-
-    /// Resolve server from a string (either a name or URL)
-    fn resolve_server_string(&self, server_str: &str) -> Result<ServerConfig> {
         // Try as named server first
         if let Some(server_config) = self.servers.get(server_str) {
             return Ok(self.apply_env_key_override(server_config.clone()));
@@ -197,7 +189,7 @@ impl Config {
     }
 
     /// Get the default server configuration
-    pub fn get_default_server(&self) -> Result<ServerConfig> {
+    fn default_server_config(&self) -> Result<ServerConfig> {
         if let Some(default_name) = &self.default_server
             && let Some(server_config) = self.servers.get(default_name)
         {
@@ -213,7 +205,8 @@ impl Config {
     }
 
     /// Add or update a server
-    pub fn add_server(&mut self, name: String, url: Url, api_key: Option<String>) {
+    pub fn add_server(&mut self, name: impl Into<String>, url: Url, api_key: Option<String>) {
+        let name = name.into();
         self.servers.insert(name.clone(), ServerConfig { url, api_key });
 
         // Set as default if it's the first server
@@ -254,7 +247,7 @@ impl Config {
     }
 
     /// Get the default server name
-    pub fn get_default_server_name(&self) -> Option<&str> {
+    pub fn default_server(&self) -> Option<&str> {
         self.default_server.as_deref()
     }
 
@@ -271,25 +264,6 @@ impl Config {
             .context("No API key configured. Use 'ricochet login' to authenticate")
     }
 
-    pub fn build_authorize_url(&self, callback_url: &str) -> Result<Url> {
-        self.build_authorize_url_for_server(callback_url, None)
-    }
-
-    pub fn build_authorize_url_for_server(
-        &self,
-        callback_url: &str,
-        server_ref: Option<&str>,
-    ) -> Result<Url> {
-        let server_config = self.resolve_server(server_ref)?;
-        let mut oauth_url = server_config.url;
-        oauth_url.set_path("/oauth/authorize");
-        oauth_url
-            .query_pairs_mut()
-            .append_pair("redirect_uri", callback_url)
-            .append_pair("response_type", "code")
-            .append_pair("client_id", "cli");
-        Ok(oauth_url)
-    }
 }
 
 #[cfg(test)]
@@ -518,14 +492,14 @@ mod tests {
         assert!(servers.is_empty());
     }
 
-    // ==================== get_default_server tests ====================
+    // ==================== default server resolution tests ====================
 
     #[test]
-    fn test_get_default_server_success() {
+    fn test_resolve_default_server() {
         cleanup_env();
         let config = create_test_config();
 
-        let result = config.get_default_server();
+        let result = config.resolve_server(None);
 
         assert!(result.is_ok());
         let server = result.unwrap();
@@ -534,19 +508,19 @@ mod tests {
     }
 
     #[test]
-    fn test_get_default_server_fallback_to_first() {
+    fn test_resolve_default_server_fallback_to_first() {
         cleanup_env();
         let mut config = create_test_config();
         config.default_server = None;
 
-        let result = config.get_default_server();
+        let result = config.resolve_server(None);
 
         // Should fallback to first available server (order not guaranteed in HashMap)
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_get_default_server_no_servers() {
+    fn test_resolve_default_server_no_servers() {
         cleanup_env();
         let config = Config {
             server: None,
@@ -556,7 +530,7 @@ mod tests {
             default_format: Some("table".to_string()),
         };
 
-        let result = config.get_default_server();
+        let result = config.resolve_server(None);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No servers configured"));
@@ -645,7 +619,7 @@ mod tests {
             default_format: Some("table".to_string()),
         };
 
-        config.migrate_legacy_config();
+        config.migrate_v1_config();
 
         assert!(config.server.is_none());
         assert!(config.api_key.is_none());
@@ -667,7 +641,7 @@ mod tests {
             default_format: Some("table".to_string()),
         };
 
-        config.migrate_legacy_config();
+        config.migrate_v1_config();
 
         let server = config.servers.get("default").unwrap();
         assert_eq!(server.api_key, None);
@@ -709,23 +683,6 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("No API key configured"));
     }
 
-    #[test]
-    fn test_build_authorize_url_for_server() {
-        cleanup_env();
-        let config = create_test_config();
-
-        let result = config.build_authorize_url_for_server(
-            "http://localhost:12345/callback",
-            Some("staging"),
-        );
-
-        assert!(result.is_ok());
-        let url = result.unwrap();
-        assert!(url.as_str().starts_with("https://staging.ricochet.com/oauth/authorize"));
-        assert!(url.as_str().contains("redirect_uri="));
-        assert!(url.as_str().contains("client_id=cli"));
-    }
-
     // ==================== Config::for_test tests ====================
 
     #[test]
@@ -741,18 +698,18 @@ mod tests {
         assert_eq!(config.default_server, Some("default".to_string()));
     }
 
-    // ==================== get_default_server_name tests ====================
+    // ==================== default_server tests ====================
 
     #[test]
-    fn test_get_default_server_name() {
+    fn test_default_server() {
         cleanup_env();
         let config = create_test_config();
 
-        assert_eq!(config.get_default_server_name(), Some("prod"));
+        assert_eq!(config.default_server(), Some("prod"));
     }
 
     #[test]
-    fn test_get_default_server_name_none() {
+    fn test_default_server_none() {
         cleanup_env();
         let config = Config {
             server: None,
@@ -762,6 +719,6 @@ mod tests {
             default_format: Some("table".to_string()),
         };
 
-        assert_eq!(config.get_default_server_name(), None);
+        assert_eq!(config.default_server(), None);
     }
 }
