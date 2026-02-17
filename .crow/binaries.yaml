@@ -3,7 +3,7 @@ when:
   - event: deployment
 
 labels:
-  group: ccx
+  agent: thumper
 
 steps:
   build:

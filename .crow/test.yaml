@@ -6,7 +6,7 @@ when:
       - ${CI_REPO_DEFAULT_BRANCH}
 
 labels:
-  group: ccx
+  agent: thumper
 
 steps:
   cache:
