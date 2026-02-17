@@ -20,7 +20,7 @@ pub fn choose_language() -> Language {
         .interact()
         .unwrap_or(0);
 
-    languages[selection].clone()
+    languages[selection]
 }
 
 pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
@@ -408,6 +408,7 @@ pub fn init_rico_toml(
         serve,
         static_,
         resources: None,
+        repositories: None,
     };
 
     let toml_content = toml::to_string_pretty(&res)?;

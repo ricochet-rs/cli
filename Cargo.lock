@@ -1258,6 +1258,8 @@ checksum = "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1324,7 +1326,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2057,12 +2059,13 @@ dependencies = [
 
 [[package]]
 name = "ricochet-core"
-version = "0.0.10"
-source = "git+https://github.com/ricochet-rs/ricochet#fa4956a6b697f4849b89a4771cbee9191f36d486"
+version = "0.2.0"
+source = "git+https://github.com/ricochet-rs/ricochet#949dfc49c9f3c717607487ddf9c1cb0840851b46"
 dependencies = [
  "anyhow",
  "croner",
  "git-url-parse",
+ "indexmap",
  "jiff",
  "log",
  "pep440_rs",
@@ -2073,6 +2076,7 @@ dependencies = [
  "thiserror 2.0.17",
  "toml",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2293,6 +2297,7 @@ version = "1.0.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -3247,15 +3252,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
