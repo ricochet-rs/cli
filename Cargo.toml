@@ -44,7 +44,7 @@ serde_yaml = "0.9"
 tar = "0.4"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
-toml = "0.9"
+toml = "1.0"
 ulid = "1.1"
 unicode-icons = "2.0"
 url = { version = "2.5", features = ["serde"] }
