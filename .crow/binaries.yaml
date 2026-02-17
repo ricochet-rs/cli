@@ -121,7 +121,7 @@ steps:
         echo "Updating version files to $VERSION"
 
         # Update install.sh - replace the default version
-        sed -i "s/VERSION=\"\${RICOCHET_VERSION:-[^\"]*}\"/VERSION=\"\${RICOCHET_VERSION:-$VERSION}\"/" install.sh
+        sed -i "s/\(RICOCHET_VERSION:-\)[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/\1$VERSION/" install.sh
 
         # Update install.ps1 - replace the default version
         sed -i "s/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"[^\"]*\" }/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"$VERSION\" }/" install.ps1
