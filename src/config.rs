@@ -38,6 +38,11 @@ pub struct Config {
     pub default_server: Option<String>,
 
     pub default_format: Option<String>,
+
+    /// When set to true, disables the periodic background update check.
+    /// This is set automatically when the GitHub API is repeatedly unreachable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_update_check: Option<bool>,
 }
 
 impl Default for Config {
@@ -56,6 +61,7 @@ impl Default for Config {
             servers,
             default_server: Some("default".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 }
@@ -78,6 +84,7 @@ impl Config {
             servers,
             default_server: Some("default".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 }
@@ -307,6 +314,7 @@ mod tests {
             servers,
             default_server: Some("prod".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 
@@ -365,6 +373,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let url = Url::parse("https://first.server.com").unwrap();
@@ -485,6 +494,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let servers = config.list_servers();
@@ -528,6 +538,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let result = config.resolve_server(None);
@@ -617,6 +628,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         config.migrate_v1_config();
@@ -639,6 +651,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         config.migrate_v1_config();
@@ -717,6 +730,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         assert_eq!(config.default_server(), None);

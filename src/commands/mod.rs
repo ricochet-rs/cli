@@ -6,3 +6,4 @@ pub mod init;
 pub mod invoke;
 pub mod list;
 pub mod servers;
+pub mod update;

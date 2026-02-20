@@ -287,6 +287,7 @@ mod tests {
             servers,
             default_server: Some("prod".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 
