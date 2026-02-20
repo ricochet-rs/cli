@@ -1,8 +1,8 @@
-use crate::config::{parse_server_url, Config};
+use crate::config::{Config, parse_server_url};
 use anyhow::Result;
 use colored::Colorize;
-use comfy_table::{presets::UTF8_FULL, Cell, Color, Table};
-use dialoguer::{theme::ColorfulTheme, Confirm};
+use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
+use dialoguer::{Confirm, theme::ColorfulTheme};
 
 /// List all configured servers
 pub fn list(config: &Config) -> Result<()> {

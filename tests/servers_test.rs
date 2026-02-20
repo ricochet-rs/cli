@@ -498,10 +498,12 @@ mod servers_tests {
 
         let result = config.resolve_server(None);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No servers configured"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No servers configured")
+        );
 
         cleanup_env();
     }
@@ -547,12 +549,13 @@ mod servers_tests {
         let result = config.api_key();
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No API key configured"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No API key configured")
+        );
 
         cleanup_env();
     }
-
 }

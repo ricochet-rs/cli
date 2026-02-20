@@ -108,10 +108,8 @@ impl Config {
     fn migrate_v1_config(&mut self) {
         if let Some(url) = self.server.take() {
             let api_key = self.api_key.take();
-            self.servers.insert(
-                "default".to_string(),
-                ServerConfig { url, api_key },
-            );
+            self.servers
+                .insert("default".to_string(), ServerConfig { url, api_key });
             self.default_server = Some("default".to_string());
         }
     }
@@ -175,7 +173,11 @@ impl Config {
             anyhow::bail!(
                 "Server '{}' not found. Available servers: {}",
                 server_str,
-                available.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                available
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         }
     }
@@ -207,7 +209,8 @@ impl Config {
     /// Add or update a server
     pub fn add_server(&mut self, name: impl Into<String>, url: Url, api_key: Option<String>) {
         let name = name.into();
-        self.servers.insert(name.clone(), ServerConfig { url, api_key });
+        self.servers
+            .insert(name.clone(), ServerConfig { url, api_key });
 
         // Set as default if it's the first server
         if self.default_server.is_none() {
@@ -263,7 +266,6 @@ impl Config {
             .api_key
             .context("No API key configured. Use 'ricochet login' to authenticate")
     }
-
 }
 
 #[cfg(test)]
@@ -391,7 +393,11 @@ mod tests {
         let mut config = create_test_config();
         let new_url = Url::parse("https://new-prod.ricochet.com").unwrap();
 
-        config.add_server("prod".to_string(), new_url.clone(), Some("new_key".to_string()));
+        config.add_server(
+            "prod".to_string(),
+            new_url.clone(),
+            Some("new_key".to_string()),
+        );
 
         let server = config.servers.get("prod").unwrap();
         assert_eq!(server.url, new_url);
@@ -533,7 +539,12 @@ mod tests {
         let result = config.resolve_server(None);
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No servers configured"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No servers configured")
+        );
     }
 
     // ==================== resolve_server tests ====================
@@ -680,7 +691,12 @@ mod tests {
         let result = config.api_key();
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No API key configured"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No API key configured")
+        );
     }
 
     // ==================== Config::for_test tests ====================

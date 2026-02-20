@@ -12,10 +12,7 @@ mod deploy_tests {
     use super::*;
 
     /// Create a multi-server config for testing --server parameter
-    fn create_multi_server_config(
-        prod_url: &str,
-        staging_url: &str,
-    ) -> Config {
+    fn create_multi_server_config(prod_url: &str, staging_url: &str) -> Config {
         let mut servers = HashMap::new();
         servers.insert(
             "prod".to_string(),
@@ -479,10 +476,7 @@ key = "value"
         let mock_url = mock_server.url();
 
         // Create config with mock server URL as staging
-        let config = create_multi_server_config(
-            "https://prod.example.com",
-            &mock_url,
-        );
+        let config = create_multi_server_config("https://prod.example.com", &mock_url);
 
         // Mock the server response
         let _m = mock_server
@@ -548,7 +542,7 @@ key = "value"
 
         // Create multi-server config with prod as mock server and default
         let config = create_multi_server_config(
-            &prod_server.url(),          // prod URL (mock server)
+            &prod_server.url(),            // prod URL (mock server)
             "https://staging.example.com", // staging URL
         );
 
@@ -578,10 +572,8 @@ key = "value"
         create_test_project(project_path, None).unwrap();
 
         // Create config with some servers
-        let config = create_multi_server_config(
-            "https://prod.example.com",
-            "https://staging.example.com",
-        );
+        let config =
+            create_multi_server_config("https://prod.example.com", "https://staging.example.com");
 
         // Deploy with --server that doesn't exist
         let result = ricochet_cli::commands::deploy::deploy(
