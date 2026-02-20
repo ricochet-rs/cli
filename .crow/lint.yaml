@@ -47,11 +47,14 @@ steps:
       - . ./.sccache
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-      - rustup component add clippy
-      # Use SQLx offline mode - no database setup needed
-      # Use testing profile for faster builds in CI
-      - cargo clippy -q --no-deps --profile testing
-      # - cargo clippy --all-targets --all-features -- -D warnings
+      - rustup component add rustfmt clippy
+      - curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+      - cargo binstall -y leptosfmt
+      # Check formatting
+      - cargo fmt --all -- --check
+      - leptosfmt --check ricochet-ui
+      # check clippy lints
+      - cargo clippy --all-targets --all-features -- -D warnings
       - sccache --show-stats
 
   check-docs:
