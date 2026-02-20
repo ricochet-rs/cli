@@ -5,7 +5,6 @@
 set -e
 
 VERSION="${RICOCHET_VERSION:-0.3.0}"
-INSTALL_DIR="${RICOCHET_INSTALL_DIR:-/usr/local/bin}"
 GITHUB_RELEASES_BASE="https://github.com/ricochet-rs/cli/releases/download/v${VERSION}"
 S3_BASE_URL="https://hel1.your-objectstorage.com/ricochet-cli/v${VERSION}"
 
@@ -23,6 +22,17 @@ case "${OS}" in
         IS_WINDOWS=0
         ;;
 esac
+
+# Determine default install directory
+if [ -n "${RICOCHET_INSTALL_DIR:-}" ]; then
+    INSTALL_DIR="${RICOCHET_INSTALL_DIR}"
+elif [ "$(id -u)" = "0" ]; then
+    INSTALL_DIR="/usr/local/bin"
+elif [ "${IS_WINDOWS}" = "1" ]; then
+    INSTALL_DIR="$HOME/bin"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+fi
 
 case "${OS}" in
     Darwin*)
@@ -67,11 +77,6 @@ case "${OS}" in
                 TARBALL="ricochet-${VERSION}-windows-x86_64.exe.tar.gz"
                 BINARY_NAME="ricochet-${VERSION}-windows-x86_64.exe"
                 BASE_URL="${GITHUB_RELEASES_BASE}"
-                # On Windows, use ~/bin (C:\Users\<username>\bin) if not specified
-                if [ -z "${RICOCHET_INSTALL_DIR:-}" ]; then
-                    INSTALL_DIR="$HOME/bin"
-                    mkdir -p "$INSTALL_DIR" 2>/dev/null || true
-                fi
                 ;;
             *)
                 echo "Unsupported Windows architecture: ${ARCH}"
@@ -110,18 +115,16 @@ tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
 # Determine final binary name
 FINAL_NAME="ricochet"
 
+# Ensure install directory exists
+mkdir -p "${INSTALL_DIR}" 2>/dev/null || true
+
 # Move the binary
 if [ -w "${INSTALL_DIR}" ]; then
     mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${FINAL_NAME}"
 else
-    if [ "${IS_WINDOWS}" = "1" ]; then
-        # On Windows, if we can't write to the dir, just fail (no sudo)
-        echo "Error: Cannot write to ${INSTALL_DIR}"
-        echo "Please run this script with appropriate permissions or set RICOCHET_INSTALL_DIR to a writable location."
-        exit 1
-    else
-        sudo mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${FINAL_NAME}"
-    fi
+    echo "Error: Cannot write to ${INSTALL_DIR}"
+    echo "Set RICOCHET_INSTALL_DIR to a writable location, or run as root."
+    exit 1
 fi
 
 chmod +x "${INSTALL_DIR}/${FINAL_NAME}"
@@ -130,21 +133,19 @@ echo "✓ Ricochet CLI installed successfully!"
 echo "Binary installed to: ${INSTALL_DIR}/${FINAL_NAME}"
 echo ""
 
-if [ "${IS_WINDOWS}" = "1" ]; then
-    # Check if directory is in PATH
-    if echo "$PATH" | grep -q "${INSTALL_DIR}"; then
+# Check if directory is in PATH
+case ":${PATH}:" in
+    *":${INSTALL_DIR}:"*)
         echo "Run 'ricochet --help' to get started."
-    else
+        ;;
+    *)
         echo "⚠️  Note: ${INSTALL_DIR} is not in your PATH."
         echo ""
-        echo "To add it to your PATH, run:"
+        echo "To add it, run:"
         echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
         echo ""
-        echo "Or add this line to your ~/.bashrc or ~/.bash_profile:"
-        echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+        echo "To make it permanent, add that line to your shell profile (~/.bashrc, ~/.zshrc, etc.)."
         echo ""
         echo "For now, you can run: ${INSTALL_DIR}/${FINAL_NAME} --help"
-    fi
-else
-    echo "Run 'ricochet --help' to get started."
-fi
+        ;;
+esac
