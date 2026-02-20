@@ -2,7 +2,12 @@ use crate::{client::RicochetClient, config::Config, utils};
 use anyhow::Result;
 use colored::Colorize;
 
-pub async fn delete(config: &Config, server_ref: Option<&str>, id: &str, force: bool) -> Result<()> {
+pub async fn delete(
+    config: &Config,
+    server_ref: Option<&str>,
+    id: &str,
+    force: bool,
+) -> Result<()> {
     if !force {
         let message = format!("Are you sure you want to delete content item '{}'?", id);
         if !utils::confirm(&message)? {

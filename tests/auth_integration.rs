@@ -146,7 +146,10 @@ fn test_config_persistence() {
 
     let config2 = config2.unwrap();
     // With multi-server config, server info is in the servers map under "default"
-    let default_server = config2.servers.get("default").expect("default server should exist");
+    let default_server = config2
+        .servers
+        .get("default")
+        .expect("default server should exist");
     assert_eq!(default_server.api_key, Some("rico_test_key".to_string()));
     assert_eq!(default_server.url.as_str(), "https://test.server.com/");
 

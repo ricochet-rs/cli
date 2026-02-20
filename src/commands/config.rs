@@ -34,11 +34,7 @@ pub fn show(config: &Config, show_all: bool) -> Result<()> {
             let is_default = default_name == Some(name.as_str());
             let marker = if is_default { " (default)" } else { "" };
 
-            println!(
-                "\n  {}{}",
-                name.bright_cyan(),
-                marker.dimmed()
-            );
+            println!("\n  {}{}", name.bright_cyan(), marker.dimmed());
             println!("    URL: {}", server_config.url.as_str());
 
             if let Some(api_key) = &server_config.api_key {

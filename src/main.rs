@@ -1,9 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ricochet_cli::{
-    OutputFormat, commands,
-    config::Config,
-};
+use ricochet_cli::{OutputFormat, commands, config::Config};
 
 #[derive(Parser)]
 #[command(name = "ricochet")]
@@ -185,14 +182,30 @@ async fn main() -> Result<()> {
             name,
             description,
         }) => {
-            commands::deploy::deploy(&config, cli.server.as_deref(), path, name, description, cli.debug).await?;
+            commands::deploy::deploy(
+                &config,
+                cli.server.as_deref(),
+                path,
+                name,
+                description,
+                cli.debug,
+            )
+            .await?;
         }
         Some(Commands::List {
             content_type,
             active_only,
             sort,
         }) => {
-            commands::list::list(&config, cli.server.as_deref(), content_type, active_only, sort, cli.format).await?;
+            commands::list::list(
+                &config,
+                cli.server.as_deref(),
+                content_type,
+                active_only,
+                sort,
+                cli.format,
+            )
+            .await?;
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;

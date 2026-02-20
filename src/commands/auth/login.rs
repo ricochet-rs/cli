@@ -62,8 +62,7 @@ pub async fn login(
             );
             println!(
                 "{}",
-                "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)"
-                    .dimmed()
+                "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)".dimmed()
             );
             return Ok(());
         } else {
@@ -135,7 +134,7 @@ async fn oauth_login_with_callback(
     server: url::Url,
     server_name: Option<String>,
 ) -> Result<()> {
-    use axum::{extract::Query, response::Html, routing::get, Router};
+    use axum::{Router, extract::Query, response::Html, routing::get};
     use std::collections::HashMap;
     use tokio::net::TcpListener;
 

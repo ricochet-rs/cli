@@ -169,11 +169,13 @@ mod delete_tests {
         );
 
         // Delete first item
-        let result1 = ricochet_cli::commands::delete::delete(&config, None, content_id1, true).await;
+        let result1 =
+            ricochet_cli::commands::delete::delete(&config, None, content_id1, true).await;
         assert!(result1.is_ok());
 
         // Delete second item
-        let result2 = ricochet_cli::commands::delete::delete(&config, None, content_id2, true).await;
+        let result2 =
+            ricochet_cli::commands::delete::delete(&config, None, content_id2, true).await;
         assert!(result2.is_ok());
     }
 }
