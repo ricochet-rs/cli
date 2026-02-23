@@ -50,7 +50,6 @@ mod tests {
             default_server.api_key, None,
             "API key should be cleared after logout"
         );
-
     }
 
     /// Test that logout handles already logged out state
@@ -77,7 +76,6 @@ mod tests {
             .get("default")
             .expect("default server should exist");
         assert_eq!(default_server.api_key, None, "API key should remain None");
-
     }
 
     /// Test API key validation format
@@ -312,7 +310,6 @@ mod tests {
         // Prod should still have its API key
         let prod = config.servers.get("prod").unwrap();
         assert!(prod.api_key.is_some());
-
     }
 
     /// Test logout from server specified by URL
@@ -329,7 +326,6 @@ mod tests {
         // Staging should now have no API key
         let staging = config.servers.get("staging").unwrap();
         assert!(staging.api_key.is_none());
-
     }
 
     /// Test logout from nonexistent server fails
@@ -342,7 +338,6 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
-
     }
 
     /// Test logout from server with no matching URL
@@ -355,7 +350,6 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No server found"));
-
     }
 
     /// Test logout uses default server when none specified
@@ -379,7 +373,6 @@ mod tests {
         // Other servers should be unaffected
         let staging = config.servers.get("staging").unwrap();
         assert!(staging.api_key.is_some());
-
     }
 
     /// Test logout when already logged out from specified server
@@ -393,6 +386,5 @@ mod tests {
 
         // Should succeed without error (just a warning)
         assert!(result.is_ok());
-
     }
 }

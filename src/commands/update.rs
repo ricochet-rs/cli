@@ -26,10 +26,7 @@ fn download_url(version: &str) -> Result<String> {
     );
 
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    return Ok(format!(
-        "{}/ricochet-{}-linux-x86_64.tar.gz",
-        base, version
-    ));
+    return Ok(format!("{}/ricochet-{}-linux-x86_64.tar.gz", base, version));
 
     #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
     return Ok(format!(
@@ -44,10 +41,7 @@ fn download_url(version: &str) -> Result<String> {
     ));
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    return Ok(format!(
-        "{}/ricochet-{}-darwin-arm64.tar.gz",
-        base, version
-    ));
+    return Ok(format!("{}/ricochet-{}-darwin-arm64.tar.gz", base, version));
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     return Ok(format!(
@@ -152,11 +146,7 @@ pub async fn self_update(force: bool) -> Result<()> {
         .context("Failed to read download response")?;
 
     spinner.finish_and_clear();
-    println!(
-        "{} Downloaded ({} bytes)",
-        "✓".green(),
-        tarball_bytes.len()
-    );
+    println!("{} Downloaded ({} bytes)", "✓".green(), tarball_bytes.len());
 
     let binary_path = binary_name_in_tarball(&latest)?;
     let extracted_bytes = extract_binary_from_tarball(&tarball_bytes, &binary_path)

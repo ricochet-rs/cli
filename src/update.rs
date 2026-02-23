@@ -122,9 +122,7 @@ pub fn is_newer(current: &str, candidate: &str) -> bool {
 /// After MAX_CONSECUTIVE_FAILURES, auto-disables update checks in the config
 /// and notifies the user via stderr.
 pub async fn check_for_update() -> Option<String> {
-    let previous_failures = load_cache()
-        .map(|c| c.consecutive_failures)
-        .unwrap_or(0);
+    let previous_failures = load_cache().map(|c| c.consecutive_failures).unwrap_or(0);
 
     match fetch_latest_version().await {
         Ok(latest) => {

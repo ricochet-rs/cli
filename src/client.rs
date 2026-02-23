@@ -1,4 +1,4 @@
-use crate::config::{parse_server_url, ServerConfig};
+use crate::config::{ServerConfig, parse_server_url};
 use anyhow::{Context, Result};
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::content::ContentItem;

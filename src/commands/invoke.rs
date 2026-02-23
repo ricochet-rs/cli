@@ -3,7 +3,12 @@ use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 
-pub async fn invoke(config: &Config, server_ref: Option<&str>, id: &str, format: OutputFormat) -> Result<()> {
+pub async fn invoke(
+    config: &Config,
+    server_ref: Option<&str>,
+    id: &str,
+    format: OutputFormat,
+) -> Result<()> {
     println!("Invoking task: {}", id.bright_cyan());
 
     // Resolve server configuration

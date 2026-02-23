@@ -10,11 +10,11 @@ labels:
 
 steps:
   editor-config:
-    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.6.0
+    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.6.1
     depends_on: []
 
   cache:
-    image: codeberg.org/crow-plugins/sccache:0.2.0
+    image: codeberg.org/crow-plugins/sccache:0.2.3
     settings:
       s3-endpoint: https://hel1.your-objectstorage.com
       s3-bucket: ricochet-sccache
@@ -26,7 +26,7 @@ steps:
         from_secret: s3_secret_key
 
   rust-fmt:
-    image: reg.ricochet.rs/docker.io/library/rust:1.92
+    image: reg.ricochet.rs/docker.io/library/rust:1.93
     depends_on: cache
     commands:
       - export PATH=".sccache-cache:$PATH"
@@ -36,7 +36,7 @@ steps:
       - sccache --show-stats
 
   rust-lint:
-    image: reg.ricochet.rs/docker.io/library/rust:1.92
+    image: reg.ricochet.rs/docker.io/library/rust:1.93
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
@@ -47,15 +47,18 @@ steps:
       - . ./.sccache
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-      - rustup component add clippy
-      # Use SQLx offline mode - no database setup needed
-      # Use testing profile for faster builds in CI
-      - cargo clippy -q --no-deps --profile testing
-      # - cargo clippy --all-targets --all-features -- -D warnings
+      - rustup component add rustfmt clippy
+      - curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+      - cargo binstall -y leptosfmt
+      # Check formatting
+      - cargo fmt --all -- --check
+      - leptosfmt --check ricochet-ui
+      # check clippy lints
+      - cargo clippy --all-targets --all-features -- -D warnings
       - sccache --show-stats
 
   check-docs:
-    image: reg.ricochet.rs/docker.io/library/rust:1.92
+    image: reg.ricochet.rs/docker.io/library/rust:1.93
     depends_on: cache
     environment:
       GITHUB_TOKEN:
@@ -85,6 +88,6 @@ steps:
     when:
       - event: pull_request
       - event: pull_request_edited
-    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.1.0
+    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.4.2
     commands:
       - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
