@@ -75,13 +75,24 @@ pub async fn login(
 
     // If an API key was provided directly, try to validate it
     if let Some(key) = api_key {
-        match validate_and_save_key(config, server_url.clone(), key, server_name.clone()).await {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                println!("{} Provided API key is invalid: {}", "⚠".yellow(), e);
-                println!("Proceeding with OAuth authentication...\n");
-            }
-        }
+        return validate_and_save_key(config, server_url.clone(), key, server_name.clone()).await;
+    }
+
+    // In headless environments, prompt for manual API key entry instead of OAuth
+    if is_headless() {
+        println!(
+            "{} Headless environment detected (no display server). Using manual key entry.",
+            "ℹ".bright_cyan()
+        );
+        println!(
+            "Create an API key in your server's web UI and paste it below.\n"
+        );
+
+        let key = Password::new()
+            .with_prompt("Enter API key (starts with 'rico_')")
+            .interact()?;
+
+        return validate_and_save_key(config, server_url, key, server_name).await;
     }
 
     // Use OAuth with local callback server
@@ -410,6 +421,27 @@ fn determine_server_name(config: &Config, server_url: &Url, server_name: Option<
     }
 
     "default".to_string()
+}
+
+/// Detect whether we're running in a headless environment where a browser cannot be opened.
+///
+/// On Linux, checks for `DISPLAY` (X11) and `WAYLAND_DISPLAY`. If neither is set, the
+/// environment is headless. Also checks for `SSH_CLIENT`/`SSH_TTY` as a strong signal.
+/// On macOS and Windows, always returns false since a display server is assumed.
+fn is_headless() -> bool {
+    if cfg!(target_os = "linux") {
+        let has_display = std::env::var("DISPLAY").is_ok();
+        let has_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+        let is_ssh = std::env::var("SSH_CLIENT").is_ok() || std::env::var("SSH_TTY").is_ok();
+
+        if is_ssh && !has_display && !has_wayland {
+            return true;
+        }
+
+        !has_display && !has_wayland
+    } else {
+        false
+    }
 }
 
 async fn validate_and_save_key(
