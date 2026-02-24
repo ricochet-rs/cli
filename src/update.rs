@@ -19,10 +19,10 @@ const MAX_CONSECUTIVE_FAILURES: u32 = 3;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateCache {
-    pub last_checked: chrono::DateTime<chrono::Utc>,
-    pub latest_version: String,
+    pub(crate) last_checked: chrono::DateTime<chrono::Utc>,
+    pub(crate) latest_version: String,
     #[serde(default)]
-    pub consecutive_failures: u32,
+    pub(crate) consecutive_failures: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,57 +30,136 @@ struct GitHubRelease {
     tag_name: String,
 }
 
-/// Returns true if update checks should be suppressed.
-fn should_suppress_checks(config: &Config) -> bool {
-    if config.skip_update_check == Some(true) {
-        return true;
+impl UpdateCache {
+    /// Construct a fresh cache entry for a successfully fetched version.
+    pub(crate) fn for_version(latest_version: String) -> Self {
+        Self {
+            last_checked: chrono::Utc::now(),
+            latest_version,
+            consecutive_failures: 0,
+        }
     }
-    if std::env::var("RICOCHET_NO_UPDATE_CHECK")
-        .map(|v| !v.is_empty())
-        .unwrap_or(false)
-    {
-        return true;
+
+    /// Returns true if `latest_version` is newer than the currently running binary.
+    pub(crate) fn is_update_available(&self) -> bool {
+        is_newer(CURRENT_VERSION, &self.latest_version)
     }
-    if std::env::var("CI").is_ok() {
-        return true;
+
+    pub(crate) fn path() -> Result<PathBuf> {
+        let cache_dir = dirs::cache_dir().context("Failed to get cache directory")?;
+        Ok(cache_dir.join("ricochet").join("update-check.json"))
     }
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(parent) = exe.parent()
-        && parent.starts_with("/opt/homebrew")
-    {
-        return true;
+
+    pub fn load() -> Option<UpdateCache> {
+        let path = Self::path().ok()?;
+        let content = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&content).ok()
     }
-    false
+
+    pub(crate) fn save(&self) -> Result<()> {
+        let path = Self::path()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
+        }
+        let content =
+            serde_json::to_string_pretty(self).context("Failed to serialize update cache")?;
+        std::fs::write(&path, content).context("Failed to write update cache")?;
+        Ok(())
+    }
+
+    /// Background task: fetch latest version and save to cache.
+    /// On success, resets the failure counter. On failure, increments it.
+    /// After MAX_CONSECUTIVE_FAILURES, auto-disables update checks in the config
+    /// and notifies the user via stderr.
+    pub(crate) async fn check_for_update() -> Option<String> {
+        let previous_failures = Self::load().map(|c| c.consecutive_failures).unwrap_or(0);
+
+        match fetch_latest_version().await {
+            Ok(latest) => {
+                let cache = Self::for_version(latest.clone());
+                let _ = cache.save();
+                if cache.is_update_available() {
+                    Some(latest)
+                } else {
+                    None
+                }
+            }
+            Err(_) => {
+                let failures = previous_failures + 1;
+                let cache = UpdateCache {
+                    last_checked: chrono::Utc::now(),
+                    latest_version: Self::load()
+                        .map(|c| c.latest_version)
+                        .unwrap_or_else(|| CURRENT_VERSION.to_string()),
+                    consecutive_failures: failures,
+                };
+                let _ = cache.save();
+
+                if failures >= MAX_CONSECUTIVE_FAILURES
+                    && let Ok(mut config) = Config::load()
+                {
+                    config.disable_update_checks(MAX_CONSECUTIVE_FAILURES);
+                }
+
+                None
+            }
+        }
+    }
+
+    /// Print a one-line stderr notice if a newer version is recorded in the cache.
+    /// Reads the on-disk cache synchronously — no network call.
+    pub fn maybe_notify(&self, config: &Config) {
+        if config.suppresses_update_checks() {
+            return;
+        }
+        use colored::Colorize;
+        if self.is_update_available() {
+            eprintln!(
+                "\n{} A new version of ricochet is available: {} -> {}\n  Update with: {}\n  Release notes: {}",
+                "notice:".yellow().bold(),
+                CURRENT_VERSION.dimmed(),
+                self.latest_version.green().bold(),
+                "ricochet self-update".bright_cyan(),
+                release_notes_url(&self.latest_version).dimmed(),
+            );
+        }
+    }
+
+    /// If the last update check was more than 24h ago (or never), spawn a background
+    /// tokio task to fetch the latest version and refresh the cache.
+    /// Returns the JoinHandle so the caller can await it with a timeout.
+    pub fn trigger_background_check(config: &Config) -> Option<tokio::task::JoinHandle<()>> {
+        if config.suppresses_update_checks() {
+            return None;
+        }
+
+        let should_check = match Self::load() {
+            None => true,
+            Some(cache) => {
+                let age = chrono::Utc::now()
+                    .signed_duration_since(cache.last_checked)
+                    .num_seconds()
+                    .unsigned_abs();
+                age >= CHECK_INTERVAL_SECS
+            }
+        };
+
+        if should_check {
+            Some(tokio::spawn(async {
+                let _ = Self::check_for_update().await;
+            }))
+        } else {
+            None
+        }
+    }
 }
 
-pub fn cache_path() -> Result<PathBuf> {
-    let cache_dir = dirs::cache_dir().context("Failed to get cache directory")?;
-    Ok(cache_dir.join("ricochet").join("update-check.json"))
-}
-
-pub fn load_cache() -> Option<UpdateCache> {
-    let path = cache_path().ok()?;
-    let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&content).ok()
-}
-
-pub fn save_cache(cache: &UpdateCache) -> Result<()> {
-    let path = cache_path()?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
-    }
-    let content =
-        serde_json::to_string_pretty(cache).context("Failed to serialize update cache")?;
-    std::fs::write(&path, content).context("Failed to write update cache")?;
-    Ok(())
-}
-
-pub fn release_notes_url(version: &str) -> String {
+pub(crate) fn release_notes_url(version: &str) -> String {
     format!("{}/v{}", RELEASE_NOTES_BASE, version)
 }
 
 /// Fetch the latest release version string (without leading 'v') from GitHub.
-pub async fn fetch_latest_version() -> Result<String> {
+pub(crate) async fn fetch_latest_version() -> Result<String> {
     let client = reqwest::Client::builder()
         .user_agent(concat!("ricochet-cli/", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(10))
@@ -101,7 +180,7 @@ pub async fn fetch_latest_version() -> Result<String> {
 }
 
 /// Returns true if `candidate` is a newer version than `current`.
-pub fn is_newer(current: &str, candidate: &str) -> bool {
+fn is_newer(current: &str, candidate: &str) -> bool {
     fn parse(v: &str) -> Option<(u64, u64, u64)> {
         let v = v.split('-').next()?;
         let parts: Vec<u64> = v.split('.').filter_map(|p| p.parse().ok()).collect();
@@ -114,114 +193,6 @@ pub fn is_newer(current: &str, candidate: &str) -> bool {
     match (parse(current), parse(candidate)) {
         (Some(c), Some(n)) => n > c,
         _ => false,
-    }
-}
-
-/// Background task: fetch latest version and save to cache.
-/// On success, resets the failure counter. On failure, increments it.
-/// After MAX_CONSECUTIVE_FAILURES, auto-disables update checks in the config
-/// and notifies the user via stderr.
-pub async fn check_for_update() -> Option<String> {
-    let previous_failures = load_cache().map(|c| c.consecutive_failures).unwrap_or(0);
-
-    match fetch_latest_version().await {
-        Ok(latest) => {
-            let cache = UpdateCache {
-                last_checked: chrono::Utc::now(),
-                latest_version: latest.clone(),
-                consecutive_failures: 0,
-            };
-            let _ = save_cache(&cache);
-            if is_newer(CURRENT_VERSION, &latest) {
-                Some(latest)
-            } else {
-                None
-            }
-        }
-        Err(_) => {
-            let failures = previous_failures + 1;
-            let cache = UpdateCache {
-                last_checked: chrono::Utc::now(),
-                latest_version: load_cache()
-                    .map(|c| c.latest_version)
-                    .unwrap_or_else(|| CURRENT_VERSION.to_string()),
-                consecutive_failures: failures,
-            };
-            let _ = save_cache(&cache);
-
-            if failures >= MAX_CONSECUTIVE_FAILURES {
-                disable_update_checks();
-            }
-
-            None
-        }
-    }
-}
-
-/// Disable update checks by setting skip_update_check in the config file,
-/// and inform the user via stderr.
-fn disable_update_checks() {
-    use colored::Colorize;
-
-    if let Ok(mut config) = Config::load() {
-        config.skip_update_check = Some(true);
-        let _ = config.save();
-    }
-
-    eprintln!(
-        "\n{} Automatic update checks have been disabled after {} consecutive failures reaching GitHub.\n  To re-enable, set {} in your config file or run:\n  {}",
-        "notice:".yellow().bold(),
-        MAX_CONSECUTIVE_FAILURES,
-        "skip_update_check = false".bright_cyan(),
-        "ricochet self-update".bright_cyan(),
-    );
-}
-
-/// Print a one-line stderr notice if a newer version is recorded in the cache.
-/// Reads the on-disk cache synchronously — no network call.
-pub fn maybe_notify_update(config: &Config) {
-    if should_suppress_checks(config) {
-        return;
-    }
-    use colored::Colorize;
-    let Some(cache) = load_cache() else { return };
-    if is_newer(CURRENT_VERSION, &cache.latest_version) {
-        eprintln!(
-            "\n{} A new version of ricochet is available: {} -> {}\n  Update with: {}\n  Release notes: {}",
-            "notice:".yellow().bold(),
-            CURRENT_VERSION.dimmed(),
-            cache.latest_version.green().bold(),
-            "ricochet self-update".bright_cyan(),
-            release_notes_url(&cache.latest_version).dimmed(),
-        );
-    }
-}
-
-/// If the last update check was more than 24h ago (or never), spawn a background
-/// tokio task to fetch the latest version and refresh the cache.
-/// Returns the JoinHandle so the caller can await it with a timeout.
-pub fn trigger_background_check(config: &Config) -> Option<tokio::task::JoinHandle<()>> {
-    if should_suppress_checks(config) {
-        return None;
-    }
-
-    let should_check = match load_cache() {
-        None => true,
-        Some(cache) => {
-            let age = chrono::Utc::now()
-                .signed_duration_since(cache.last_checked)
-                .num_seconds()
-                .unsigned_abs();
-            age >= CHECK_INTERVAL_SECS
-        }
-    };
-
-    if should_check {
-        Some(tokio::spawn(async {
-            let _ = check_for_update().await;
-        }))
-    } else {
-        None
     }
 }
 
