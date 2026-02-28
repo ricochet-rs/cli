@@ -45,7 +45,15 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
                 ContentType::QuartoJl,
             ]
         }
-        Language::Python => vec![ContentType::Python],
+        Language::Python => vec![
+            ContentType::Python,
+            ContentType::PythonService,
+            ContentType::QuartoPy,
+            ContentType::FastApi,
+            ContentType::Flask,
+            ContentType::Streamlit,
+            ContentType::Dash,
+        ],
     };
 
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
@@ -198,11 +206,15 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         ContentType::Shiny => choose_shiny_entrypoint(dir),
         ContentType::Rmd | ContentType::RmdShiny => find_candidate_entrypoints("Rmd", dir),
         ContentType::Julia | ContentType::JuliaService => find_candidate_entrypoints("jl", dir),
-        ContentType::QuartoR | ContentType::QuartoRShiny | ContentType::QuartoJl => {
-            find_candidate_entrypoints("qmd", dir)
-        }
-        ContentType::Python => find_candidate_entrypoints("py", dir),
-        ContentType::ServerlessJl | ContentType::PythonService => {
+        ContentType::QuartoR | ContentType::QuartoRShiny | ContentType::QuartoJl
+        | ContentType::QuartoPy => find_candidate_entrypoints("qmd", dir),
+        ContentType::Python
+        | ContentType::PythonService
+        | ContentType::FastApi
+        | ContentType::Flask
+        | ContentType::Streamlit
+        | ContentType::Dash => find_candidate_entrypoints("py", dir),
+        ContentType::ServerlessJl => {
             bail!("Requested content type not yet implemented")
         }
     }

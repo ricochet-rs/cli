@@ -77,3 +77,6 @@ opt-level = 2  # Some optimization, faster compile than release
 debug = 0  # Minimal debug info
 strip = false  # Keep symbols for debugging
 lto = false  # No link-time optimization
+
+[patch."https://github.com/ricochet-rs/ricochet"]
+ricochet-core = { path = "../ricochet/ricochet-core" }
