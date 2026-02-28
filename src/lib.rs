@@ -1,6 +1,7 @@
 pub mod client;
 pub mod commands;
 pub mod config;
+pub mod update;
 pub mod utils;
 
 #[derive(clap::ValueEnum, Clone, Debug, Copy)]

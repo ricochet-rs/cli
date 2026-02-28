@@ -71,6 +71,7 @@ fn create_multi_server_config() -> Config {
         servers,
         default_server: Some("prod".to_string()),
         default_format: Some("table".to_string()),
+        skip_update_check: None,
     }
 }
 
@@ -91,6 +92,7 @@ mod servers_tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let url = Url::parse("https://new.server.com").unwrap();
@@ -140,6 +142,7 @@ mod servers_tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         // Add first server
@@ -416,6 +419,7 @@ mod servers_tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         config.add_server(
@@ -494,6 +498,7 @@ mod servers_tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let result = config.resolve_server(None);

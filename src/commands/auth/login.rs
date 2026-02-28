@@ -84,9 +84,7 @@ pub async fn login(
             "{} Headless environment detected (no display server). Using manual key entry.",
             "ℹ".bright_cyan()
         );
-        println!(
-            "Create an API key in your server's web UI and paste it below.\n"
-        );
+        println!("Create an API key in your server's web UI and paste it below.\n");
 
         let key = Password::new()
             .with_prompt("Enter API key (starts with 'rico_')")
