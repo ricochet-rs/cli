@@ -260,8 +260,10 @@ async fn main() -> Result<()> {
     // Background update check and notification.
     // Skipped for Homebrew installs, when RICOCHET_NO_UPDATE_CHECK is set,
     // or when skip_update_check is set in config (auto-set after repeated failures).
-    update::maybe_notify_update(&config);
-    if let Some(handle) = update::trigger_background_check(&config) {
+    if let Some(cache) = update::UpdateCache::load() {
+        cache.maybe_notify(&config);
+    }
+    if let Some(handle) = update::UpdateCache::trigger_background_check(&config) {
         // Give the background check a short window to complete before exiting.
         // If it doesn't finish in time, the cache will be written on the next run.
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;

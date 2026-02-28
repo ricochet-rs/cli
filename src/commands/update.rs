@@ -96,7 +96,9 @@ pub async fn self_update(force: bool) -> Result<()> {
         .await
         .context("Failed to fetch latest version from GitHub")?;
 
-    if !update::is_newer(CURRENT_VERSION, &latest) && !force {
+    let latest_cache = update::UpdateCache::for_version(latest.clone());
+
+    if !latest_cache.is_update_available() && !force {
         println!(
             "{} Already on the latest version: {}",
             "✓".green().bold(),
@@ -105,7 +107,7 @@ pub async fn self_update(force: bool) -> Result<()> {
         return Ok(());
     }
 
-    if !update::is_newer(CURRENT_VERSION, &latest) {
+    if !latest_cache.is_update_available() {
         println!(
             "Reinstalling current version {} (--force)",
             latest.bright_cyan()
@@ -170,18 +172,13 @@ pub async fn self_update(force: bool) -> Result<()> {
         .context("Failed to replace the ricochet binary. You may need elevated permissions.")?;
 
     // Update the cache: reset failure counter and record the new version
-    let _ = update::save_cache(&update::UpdateCache {
-        last_checked: chrono::Utc::now(),
-        latest_version: latest.clone(),
-        consecutive_failures: 0,
-    });
+    let _ = update::UpdateCache::for_version(latest.clone()).save();
 
     // Re-enable update checks if they were auto-disabled due to previous failures
     if let Ok(mut config) = crate::config::Config::load()
         && config.skip_update_check == Some(true)
     {
-        config.skip_update_check = None;
-        let _ = config.save();
+        config.re_enable_update_checks();
     }
 
     println!(

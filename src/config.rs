@@ -251,6 +251,49 @@ impl Config {
         Ok(())
     }
 
+    /// Returns true if automatic update checks should be suppressed.
+    pub fn suppresses_update_checks(&self) -> bool {
+        if self.skip_update_check == Some(true) {
+            return true;
+        }
+        if std::env::var("RICOCHET_NO_UPDATE_CHECK")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        if std::env::var("CI").is_ok() {
+            return true;
+        }
+        if let Ok(exe) = std::env::current_exe()
+            && let Some(parent) = exe.parent()
+            && parent.starts_with("/opt/homebrew")
+        {
+            return true;
+        }
+        false
+    }
+
+    /// Disable automatic update checks after repeated failures, and notify the user via stderr.
+    pub fn disable_update_checks(&mut self, failure_count: u32) {
+        use colored::Colorize;
+        self.skip_update_check = Some(true);
+        let _ = self.save();
+        eprintln!(
+            "\n{} Automatic update checks have been disabled after {} consecutive failures reaching GitHub.\n  To re-enable, set {} in your config file or run:\n  {}",
+            "notice:".yellow().bold(),
+            failure_count,
+            "skip_update_check = false".bright_cyan(),
+            "ricochet self-update".bright_cyan(),
+        );
+    }
+
+    /// Re-enable automatic update checks (clears skip_update_check).
+    pub fn re_enable_update_checks(&mut self) {
+        self.skip_update_check = None;
+        let _ = self.save();
+    }
+
     /// List all configured servers
     pub fn list_servers(&self) -> Vec<(&String, &ServerConfig)> {
         self.servers.iter().collect()
