@@ -148,32 +148,20 @@ steps:
     when:
       event: tag
 
-  'Clone homebrew-tap':
+  'Trigger homebrew-tap update':
     image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
       - changelog
+    environment:
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
     commands:
-      - apk add --no-cache -q git
-      - git config --global user.name "ricochet-bot"
-      - git config --global user.email "droid@ricochet.rs"
-      - git clone https://github.com/ricochet-rs/homebrew-tap.git
-      - cd homebrew-tap && git tag -f -a ${CI_COMMIT_TAG} -m ${CI_COMMIT_TAG}
-    when:
-      event: tag
-
-  'Push changes to homebrew-tap':
-    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.2.1
-    depends_on:
-      - 'Clone homebrew-tap'
-    settings:
-      path: homebrew-tap
-      remote: git@github.com:ricochet-rs/homebrew-tap.git
-      branch: main
-      followtags: true
-      force: true
-      ssh_key:
-        from_secret: github-actions-bot-deploy-key
-      author_name: ricochet-bot
-      author_email: droid@ricochet.rs
+      - apk add --no-cache -q curl
+      - |
+        curl -s -X POST \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/ricochet-rs/homebrew-tap/actions/workflows/update-formula.yml/dispatches \
+          -d "{\"ref\":\"main\",\"inputs\":{\"version\":\"${CI_COMMIT_TAG}\"}}"
     when:
       event: tag
