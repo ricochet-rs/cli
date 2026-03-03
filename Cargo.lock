@@ -1357,7 +1357,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2113,8 +2113,8 @@ dependencies = [
 
 [[package]]
 name = "ricochet-core"
-version = "0.2.0"
-source = "git+https://github.com/ricochet-rs/ricochet#a8524db99a8a1760c0e5b0e2ed500c2169c315cd"
+version = "0.3.0"
+source = "git+https://github.com/ricochet-rs/ricochet#ab2af209ac023ad243422c68be1f1a64e3032a74"
 dependencies = [
  "anyhow",
  "croner",
@@ -3429,15 +3429,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
