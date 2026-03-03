@@ -134,17 +134,29 @@ steps:
       event: tag
 
   'Push version updates':
-    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.2.1
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
       - 'Update version files'
-    settings:
-      path: .
-      remote: git@github.com:ricochet-rs/cli.git
-      branch: main
-      ssh_key:
+    environment:
+      SSH_KEY:
         from_secret: ricochet-bot-ssh-key
-      author_name: ricochet-bot
-      author_email: droid@ricochet.rs
+    commands:
+      - apk add --no-cache -q git openssh-client
+      - |
+        # Set up SSH key
+        mkdir -p ~/.ssh
+        echo "$SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+
+        # Fetch latest main and rebase our version bump commit on top
+        git remote add origin-push git@github.com:ricochet-rs/cli.git
+        git fetch origin-push main
+        git rebase origin-push/main
+        git push origin-push HEAD:main
     when:
       event: tag
 
