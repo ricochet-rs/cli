@@ -38,6 +38,11 @@ pub struct Config {
     pub default_server: Option<String>,
 
     pub default_format: Option<String>,
+
+    /// When set to true, disables the periodic background update check.
+    /// This is set automatically when the GitHub API is repeatedly unreachable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_update_check: Option<bool>,
 }
 
 impl Default for Config {
@@ -56,6 +61,7 @@ impl Default for Config {
             servers,
             default_server: Some("default".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 }
@@ -78,6 +84,7 @@ impl Config {
             servers,
             default_server: Some("default".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 }
@@ -244,6 +251,49 @@ impl Config {
         Ok(())
     }
 
+    /// Returns true if automatic update checks should be suppressed.
+    pub fn suppresses_update_checks(&self) -> bool {
+        if self.skip_update_check == Some(true) {
+            return true;
+        }
+        if std::env::var("RICOCHET_NO_UPDATE_CHECK")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        if std::env::var("CI").is_ok() {
+            return true;
+        }
+        if let Ok(exe) = std::env::current_exe()
+            && let Some(parent) = exe.parent()
+            && parent.starts_with("/opt/homebrew")
+        {
+            return true;
+        }
+        false
+    }
+
+    /// Disable automatic update checks after repeated failures, and notify the user via stderr.
+    pub fn disable_update_checks(&mut self, failure_count: u32) {
+        use colored::Colorize;
+        self.skip_update_check = Some(true);
+        let _ = self.save();
+        eprintln!(
+            "\n{} Automatic update checks have been disabled after {} consecutive failures reaching GitHub.\n  To re-enable, set {} in your config file or run:\n  {}",
+            "notice:".yellow().bold(),
+            failure_count,
+            "skip_update_check = false".bright_cyan(),
+            "ricochet self-update".bright_cyan(),
+        );
+    }
+
+    /// Re-enable automatic update checks (clears skip_update_check).
+    pub fn re_enable_update_checks(&mut self) {
+        self.skip_update_check = None;
+        let _ = self.save();
+    }
+
     /// List all configured servers
     pub fn list_servers(&self) -> Vec<(&String, &ServerConfig)> {
         self.servers.iter().collect()
@@ -309,6 +359,7 @@ mod tests {
             servers,
             default_server: Some("prod".to_string()),
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         }
     }
 
@@ -367,6 +418,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let url = Url::parse("https://first.server.com").unwrap();
@@ -491,6 +543,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let servers = config.list_servers();
@@ -534,6 +587,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         let result = config.resolve_server(None);
@@ -628,6 +682,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         config.migrate_v1_config();
@@ -650,6 +705,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         config.migrate_v1_config();
@@ -733,6 +789,7 @@ mod tests {
             servers: HashMap::new(),
             default_server: None,
             default_format: Some("table".to_string()),
+            skip_update_check: None,
         };
 
         assert_eq!(config.default_server(), None);

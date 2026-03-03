@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ricochet_cli::{OutputFormat, commands, config::Config};
+use ricochet_cli::{OutputFormat, commands, config::Config, update};
 
 #[derive(Parser)]
 #[command(name = "ricochet")]
@@ -110,6 +110,12 @@ enum Commands {
     Servers {
         #[command(subcommand)]
         command: ServersCommands,
+    },
+    /// Update the ricochet CLI to the latest version
+    SelfUpdate {
+        /// Force reinstall even if already on the latest version
+        #[arg(short = 'f', long)]
+        force: bool,
     },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
@@ -237,6 +243,9 @@ async fn main() -> Result<()> {
                 commands::servers::set_default(&mut config, name)?;
             }
         },
+        Some(Commands::SelfUpdate { force }) => {
+            commands::update::self_update(force).await?;
+        }
         Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
             println!("{}", markdown);
@@ -246,6 +255,18 @@ async fn main() -> Result<()> {
             use clap::CommandFactory;
             Cli::command().print_help()?;
         }
+    }
+
+    // Background update check and notification.
+    // Skipped for Homebrew installs, when RICOCHET_NO_UPDATE_CHECK is set,
+    // or when skip_update_check is set in config (auto-set after repeated failures).
+    if let Some(cache) = update::UpdateCache::load() {
+        cache.maybe_notify(&config);
+    }
+    if let Some(handle) = update::UpdateCache::trigger_background_check(&config) {
+        // Give the background check a short window to complete before exiting.
+        // If it doesn't finish in time, the cache will be written on the next run.
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;
     }
 
     Ok(())

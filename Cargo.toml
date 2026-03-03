@@ -49,13 +49,14 @@ ulid = "1.1"
 unicode-icons = "2.0"
 url = { version = "2.5", features = ["serde"] }
 urlencoding = "2.1"
+self-replace = "1"
+tempfile = "3.8"
 walkdir = "2.5"
 webbrowser = "1.0"
 
 [dev-dependencies]
 mockito = "1.5"
 serial_test = "3"
-tempfile = "3.8"
 tokio-test = "0.4"
 
 # Optimize dependencies even in dev mode for better test performance
