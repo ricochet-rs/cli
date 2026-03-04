@@ -18,6 +18,13 @@ pub async fn deploy(
         anyhow::bail!("Path does not exist: {}", path.display());
     }
 
+    // Resolve server configuration early so we can bail before the init dialog
+    // if the user has no API key configured
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+
+    client.preflight_key_check().await?;
+
     // Check for _ricochet.toml
     let toml_path = if path.is_dir() {
         path.join("_ricochet.toml")
@@ -29,7 +36,10 @@ pub async fn deploy(
         // Check if we're in an interactive terminal (not in tests or CI)
         if !crate::utils::is_non_interactive() {
             let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt("No _ricochet.toml found. Would you like to create one?")
+                .with_prompt(format!(
+                    "No _ricochet.toml found. Would you like to create one? (deploying to {})",
+                    server_config.url.as_str().trim_end_matches('/')
+                ))
                 .default(true)
                 .interact()?;
 
@@ -74,10 +84,6 @@ pub async fn deploy(
             .unwrap(),
     );
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
-
-    // Resolve server configuration
-    let server_config = config.resolve_server(server_ref)?;
-    let client = RicochetClient::new(&server_config)?;
 
     match client
         .deploy(&path, content_id.clone(), &toml_path, &pb, debug)

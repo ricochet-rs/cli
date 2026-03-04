@@ -38,6 +38,14 @@ mod deploy_tests {
         }
     }
 
+    fn mock_check_key(server: &mut Server) -> mockito::Mock {
+        server
+            .mock("GET", "/api/v0/check_key")
+            .match_header("authorization", Matcher::Regex("Key .*".to_string()))
+            .with_status(200)
+            .create()
+    }
+
     fn create_test_project(dir: &Path, content_id: Option<&str>) -> std::io::Result<()> {
         // Create _ricochet.toml
         let toml_content = if let Some(id) = content_id {
@@ -91,6 +99,7 @@ shinyApp(ui = ui, server = server)"#,
 
         // Create mock server
         let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
 
         // Mock the server response for new content deployment
         let _m = server
@@ -147,6 +156,7 @@ shinyApp(ui = ui, server = server)"#,
 
         // Create mock server
         let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
 
         // Mock the server response for updating existing content
         let _m = server
@@ -199,9 +209,12 @@ shinyApp(ui = ui, server = server)"#,
         let temp_dir = TempDir::new().unwrap();
         let project_path = temp_dir.path();
 
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+
         // Create test config
         let config = ricochet_cli::config::Config::for_test(
-            Url::parse("http://localhost:3000").unwrap(),
+            Url::parse(&server.url()).unwrap(),
             Some("test_api_key".to_string()),
         );
 
@@ -272,6 +285,7 @@ key = "value"
 
         // Create mock server
         let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
 
         // Mock the server response with 403 error
         let _m = server
@@ -317,6 +331,7 @@ key = "value"
 
         // Create mock server
         let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
 
         let _m = server
             .mock("POST", "/api/v0/content/upload")
@@ -372,6 +387,7 @@ key = "value"
 
         // Create mock server
         let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
 
         let _m = server
             .mock("POST", "/api/v0/content/upload")
@@ -423,6 +439,7 @@ key = "value"
 
         // Create mock server for staging
         let mut staging_server = Server::new_async().await;
+        let _ck = mock_check_key(&mut staging_server);
 
         // Mock the staging server response
         let _m = staging_server
@@ -474,6 +491,7 @@ key = "value"
 
         // Create mock server
         let mut mock_server = Server::new_async().await;
+        let _ck = mock_check_key(&mut mock_server);
         let mock_url = mock_server.url();
 
         // Create config with mock server URL as staging
@@ -523,6 +541,7 @@ key = "value"
 
         // Create mock server for prod (the default)
         let mut prod_server = Server::new_async().await;
+        let _ck = mock_check_key(&mut prod_server);
 
         // Mock the prod server response
         let _m = prod_server
