@@ -27,6 +27,7 @@ mod tests {
     }
 
     /// Test that logout clears the API key
+    #[serial]
     #[test]
     fn test_logout_clears_api_key() {
         let _temp_dir = setup_test_env();
@@ -53,6 +54,7 @@ mod tests {
     }
 
     /// Test that logout handles already logged out state
+    #[serial]
     #[test]
     fn test_logout_when_not_logged_in() {
         let _temp_dir = setup_test_env();
@@ -290,6 +292,7 @@ mod tests {
     }
 
     /// Test logout from a specific named server
+    #[serial]
     #[test]
     fn test_logout_from_named_server() {
         let _temp_dir = setup_test_env();
@@ -313,6 +316,7 @@ mod tests {
     }
 
     /// Test logout from server specified by URL
+    #[serial]
     #[test]
     fn test_logout_from_server_by_url() {
         let _temp_dir = setup_test_env();
@@ -329,6 +333,7 @@ mod tests {
     }
 
     /// Test logout from nonexistent server fails
+    #[serial]
     #[test]
     fn test_logout_from_nonexistent_server() {
         let _temp_dir = setup_test_env();
@@ -341,6 +346,7 @@ mod tests {
     }
 
     /// Test logout from server with no matching URL
+    #[serial]
     #[test]
     fn test_logout_from_unknown_url() {
         let _temp_dir = setup_test_env();
@@ -353,6 +359,7 @@ mod tests {
     }
 
     /// Test logout uses default server when none specified
+    #[serial]
     #[test]
     fn test_logout_uses_default_server() {
         let _temp_dir = setup_test_env();
@@ -376,6 +383,7 @@ mod tests {
     }
 
     /// Test logout when already logged out from specified server
+    #[serial]
     #[test]
     fn test_logout_when_already_logged_out_from_server() {
         let _temp_dir = setup_test_env();
