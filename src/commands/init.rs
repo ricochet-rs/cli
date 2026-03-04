@@ -206,7 +206,9 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         ContentType::Shiny => choose_shiny_entrypoint(dir),
         ContentType::Rmd | ContentType::RmdShiny => find_candidate_entrypoints("Rmd", dir),
         ContentType::Julia | ContentType::JuliaService => find_candidate_entrypoints("jl", dir),
-        ContentType::QuartoR | ContentType::QuartoRShiny | ContentType::QuartoJl
+        ContentType::QuartoR
+        | ContentType::QuartoRShiny
+        | ContentType::QuartoJl
         | ContentType::QuartoPy => find_candidate_entrypoints("qmd", dir),
         ContentType::Python
         | ContentType::PythonService

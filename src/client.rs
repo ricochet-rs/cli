@@ -1,5 +1,6 @@
 use crate::config::{ServerConfig, parse_server_url};
 use anyhow::{Context, Result};
+use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::content::ContentItem;
 use serde::de::DeserializeOwned;
@@ -111,6 +112,31 @@ impl RicochetClient {
             .await?;
 
         Ok(response.status() == StatusCode::OK)
+    }
+
+    /// Check if a key is expired and report if so
+    /// Use this as a pre-flight check for all API calls where appropriate
+    pub async fn preflight_key_check(&self) -> Result<()> {
+        let server_url = self.base_url.as_str().trim_end_matches('/');
+        let login_cmd = format!("ricochet login -S {server_url}").bright_cyan();
+        match self.validate_key().await {
+            Ok(v) => {
+                if !v {
+                    anyhow::bail!(
+                        "Credentials are invalid or expired for server {server_url}.\nRun {login_cmd} to authenticate."
+                    );
+                } else {
+                    Ok(())
+                }
+            }
+            Err(e) => {
+                anyhow::bail!(
+                    "Failed to validate credentials for {server_url}:\n{} {}\nRun {login_cmd} to authenticate.",
+                    "⚠".bright_yellow(),
+                    e.to_string().dimmed()
+                );
+            }
+        }
     }
 
     pub async fn list_items(&self) -> Result<Vec<serde_json::Value>> {

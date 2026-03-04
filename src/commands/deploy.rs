@@ -21,13 +21,9 @@ pub async fn deploy(
     // Resolve server configuration early so we can bail before the init dialog
     // if the user has no API key configured
     let server_config = config.resolve_server(server_ref)?;
-    if server_config.api_key.is_none() {
-        anyhow::bail!(
-            "No API key configured for server {}.\nRun {} to authenticate.",
-            server_config.url.as_str().trim_end_matches('/'),
-            format!("ricochet login -S {}", server_config.url.as_str().trim_end_matches('/')).bright_cyan()
-        );
-    }
+    let client = RicochetClient::new(&server_config)?;
+
+    client.preflight_key_check().await?;
 
     // Check for _ricochet.toml
     let toml_path = if path.is_dir() {
@@ -88,8 +84,6 @@ pub async fn deploy(
             .unwrap(),
     );
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
-
-    let client = RicochetClient::new(&server_config)?;
 
     match client
         .deploy(&path, content_id.clone(), &toml_path, &pb, debug)
