@@ -96,7 +96,7 @@ steps:
       event: tag
 
   'Create release':
-    image: reg.devxy.io/docker.io/woodpeckerci/plugin-release:0.2.6
+    image: reg.devxy.io/docker.io/woodpeckerci/plugin-release:0.3.0
     depends_on:
       - changelog
     settings:

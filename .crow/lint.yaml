@@ -88,6 +88,6 @@ steps:
     when:
       - event: pull_request
       - event: pull_request_edited
-    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.4.4
+    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.5.0
     commands:
       - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
