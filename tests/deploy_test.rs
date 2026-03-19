@@ -584,6 +584,183 @@ key = "value"
         assert!(result.is_ok());
     }
 
+    // ==================== Package file existence checks ====================
+
+    fn create_julia_project(dir: &Path) -> std::io::Result<()> {
+        fs::write(
+            dir.join("_ricochet.toml"),
+            r#"[content]
+content_type = "julia"
+name = "test-app"
+entrypoint = "app.jl"
+access_type = "private"
+
+[language]
+name = "julia"
+packages = "Manifest.toml"
+"#,
+        )
+    }
+
+    fn create_python_project(dir: &Path) -> std::io::Result<()> {
+        fs::write(
+            dir.join("_ricochet.toml"),
+            r#"[content]
+content_type = "python"
+name = "test-app"
+entrypoint = "app.py"
+access_type = "private"
+
+[language]
+name = "python"
+packages = "uv.lock"
+"#,
+        )
+    }
+
+    #[tokio::test]
+    async fn test_deploy_julia_without_manifest_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_julia_project(project_path).unwrap();
+        // Intentionally do NOT create Manifest.toml
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("Manifest.toml"),
+            "Error should mention Manifest.toml"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_deploy_r_without_renv_lock() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+
+        fs::write(
+            project_path.join("_ricochet.toml"),
+            r#"[content]
+content_type = "shiny"
+name = "test-app"
+entrypoint = "app.R"
+access_type = "private"
+
+[language]
+name = "r"
+packages = "renv.lock"
+"#,
+        )
+        .unwrap();
+        // Intentionally do NOT create renv.lock
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("renv.lock"),
+            "Error should mention renv.lock"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_deploy_python_without_uv_lock_and_python_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_python_project(project_path).unwrap();
+        // Intentionally do NOT create uv.lock or .python-version
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("uv.lock"),
+            "Error should mention uv.lock"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_deploy_python_without_python_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_python_project(project_path).unwrap();
+        // Create uv.lock but NOT .python-version
+        fs::write(project_path.join("uv.lock"), "").unwrap();
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(".python-version"),
+            "Error should mention .python-version"
+        );
+    }
+
     #[tokio::test]
     async fn test_deploy_with_nonexistent_server_fails() {
         // Create a temporary directory for test project
