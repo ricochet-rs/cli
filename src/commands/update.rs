@@ -62,7 +62,6 @@ fn download_url(version: &str) -> Result<String> {
 }
 
 /// The binary name inside the tarball for the current platform.
-/// macOS bottles have a different structure: ricochet/{version}/bin/ricochet
 fn binary_name_in_tarball(version: &str) -> Result<String> {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     return Ok(format!("ricochet-{}-linux-x86_64", version));
@@ -73,9 +72,12 @@ fn binary_name_in_tarball(version: &str) -> Result<String> {
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     return Ok(format!("ricochet-{}-windows-x86_64.exe", version));
 
-    // macOS bottles: the binary is at ricochet/{version}/bin/ricochet inside the tarball
+    // macOS bottles contain a flat "ricochet" binary (tarball created from inside the bin dir)
     #[cfg(target_os = "macos")]
-    return Ok(format!("ricochet/{}/bin/ricochet", version));
+    {
+        let _ = version;
+        Ok("ricochet".to_string())
+    }
 
     #[cfg(not(any(
         all(target_os = "linux", target_arch = "x86_64"),
@@ -206,8 +208,7 @@ fn extract_binary_from_tarball(tarball: &[u8], binary_path: &str) -> Result<Vec<
         let path = entry.path().context("Failed to read entry path")?;
         let path_str = path.to_string_lossy();
 
-        // Match against full path (for macOS bottles: ricochet/0.4.0/bin/ricochet)
-        // or just the filename (for Linux/Windows flat tarballs)
+        // Match against full path or just the filename
         let matches = path_str == binary_path
             || path
                 .file_name()
@@ -225,4 +226,98 @@ fn extract_binary_from_tarball(tarball: &[u8], binary_path: &str) -> Result<Vec<
     }
 
     anyhow::bail!("Binary '{}' not found in tarball", binary_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+
+    /// Create a tar.gz in memory with the given entries: (path, content).
+    fn make_tarball(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut tar_bytes = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar_bytes);
+            for (path, content) in entries {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(content.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                builder
+                    .append_data(&mut header, *path, *content)
+                    .unwrap();
+            }
+            builder.finish().unwrap();
+        }
+
+        let mut gz_bytes = Vec::new();
+        let mut encoder = GzEncoder::new(&mut gz_bytes, Compression::fast());
+        encoder.write_all(&tar_bytes).unwrap();
+        encoder.finish().unwrap();
+        gz_bytes
+    }
+
+    #[test]
+    fn extract_flat_binary_by_exact_name() {
+        let content = b"fake-binary-content";
+        let tarball = make_tarball(&[("ricochet-0.5.0-linux-x86_64", content)]);
+
+        let result =
+            extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
+        assert_eq!(result, content);
+    }
+
+    #[test]
+    fn extract_flat_binary_by_filename_fallback() {
+        // The tarball has "ricochet" and we search for "ricochet" — macOS case
+        let content = b"macos-binary";
+        let tarball = make_tarball(&[("ricochet", content)]);
+
+        let result = extract_binary_from_tarball(&tarball, "ricochet").unwrap();
+        assert_eq!(result, content);
+    }
+
+    #[test]
+    fn extract_returns_error_when_not_found() {
+        let tarball = make_tarball(&[("some-other-file", b"data")]);
+
+        let result = extract_binary_from_tarball(&tarball, "ricochet");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("not found in tarball")
+        );
+    }
+
+    #[test]
+    fn extract_ignores_non_matching_entries() {
+        let content = b"the-right-one";
+        let tarball = make_tarball(&[
+            ("README.md", b"readme"),
+            ("ricochet-0.5.0-linux-x86_64", content),
+            ("other-file", b"nope"),
+        ]);
+
+        let result =
+            extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
+        assert_eq!(result, content);
+    }
+
+    #[test]
+    fn binary_name_in_tarball_current_platform() {
+        let name = binary_name_in_tarball("0.5.0").unwrap();
+        // On macOS it should be just "ricochet", on Linux it should include the version
+        #[cfg(target_os = "macos")]
+        assert_eq!(name, "ricochet");
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        assert_eq!(name, "ricochet-0.5.0-linux-x86_64");
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        assert_eq!(name, "ricochet-0.5.0-linux-aarch64");
+        // Just verify it doesn't error on whatever platform we're on
+        assert!(!name.is_empty());
+    }
 }
