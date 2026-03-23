@@ -78,6 +78,9 @@ packages = "renv.lock"
         };
         fs::write(dir.join("_ricochet.toml"), toml_content)?;
 
+        // Create renv.lock so pre-flight check passes
+        fs::write(dir.join("renv.lock"), r#"{"R":{},"Packages":{}}"#)?;
+
         // Create a sample app.R file
         fs::write(
             dir.join("app.R"),
