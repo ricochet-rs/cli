@@ -67,7 +67,7 @@ pub async fn deploy(
 
     // check for existence of packages file
     let pkgs = ricochet_toml.language.packages;
-    let pkg_path = path.join(&pkgs.to_string());
+    let pkg_path = path.join(pkgs.to_string());
 
     // bail if the package file doesnt exist.
     if !pkg_path.exists() {
@@ -81,11 +81,10 @@ pub async fn deploy(
     }
 
     // if python and no .python-version bail
-    if let Package::UvLock = pkgs {
-        if !path.join(".python-version").exists() {
+    if let Package::UvLock = pkgs
+        && !path.join(".python-version").exists() {
             bail!("Please create a `.python-version` via `uv python pin`")
         }
-    }
 
     if let Some(ref id) = content_id {
         println!(
