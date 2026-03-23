@@ -11,18 +11,7 @@ mod tests {
         unsafe {
             env::set_var("HOME", temp_dir.path());
         }
-        // Create the config directory structure
-        // On macOS, dirs::config_dir() might use Library/Application Support
-        // On Linux, it uses .config
-        // By setting HOME and creating both, we cover both cases
         let _ = std::fs::create_dir_all(temp_dir.path().join(".config").join("ricochet"));
-        let _ = std::fs::create_dir_all(
-            temp_dir
-                .path()
-                .join("Library")
-                .join("Application Support")
-                .join("ricochet"),
-        );
         temp_dir
     }
 

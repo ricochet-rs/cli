@@ -93,6 +93,33 @@ impl Config {
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
 
+        // On macOS, migrate from the legacy ~/Library/Application Support path
+        #[cfg(target_os = "macos")]
+        if !config_path.exists()
+            && let Some(legacy_path) = Self::legacy_config_path()
+            && legacy_path.exists()
+        {
+            if let Some(parent) = config_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .context("Failed to create config directory")?;
+            }
+            std::fs::rename(&legacy_path, &config_path).with_context(|| {
+                format!(
+                    "Failed to migrate config from {} to {}",
+                    legacy_path.display(),
+                    config_path.display()
+                )
+            })?;
+            // Clean up the old directory if it's empty
+            if let Some(old_dir) = legacy_path.parent() {
+                let _ = std::fs::remove_dir(old_dir);
+            }
+            eprintln!(
+                "Migrated config to {}",
+                config_path.display()
+            );
+        }
+
         if config_path.exists() {
             let content =
                 std::fs::read_to_string(&config_path).context("Failed to read config file")?;
@@ -136,8 +163,15 @@ impl Config {
     }
 
     pub fn config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
-        Ok(config_dir.join("ricochet").join("config.toml"))
+        let home = dirs::home_dir().context("Failed to get home directory")?;
+        Ok(home.join(".config").join("ricochet").join("config.toml"))
+    }
+
+    /// Returns the legacy macOS config path (~/Library/Application Support/ricochet/config.toml).
+    /// Used for one-time migration to the new ~/.config location.
+    #[cfg(target_os = "macos")]
+    fn legacy_config_path() -> Option<PathBuf> {
+        dirs::config_dir().map(|d| d.join("ricochet").join("config.toml"))
     }
 
     /// Resolve server by name or URL
