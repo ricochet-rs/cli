@@ -436,6 +436,22 @@ pub fn init_rico_toml(
             "{} Created _ricochet.toml",
             unicode_icons::icons::symbols::check_mark().0.green()
         );
+
+        // Warn if the required package file is missing
+        let pkg_path = dir.join(res.language.packages.to_string());
+        if !pkg_path.exists() {
+            let hint = match res.language.packages {
+                Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+                Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+                Package::UvLock => "Create it by running `uv init`",
+            };
+            eprintln!(
+                "\n{} Required package file `{}` not found. {}",
+                "⚠".yellow().bold(),
+                res.language.packages.to_string().bright_cyan(),
+                hint
+            );
+        }
     }
 
     Ok(res)

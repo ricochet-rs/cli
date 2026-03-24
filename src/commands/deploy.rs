@@ -69,15 +69,19 @@ pub async fn deploy(
     let pkgs = ricochet_toml.language.packages;
     let pkg_path = path.join(pkgs.to_string());
 
-    // bail if the package file doesnt exist.
+    // bail if the package file doesn't exist
     if !pkg_path.exists() {
-        match pkgs {
-            Package::RenvLock => bail!("Please create an `renv.lock` via `renv::snapshot()`"),
-            Package::ManifestToml => {
-                bail!("Please create a `Manifest.toml` via `Pkg.instantiate()`")
-            }
-            Package::UvLock => bail!("Please create a `uv.lock` via `uv init`"),
-        }
+        let hint = match pkgs {
+            Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+            Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+            Package::UvLock => "Create it by running `uv init`",
+        };
+        bail!(
+            "Required package file `{}` not found.\n  {} {}",
+            pkgs,
+            "Hint:".yellow().bold(),
+            hint
+        );
     }
 
     // if python and no .python-version bail
