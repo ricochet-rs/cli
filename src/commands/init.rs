@@ -3,6 +3,7 @@ use colored::Colorize;
 use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
     content::{AccessType, Content, ContentItem, ContentType},
+    kinds::QuartoYml,
     language::{Language, LanguageConfig, Package},
     settings::{ScheduleSettings, ServeSettings, StaticSettings},
 };
@@ -236,6 +237,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         | ContentType::FastApi
         | ContentType::Flask
         | ContentType::Streamlit
+        | ContentType::ShinyPy
         | ContentType::Dash => find_candidate_entrypoints("py", dir),
         ContentType::ServerlessJl => {
             bail!("Requested content type not yet implemented")
@@ -260,56 +262,6 @@ fn choose_access_type() -> AccessType {
     opts[selection].clone()
 }
 
-/// Check if a _quarto.yml exists and parse its project type and output-dir.
-/// Returns (is_website, output_dir) where output_dir is the configured output
-/// directory or "_site" (the quarto default for websites).
-fn detect_quarto_website(path: &std::path::Path, entrypoint: &std::path::Path) -> (bool, Option<String>) {
-    // Look for _quarto.yml relative to the entrypoint's parent directory
-    let quarto_yml_path = if entrypoint.extension().is_some_and(|ext| ext == "yml") {
-        path.join(entrypoint)
-    } else {
-        let entrypoint_dir = path.join(entrypoint).parent().map(|p| p.to_path_buf()).unwrap_or_else(|| path.to_path_buf());
-        entrypoint_dir.join("_quarto.yml")
-    };
-
-    let Ok(content) = std::fs::read_to_string(&quarto_yml_path) else {
-        return (false, None);
-    };
-
-    // Simple YAML parsing — look for project type and output-dir
-    let mut is_website = false;
-    let mut output_dir = None;
-    let mut in_project = false;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == "project:" {
-            in_project = true;
-            continue;
-        }
-        if in_project {
-            if !line.starts_with(' ') && !line.starts_with('\t') {
-                in_project = false;
-                continue;
-            }
-            if trimmed.starts_with("type:") {
-                let val = trimmed.trim_start_matches("type:").trim();
-                is_website = val == "website";
-            }
-            if trimmed.starts_with("output-dir:") {
-                let val = trimmed.trim_start_matches("output-dir:").trim();
-                output_dir = Some(val.to_string());
-            }
-        }
-    }
-
-    if is_website && output_dir.is_none() {
-        output_dir = Some("_site".to_string());
-    }
-
-    (is_website, output_dir)
-}
-
 fn static_settings(
     path: &PathBuf,
     content_type: &ContentType,
@@ -326,34 +278,47 @@ fn static_settings(
         content_type,
         ContentType::QuartoR | ContentType::QuartoJl | ContentType::QuartoPy
     );
-
     if is_quarto {
-        let (is_website, quarto_output_dir) = detect_quarto_website(path, entrypoint);
-        if is_website
-            && let Some(output_dir) = quarto_output_dir
-        {
-            // Build the output_dir relative to the project root
-            let entrypoint_parent = entrypoint
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_default();
-            let full_output_dir = if entrypoint_parent.as_os_str().is_empty() {
-                output_dir.clone()
+        // Determine _quarto.yml path relative to entrypoint
+        let quarto_yml_path = {
+            let entry_path = path.join(entrypoint);
+            if entrypoint.extension().is_some_and(|ext| ext == "yml") {
+                entry_path
             } else {
-                format!("{}/{output_dir}", entrypoint_parent.display())
-            };
+                entry_path
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| path.to_path_buf())
+                    .join("_quarto.yml")
+            }
+        };
 
-            println!(
-                "  {} Detected quarto website project (output: {})",
-                "→".bright_cyan(),
-                full_output_dir.bright_cyan()
-            );
+        if let Ok(quarto) = QuartoYml::from_file(&quarto_yml_path) {
+            if let Some(output_dir) = quarto.project.as_ref().and_then(|p| p.get_output_dir()) {
+                // Build full path relative to entrypoint parent
+                let entrypoint_parent = entrypoint
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_default();
 
-            return Ok(Some(StaticSettings {
-                index: Some("index.html".to_string()),
-                output_dir: Some(full_output_dir),
-                render_fn: None,
-            }));
+                let full_output_dir = if entrypoint_parent.as_os_str().is_empty() {
+                    output_dir
+                } else {
+                    entrypoint_parent.join(output_dir)
+                };
+
+                println!(
+                    "  {} Detected quarto website project (output: {})",
+                    "→".bright_cyan(),
+                    full_output_dir.display().to_string().bright_cyan()
+                );
+
+                return Ok(Some(StaticSettings {
+                    index: Some("index.html".to_string()),
+                    output_dir: Some(full_output_dir.display().to_string()),
+                    render_fn: None,
+                }));
+            }
         }
     }
 
