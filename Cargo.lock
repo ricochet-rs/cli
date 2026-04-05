@@ -2126,8 +2126,8 @@ dependencies = [
 
 [[package]]
 name = "ricochet-core"
-version = "0.2.0"
-source = "git+https://github.com/ricochet-rs/ricochet?tag=v0.3.0#261dce7ec307133c8b6d5894cc104e2e5870d5cd"
+version = "0.4.0"
+source = "git+https://github.com/ricochet-rs/ricochet#d43ddf16a6fe67681feea108f9c075c74e5d44d4"
 dependencies = [
  "anyhow",
  "croner",
