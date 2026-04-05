@@ -29,15 +29,7 @@ fn setup_test_env_with_home() -> TempDir {
     unsafe {
         env::set_var("HOME", temp_dir.path());
     }
-    // Create the config directory structure for both macOS and Linux
     let _ = std::fs::create_dir_all(temp_dir.path().join(".config").join("ricochet"));
-    let _ = std::fs::create_dir_all(
-        temp_dir
-            .path()
-            .join("Library")
-            .join("Application Support")
-            .join("ricochet"),
-    );
     temp_dir
 }
 

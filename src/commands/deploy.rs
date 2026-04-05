@@ -1,9 +1,9 @@
 use crate::{client::RicochetClient, config::Config};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
-use ricochet_core::content::ContentItem;
+use ricochet_core::{content::ContentItem, language::Package};
 use std::path::PathBuf;
 
 pub async fn deploy(
@@ -64,6 +64,31 @@ pub async fn deploy(
 
     let content_id = ricochet_toml.content.id.clone();
     let content_type = ricochet_toml.content.content_type;
+
+    // check for existence of packages file
+    let pkgs = ricochet_toml.language.packages;
+    let pkg_path = path.join(pkgs.to_string());
+
+    // bail if the package file doesn't exist
+    if !pkg_path.exists() {
+        let hint = match pkgs {
+            Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+            Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+            Package::UvLock => "Create it by running `uv init`",
+        };
+        bail!(
+            "Required package file `{}` not found.\n  {} {}",
+            pkgs,
+            "Hint:".yellow().bold(),
+            hint
+        );
+    }
+
+    // if python and no .python-version bail
+    if let Package::UvLock = pkgs
+        && !path.join(".python-version").exists() {
+            bail!("Please create a `.python-version` via `uv python pin`")
+        }
 
     if let Some(ref id) = content_id {
         println!(
