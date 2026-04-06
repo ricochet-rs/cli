@@ -239,9 +239,6 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         | ContentType::Streamlit
         | ContentType::ShinyPy
         | ContentType::Dash => find_candidate_entrypoints("py", dir),
-        ContentType::ServerlessJl => {
-            bail!("Requested content type not yet implemented")
-        }
     }
 }
 
@@ -293,32 +290,32 @@ fn static_settings(
             }
         };
 
-        if let Ok(quarto) = QuartoYml::from_file(&quarto_yml_path) {
-            if let Some(output_dir) = quarto.project.as_ref().and_then(|p| p.get_output_dir()) {
-                // Build full path relative to entrypoint parent
-                let entrypoint_parent = entrypoint
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_default();
+        if let Ok(quarto) = QuartoYml::from_file(&quarto_yml_path)
+            && let Some(output_dir) = quarto.project.as_ref().and_then(|p| p.get_output_dir())
+        {
+            // Build full path relative to entrypoint parent
+            let entrypoint_parent = entrypoint
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_default();
 
-                let full_output_dir = if entrypoint_parent.as_os_str().is_empty() {
-                    output_dir
-                } else {
-                    entrypoint_parent.join(output_dir)
-                };
+            let full_output_dir = if entrypoint_parent.as_os_str().is_empty() {
+                output_dir
+            } else {
+                entrypoint_parent.join(output_dir)
+            };
 
-                println!(
-                    "  {} Detected quarto website project (output: {})",
-                    "→".bright_cyan(),
-                    full_output_dir.display().to_string().bright_cyan()
-                );
+            println!(
+                "  {} Detected quarto website project (output: {})",
+                "→".bright_cyan(),
+                full_output_dir.display().to_string().bright_cyan()
+            );
 
-                return Ok(Some(StaticSettings {
-                    index: Some("index.html".to_string()),
-                    output_dir: Some(full_output_dir.display().to_string()),
-                    render_fn: None,
-                }));
-            }
+            return Ok(Some(StaticSettings {
+                index: Some("index.html".to_string()),
+                output_dir: Some(full_output_dir.display().to_string()),
+                render_fn: None,
+            }));
         }
     }
 
