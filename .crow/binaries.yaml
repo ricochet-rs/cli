@@ -180,14 +180,14 @@ steps:
     commands:
       - apk add --no-cache -q curl jq
       - |
+        echo "Debug: pwd=$(pwd), Cargo.lock exists=$(test -f Cargo.lock && echo yes || echo no)"
         # Resolve the ricochet-core commit from Cargo.lock (pinned git revision)
-        # Using sed since it's always available on Alpine (no extra grep package needed)
-        CORE_REVISION=$(sed -n '/^name = "ricochet-core"/{n;n;s/.*#//;s/"//g;p;}' Cargo.lock)
+        CORE_REVISION=$(awk '/^name = "ricochet-core"/{getline;getline;sub(/.*#/,"");gsub(/"/,"");print}' Cargo.lock)
         echo "==> ricochet-core ${CI_COMMIT_TAG} -> ${CORE_REVISION}"
         if [ -z "$CORE_REVISION" ]; then
-          echo "Debug: ricochet-core lines in Cargo.lock:" >&2
-          sed -n '/ricochet-core/,+3p' Cargo.lock >&2
           echo "Warning: could not resolve ricochet-core revision from Cargo.lock" >&2
+          echo "Debug: Cargo.lock contents around ricochet-core:" >&2
+          awk '/ricochet-core/{found=NR} found && NR<=found+3' Cargo.lock >&2
         fi
 
         curl -sf -X POST \
