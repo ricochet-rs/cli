@@ -129,7 +129,11 @@ steps:
         git config user.name "ricochet-bot"
         git config user.email "droid@ricochet.rs"
         git add Cargo.toml Cargo.lock install.sh install.ps1
-        git commit -m "chore: bump version to $VERSION"
+        if git diff --cached --quiet; then
+          echo "No version changes needed — files already at $VERSION"
+        else
+          git commit -m "chore: bump version to $VERSION"
+        fi
     when:
       event: tag
 
@@ -155,8 +159,14 @@ steps:
         # Fetch latest main and rebase our version bump commit on top
         git remote add origin-push git@github.com:ricochet-rs/cli.git
         git fetch origin-push main
-        git rebase origin-push/main
-        git push origin-push HEAD:main
+
+        # Only push if there's a version bump commit to push
+        if git log --oneline origin-push/main..HEAD | grep -q .; then
+          git rebase origin-push/main
+          git push origin-push HEAD:main
+        else
+          echo "No version bump commit to push — skipping"
+        fi
     when:
       event: tag
 
