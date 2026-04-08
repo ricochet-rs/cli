@@ -495,6 +495,7 @@ pub fn init_rico_toml(
         static_,
         resources: None,
         repositories: None,
+        retention: None,
     };
 
     let toml_content = toml::to_string_pretty(&res)?;
