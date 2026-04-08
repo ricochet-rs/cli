@@ -178,22 +178,18 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apk add --no-cache -q curl jq
+      - apk add --no-cache -q curl
       - |
-        # Resolve the ricochet-core commit from Cargo.lock (pinned git revision)
-        # Using sed since it's always available on Alpine (no extra grep package needed)
-        CORE_REVISION=$(sed -n '/^name = "ricochet-core"/{n;n;s/.*#//;s/"//g;p;}' Cargo.lock)
-        echo "==> ricochet-core ${CI_COMMIT_TAG} -> ${CORE_REVISION}"
-        if [ -z "$CORE_REVISION" ]; then
-          echo "Debug: ricochet-core lines in Cargo.lock:" >&2
-          sed -n '/ricochet-core/,+3p' Cargo.lock >&2
-          echo "Warning: could not resolve ricochet-core revision from Cargo.lock" >&2
-        fi
-
-        curl -sf -X POST \
+        HTTP_CODE=$(curl -s -o /tmp/dispatch-response.json -w '%{http_code}' -X POST \
           -H "Authorization: token $GITHUB_TOKEN" \
           -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/ricochet-rs/homebrew-tap/actions/workflows/update-formula.yml/dispatches \
-          -d "{\"ref\":\"main\",\"inputs\":{\"version\":\"${CI_COMMIT_TAG}\",\"core_revision\":\"${CORE_REVISION}\"}}"
+          -d "{\"ref\":\"main\",\"inputs\":{\"version\":\"${CI_COMMIT_TAG}\"}}")
+        if [ "$HTTP_CODE" -ne 204 ]; then
+          echo "Error: GitHub dispatch returned HTTP $HTTP_CODE" >&2
+          cat /tmp/dispatch-response.json >&2
+          exit 1
+        fi
+        echo "==> Homebrew tap dispatch triggered for ${CI_COMMIT_TAG}"
     when:
       event: tag
