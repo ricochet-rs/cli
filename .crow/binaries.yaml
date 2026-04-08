@@ -178,14 +178,15 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apk add --no-cache -q curl jq grep
+      - apk add --no-cache -q curl jq
       - |
         # Resolve the ricochet-core commit from Cargo.lock (pinned git revision)
-        CORE_REVISION=$(grep -A2 '^name = "ricochet-core"' Cargo.lock \
-          | grep 'source = "git+' \
-          | sed 's/.*#//' | tr -d '"')
+        # Using sed since it's always available on Alpine (no extra grep package needed)
+        CORE_REVISION=$(sed -n '/^name = "ricochet-core"/{n;n;s/.*#//;s/"//g;p;}' Cargo.lock)
         echo "==> ricochet-core ${CI_COMMIT_TAG} -> ${CORE_REVISION}"
         if [ -z "$CORE_REVISION" ]; then
+          echo "Debug: ricochet-core lines in Cargo.lock:" >&2
+          sed -n '/ricochet-core/,+3p' Cargo.lock >&2
           echo "Warning: could not resolve ricochet-core revision from Cargo.lock" >&2
         fi
 
