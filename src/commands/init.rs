@@ -513,17 +513,34 @@ pub fn init_rico_toml(
         // Warn if the required package file is missing
         let pkg_path = dir.join(res.language.packages.to_string());
         if !pkg_path.exists() {
-            let hint = match res.language.packages {
-                Package::RenvLock => "Create it by running `renv::snapshot()` in R",
-                Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
-                Package::UvLock => "Create it by running `uv init`",
-            };
-            eprintln!(
-                "\n{} Required package file `{}` not found. {}",
-                "⚠".yellow().bold(),
-                res.language.packages.to_string().bright_cyan(),
-                hint
-            );
+            // For uv.lock, check parent dirs (uv workspace support)
+            if let Package::UvLock = res.language.packages {
+                if let Some(found) = crate::utils::find_in_parent_dirs(dir, "uv.lock") {
+                    println!(
+                        "  {} Found {} in workspace root (will be included during deploy)",
+                        "→".bright_cyan(),
+                        found.display().to_string().bright_cyan()
+                    );
+                } else {
+                    eprintln!(
+                        "\n{} Required package file `{}` not found. Create it by running `uv init`",
+                        "⚠".yellow().bold(),
+                        res.language.packages.to_string().bright_cyan(),
+                    );
+                }
+            } else {
+                let hint = match res.language.packages {
+                    Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+                    Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+                    Package::UvLock => unreachable!(),
+                };
+                eprintln!(
+                    "\n{} Required package file `{}` not found. {}",
+                    "⚠".yellow().bold(),
+                    res.language.packages.to_string().bright_cyan(),
+                    hint
+                );
+            }
         }
     }
 

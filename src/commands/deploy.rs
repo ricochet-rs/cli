@@ -65,30 +65,57 @@ pub async fn deploy(
     let content_id = ricochet_toml.content.id.clone();
     let content_type = ricochet_toml.content.content_type;
 
-    // check for existence of packages file
+    // check for existence of packages file, searching parent dirs for uv workspaces
     let pkgs = ricochet_toml.language.packages;
     let pkg_path = path.join(pkgs.to_string());
+    let mut extra_root_files = Vec::new();
 
-    // bail if the package file doesn't exist
     if !pkg_path.exists() {
-        let hint = match pkgs {
-            Package::RenvLock => "Create it by running `renv::snapshot()` in R",
-            Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
-            Package::UvLock => "Create it by running `uv init`",
-        };
-        bail!(
-            "Required package file `{}` not found.\n  {} {}",
-            pkgs,
-            "Hint:".yellow().bold(),
-            hint
-        );
+        if let Package::UvLock = pkgs {
+            // uv workspaces keep uv.lock at the workspace root — search parent dirs
+            if let Some(found) = crate::utils::find_in_parent_dirs(&path, "uv.lock") {
+                println!(
+                    "  {} Using {} from workspace root",
+                    "→".bright_cyan(),
+                    found.display().to_string().bright_cyan()
+                );
+                extra_root_files.push((found, "uv.lock".to_string()));
+            } else {
+                bail!(
+                    "Required package file `uv.lock` not found.\n  {} Create it by running `uv init`",
+                    "Hint:".yellow().bold(),
+                );
+            }
+        } else {
+            let hint = match pkgs {
+                Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+                Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+                Package::UvLock => unreachable!(),
+            };
+            bail!(
+                "Required package file `{}` not found.\n  {} {}",
+                pkgs,
+                "Hint:".yellow().bold(),
+                hint
+            );
+        }
     }
 
-    // if python and no .python-version bail
+    // if python and no .python-version, check parent dirs (workspace root)
     if let Package::UvLock = pkgs
-        && !path.join(".python-version").exists() {
+        && !path.join(".python-version").exists()
+    {
+        if let Some(found) = crate::utils::find_in_parent_dirs(&path, ".python-version") {
+            println!(
+                "  {} Using {} from workspace root",
+                "→".bright_cyan(),
+                found.display().to_string().bright_cyan()
+            );
+            extra_root_files.push((found, ".python-version".to_string()));
+        } else {
             bail!("Please create a `.python-version` via `uv python pin`")
         }
+    }
 
     if let Some(ref id) = content_id {
         println!(
@@ -111,7 +138,7 @@ pub async fn deploy(
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
     match client
-        .deploy(&path, content_id.clone(), &toml_path, &pb, debug)
+        .deploy(&path, content_id.clone(), &toml_path, &extra_root_files, &pb, debug)
         .await
     {
         Ok(response) => {
