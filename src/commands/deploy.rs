@@ -68,7 +68,7 @@ pub async fn deploy(
     // check for existence of packages file, searching parent dirs for uv workspaces
     let pkgs = ricochet_toml.language.packages;
     let pkg_path = path.join(pkgs.to_string());
-    let mut extra_root_files: Vec<(std::path::PathBuf, String)> = Vec::new();
+    let mut extra_root_files = Vec::new();
 
     if !pkg_path.exists() {
         if let Package::UvLock = pkgs {
