@@ -36,14 +36,19 @@ steps:
         set -euxo pipefail
         apk add --no-cache -q git openssh curl jq github-cli
 
-        VERSION=$CI_COMMIT_TAG
-        VERSION=${VERSION#v}
+        # Prefer CI variable, fall back to latest git tag
+        TAG="${CI_COMMIT_TAG:-$(git describe --tags --abbrev=0 2>/dev/null || true)}"
+        if [ -z "$TAG" ]; then
+          echo "Error: no tag available (CI_COMMIT_TAG is empty and no git tags found)" >&2
+          exit 1
+        fi
+        VERSION="${TAG#v}"
         RELEASE_DATE=$(date +"%B %d, %Y" | sed 's/ 0/ /')
 
         echo "Generating CLI release notes for v$VERSION..."
 
         # Fetch raw release notes from the GitHub release
-        NOTES=$(gh release view "$CI_COMMIT_TAG" --repo ricochet-rs/cli --json body -q .body)
+        NOTES=$(gh release view "$TAG" --repo ricochet-rs/cli --json body -q .body)
         if [ -z "$NOTES" ]; then
           echo "Error: no release notes found for $CI_COMMIT_TAG" >&2
           exit 1
