@@ -168,15 +168,16 @@ steps:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
-      - apk add --no-cache -q curl jq
+      - apk add --no-cache -q curl jq grep
       - |
-        # Resolve the ricochet-core commit for this release tag
-        CORE_REVISION=$(curl -sf \
-          -H "Authorization: token $GITHUB_TOKEN" \
-          -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/ricochet-rs/ricochet/git/ref/tags/${CI_COMMIT_TAG} \
-          | jq -r '.object.sha')
+        # Resolve the ricochet-core commit from Cargo.lock (pinned git revision)
+        CORE_REVISION=$(grep -A2 '^name = "ricochet-core"' Cargo.lock \
+          | grep 'source = "git+' \
+          | sed 's/.*#//' | tr -d '"')
         echo "==> ricochet-core ${CI_COMMIT_TAG} -> ${CORE_REVISION}"
+        if [ -z "$CORE_REVISION" ]; then
+          echo "Warning: could not resolve ricochet-core revision from Cargo.lock" >&2
+        fi
 
         curl -sf -X POST \
           -H "Authorization: token $GITHUB_TOKEN" \
