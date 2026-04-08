@@ -29,6 +29,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
         Language::R => {
             vec![
                 ContentType::R,
+                ContentType::RService,
                 ContentType::Plumber,
                 ContentType::Ambiorix,
                 ContentType::Shiny,
@@ -53,6 +54,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
             ContentType::FastApi,
             ContentType::Flask,
             ContentType::Streamlit,
+            ContentType::ShinyPy,
             ContentType::Dash,
         ],
     };
