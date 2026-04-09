@@ -129,42 +129,17 @@ steps:
           printf '%s\n' "$REWRITTEN"
         } > "src/content/docs/releases/cli-v$VERSION.mdx"
 
-        # Update releases index with new entry under the ### CLI subsection for the current year
+        # Update releases index — insert new entry after the first ### CLI heading
         INDEX="src/content/docs/releases/index.mdx"
-        YEAR=$(date +"%Y")
         ENTRY="- [CLI v$VERSION](/releases/cli-v$VERSION/) - $RELEASE_DATE"
 
-        if grep -q "^## $YEAR" "$INDEX"; then
-          # Year section exists - find the ### CLI heading within it and insert after
-          YEAR_LINE=$(grep -n "^## $YEAR" "$INDEX" | cut -d: -f1)
-          # Find the first ### CLI after the year heading
-          CLI_LINE=$(tail -n +"$YEAR_LINE" "$INDEX" | grep -n "^### CLI" | head -1 | cut -d: -f1)
-          if [ -n "$CLI_LINE" ]; then
-            # CLI_LINE is relative to YEAR_LINE, convert to absolute
-            ABS_CLI_LINE=$((YEAR_LINE + CLI_LINE - 1))
-            # Insert after ### CLI + blank line
-            { head -n "$((ABS_CLI_LINE + 1))" "$INDEX"; echo "$ENTRY"; tail -n +"$((ABS_CLI_LINE + 2))" "$INDEX"; } > "$INDEX.tmp"
-          else
-            # No ### CLI subsection found, fall back to inserting after year heading
-            { head -n "$((YEAR_LINE + 1))" "$INDEX"; echo "$ENTRY"; tail -n +"$((YEAR_LINE + 2))" "$INDEX"; } > "$INDEX.tmp"
-          fi
+        CLI_LINE=$(grep -n "^### CLI" "$INDEX" | head -1 | cut -d: -f1)
+        if [ -n "$CLI_LINE" ]; then
+          { head -n "$((CLI_LINE + 1))" "$INDEX"; echo "$ENTRY"; tail -n +"$((CLI_LINE + 2))" "$INDEX"; } > "$INDEX.tmp"
+          mv "$INDEX.tmp" "$INDEX"
         else
-          # New year - insert a full year section with grid layout before the first year heading
-          LINE=$(grep -n "^## [0-9]" "$INDEX" | head -1 | cut -d: -f1)
-          {
-            head -n "$((LINE - 1))" "$INDEX"
-            printf '## %s\n\n' "$YEAR"
-            printf '<div class="release-grid">\n<div>\n\n'
-            printf '### Server\n\n'
-            printf 'No releases yet.\n\n'
-            printf '</div>\n<div>\n\n'
-            printf '### CLI\n\n'
-            printf '%s\n\n' "$ENTRY"
-            printf '</div>\n</div>\n\n'
-            tail -n +"$LINE" "$INDEX"
-          } > "$INDEX.tmp"
+          echo "Warning: could not find ### CLI section in index, skipping index update" >&2
         fi
-        mv "$INDEX.tmp" "$INDEX"
 
         git config user.name "ricochet-bot"
         git config user.email "droid@ricochet.rs"
