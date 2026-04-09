@@ -131,7 +131,7 @@ steps:
 
         # Update releases index — insert new entry after the first ### CLI heading
         INDEX="src/content/docs/releases/index.mdx"
-        ENTRY="- [CLI v$VERSION](/releases/cli-v$VERSION/) - $RELEASE_DATE"
+        ENTRY="- [v$VERSION](/releases/cli-v$VERSION/) - $RELEASE_DATE"
 
         CLI_LINE=$(grep -n "^### CLI" "$INDEX" | head -1 | cut -d: -f1)
         if [ -n "$CLI_LINE" ]; then
