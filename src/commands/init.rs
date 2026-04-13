@@ -140,15 +140,16 @@ fn find_candidate_entrypoints(extension: &str, search_dir: &PathBuf) -> anyhow::
 
 fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
     let mut candidates = Vec::new();
+    let all_r_files = find_files_by_extension("R", dir)?;
 
-    // Find all app.R files
-    let app_files = find_files_by_extension("R", dir)?.into_iter().filter(|p| {
+    // Find all app.R files first (conventional entrypoint)
+    let app_files = all_r_files.iter().filter(|p| {
         p.file_name()
             .and_then(|name| name.to_str())
             .map(|name| name.eq_ignore_ascii_case("app.R"))
             .unwrap_or(false)
     });
-    candidates.extend(app_files);
+    candidates.extend(app_files.cloned());
 
     // Find directories with both ui.R and server.R
     for entry in WalkDir::new(dir)
@@ -162,19 +163,23 @@ fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
         let ui_path = entry.path().join("ui.R");
         let server_path = entry.path().join("server.R");
 
-        if ui_path.exists() && server_path.exists() {
-            // Add the directory path (relative to search_dir)
-            if let Ok(relative) = entry.path().strip_prefix(dir) {
-                candidates.push(relative.to_path_buf());
-            }
+        if ui_path.exists()
+            && server_path.exists()
+            && let Ok(relative) = entry.path().strip_prefix(dir)
+        {
+            candidates.push(relative.to_path_buf());
+        }
+    }
+
+    // Add remaining .R files that aren't already in the list
+    for r_file in &all_r_files {
+        if !candidates.contains(r_file) {
+            candidates.push(r_file.clone());
         }
     }
 
     if candidates.is_empty() {
-        bail!(
-            "No Shiny app found in {}. Looking for app.R or a directory with ui.R and server.R",
-            dir.display()
-        );
+        bail!("No .R files found in {}", dir.display());
     }
 
     let display_candidates: Vec<String> = candidates
@@ -184,8 +189,10 @@ fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
                 "./ (ui.R + server.R)".to_string()
             } else if p.file_name().and_then(|n| n.to_str()) == Some("app.R") {
                 format!("{}", p.display())
-            } else {
+            } else if p.extension().is_none() {
                 format!("{}/ (ui.R + server.R)", p.display())
+            } else {
+                format!("{}", p.display())
             }
         })
         .collect();
