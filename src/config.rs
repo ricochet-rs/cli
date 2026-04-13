@@ -631,8 +631,6 @@ mod tests {
         );
     }
 
-    // ==================== resolve_server tests ====================
-
     #[test]
     fn test_resolve_server_by_name() {
         cleanup_env();
