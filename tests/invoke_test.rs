@@ -31,13 +31,13 @@ mod invoke_tests {
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
-        let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
+        let server_config = config.resolve_server(None).unwrap();
+        let client = ricochet_cli::client::RicochetClient::new(&server_config).unwrap();
         let result = client.invoke(content_id, None).await;
 
         if let Err(ref e) = result {
@@ -68,14 +68,14 @@ mod invoke_tests {
             .create();
 
         // Create test config with invalid key
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("invalid_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("invalid_key".to_string()),
+        );
 
         // Create client and invoke
-        let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
+        let server_config = config.resolve_server(None).unwrap();
+        let client = ricochet_cli::client::RicochetClient::new(&server_config).unwrap();
         let result = client.invoke(content_id, None).await;
 
         // Debug print the error
@@ -104,14 +104,14 @@ mod invoke_tests {
             .create();
 
         // Create test config
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("table".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
         // Create client and invoke
-        let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
+        let server_config = config.resolve_server(None).unwrap();
+        let client = ricochet_cli::client::RicochetClient::new(&server_config).unwrap();
         let result = client.invoke(content_id, None).await;
 
         // Debug print the error
@@ -149,13 +149,13 @@ mod invoke_tests {
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("json".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
-        let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
+        let server_config = config.resolve_server(None).unwrap();
+        let client = ricochet_cli::client::RicochetClient::new(&server_config).unwrap();
         let result = client.invoke(content_id, None).await.unwrap();
 
         // Test that we can serialize the response to JSON
@@ -197,13 +197,13 @@ mod invoke_tests {
             )
             .create();
 
-        let config = ricochet_cli::config::Config {
-            server: Url::parse(&server.url()).unwrap(),
-            api_key: Some("test_api_key".to_string()),
-            default_format: Some("yaml".to_string()),
-        };
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
 
-        let client = ricochet_cli::client::RicochetClient::new(&config).unwrap();
+        let server_config = config.resolve_server(None).unwrap();
+        let client = ricochet_cli::client::RicochetClient::new(&server_config).unwrap();
         let result = client.invoke(content_id, None).await.unwrap();
 
         // Test that we can serialize the response to YAML

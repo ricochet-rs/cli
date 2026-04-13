@@ -1,4 +1,4 @@
-use crate::config::{Config, parse_server_url};
+use crate::config::{ServerConfig, parse_server_url};
 use anyhow::{Context, Result};
 use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
@@ -45,17 +45,20 @@ pub struct RicochetClient {
 }
 
 impl RicochetClient {
-    pub fn new(config: &Config) -> Result<Self> {
+    pub fn new(server_config: &ServerConfig) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(300))
             .build()?;
 
-        let base_url = config.server_url()?;
+        let api_key = server_config
+            .api_key
+            .clone()
+            .context("No API key configured. Use 'ricochet login' to authenticate")?;
 
         Ok(Self {
             client,
-            base_url,
-            api_key: config.api_key()?,
+            base_url: server_config.url.clone(),
+            api_key,
         })
     }
 
@@ -116,12 +119,13 @@ impl RicochetClient {
     /// Check if a key is expired and report if so
     /// Use this as a pre-flight check for all API calls where appropriate
     pub async fn preflight_key_check(&self) -> Result<()> {
+        let server_url = self.base_url.as_str().trim_end_matches('/');
+        let login_cmd = format!("ricochet login -S {server_url}").bright_cyan();
         match self.validate_key().await {
             Ok(v) => {
                 if !v {
                     anyhow::bail!(
-                        "{} Existing credentials are invalid or expired.",
-                        "⚠".yellow()
+                        "Credentials are invalid or expired for server {server_url}.\nRun {login_cmd} to authenticate."
                     );
                 } else {
                     Ok(())
@@ -129,8 +133,9 @@ impl RicochetClient {
             }
             Err(e) => {
                 anyhow::bail!(
-                    "{} Failed to validate credential with error {e}",
-                    "!".bright_red()
+                    "Failed to validate credentials for {server_url}:\n{} {}\nRun {login_cmd} to authenticate.",
+                    "⚠".bright_yellow(),
+                    e.to_string().dimmed()
                 );
             }
         }
@@ -165,6 +170,7 @@ impl RicochetClient {
         path: &Path,
         content_id: Option<String>,
         toml_path: &Path,
+        extra_root_files: &[(std::path::PathBuf, String)],
         pb: &indicatif::ProgressBar,
         debug: bool,
     ) -> Result<serde_json::Value> {
@@ -183,7 +189,7 @@ impl RicochetClient {
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
         let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
-        crate::utils::create_bundle(path, &tar_path, include, exclude, debug)?;
+        crate::utils::create_bundle(path, &tar_path, include, exclude, extra_root_files, debug)?;
 
         // Get file size for progress tracking
         let file_size = tokio::fs::metadata(&tar_path).await?.len();

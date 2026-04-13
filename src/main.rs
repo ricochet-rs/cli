@@ -1,9 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ricochet_cli::{
-    OutputFormat, commands,
-    config::{Config, parse_server_url},
-};
+use colored::Colorize;
+use ricochet_cli::{OutputFormat, commands, config::Config, update};
 
 #[derive(Parser)]
 #[command(name = "ricochet")]
@@ -45,7 +43,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Authenticate with the Ricochet server
+    /// Authenticate with a Ricochet server
     Login {
         /// API key (can also be provided interactively)
         #[arg(short = 'k', long)]
@@ -53,7 +51,7 @@ enum Commands {
     },
     /// Remove stored credentials
     Logout,
-    /// Deploy content to the server
+    /// Deploy content to a Ricochet server
     Deploy {
         /// Path to the content directory or bundle
         #[arg(default_value = ".")]
@@ -113,6 +111,23 @@ enum Commands {
     Item {
         #[command(subcommand)]
         command: ItemCommands,
+    /// Manage configured Ricochet servers
+    Servers {
+        #[command(subcommand)]
+        command: ServersCommands,
+    },
+    /// Update the ricochet CLI to the latest version
+    #[command(hide = true)]
+    SelfUpdate {
+        /// Force reinstall even if already on the latest version
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+    /// Manage the ricochet CLI itself
+    #[command(name = "self")]
+    Self_ {
+        #[command(subcommand)]
+        command: SelfCommands,
     },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
@@ -128,6 +143,45 @@ enum ItemCommands {
         /// Path to _ricochet.toml file
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
+  }
+}
+  
+#[derive(Subcommand)]
+enum ServersCommands {
+    /// List all configured servers
+    List,
+    /// Add a new server
+    Add {
+        /// Server name (e.g., 'production', 'staging', 'local')
+        name: String,
+        /// Server URL (must include http:// or https://)
+        url: String,
+        /// Set this server as the default
+        #[arg(long)]
+        default: bool,
+    },
+    /// Remove a server
+    Remove {
+        /// Server name to remove
+        name: String,
+        /// Skip confirmation prompt
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+    /// Set the default server
+    SetDefault {
+        /// Server name to set as default
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum SelfCommands {
+    /// Update the ricochet CLI to the latest version
+    Update {
+        /// Force reinstall even if already on the latest version
+        #[arg(short = 'f', long)]
+        force: bool,
     },
 }
 
@@ -137,56 +191,56 @@ async fn main() -> Result<()> {
 
     // Handle version flag
     if cli.version {
-        let version = env!("CARGO_PKG_VERSION");
-        let git_hash = env!("GIT_HASH");
-        let has_tag = env!("HAS_GIT_TAG");
-        let build_date = env!("BUILD_DATE");
-
-        if has_tag == "true" || git_hash.is_empty() {
-            // Tagged release
-            println!("{}", version);
-        } else {
-            // Untagged build
-            println!("{}-{} ({})", version, git_hash, build_date);
-        }
+        commands::update::print_version();
         return Ok(());
     }
 
     // Load or initialize config
     let mut config = Config::load()?;
 
-    // Override server if provided via CLI
-    if let Some(server) = cli.server {
-        config.server = parse_server_url(&server)?;
-    }
-
     // Execute command
     match cli.command {
         Some(Commands::Login { api_key }) => {
-            commands::auth::login(&mut config, api_key).await?;
+            commands::auth::login(&mut config, cli.server.as_deref(), api_key).await?;
         }
         Some(Commands::Logout) => {
-            commands::auth::logout(&mut config)?;
+            commands::auth::logout(&mut config, cli.server.as_deref())?;
         }
         Some(Commands::Deploy {
             path,
             name,
             description,
         }) => {
-            commands::deploy::deploy(&config, path, name, description, cli.debug).await?;
+            commands::deploy::deploy(
+                &config,
+                cli.server.as_deref(),
+                path,
+                name,
+                description,
+                cli.debug,
+            )
+            .await?;
         }
         Some(Commands::List {
             content_type,
             active_only,
             sort,
         }) => {
-            commands::list::list(&config, content_type, active_only, sort, cli.format).await?;
+            commands::list::list(
+                &config,
+                cli.server.as_deref(),
+                content_type,
+                active_only,
+                sort,
+                cli.format,
+            )
+            .await?;
         }
         Some(Commands::Delete { id, force }) => {
-            commands::delete::delete(&config, &id, force).await?;
+            commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
         }
         Some(Commands::Invoke { id }) => {
-            commands::invoke::invoke(&config, &id, cli.format).await?;
+            commands::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
@@ -198,9 +252,36 @@ async fn main() -> Result<()> {
         }) => {
             commands::init::init_rico_toml(&path, overwrite, dry_run)?;
         }
+
         Some(Commands::Item { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 commands::item::toml::get_toml(&config, id, path).await?;
+          }
+      },
+        Some(Commands::Servers { command }) => match command {
+            ServersCommands::List => {
+                commands::servers::list(&config)?;
+            }
+            ServersCommands::Add { name, url, default } => {
+                commands::servers::add(&mut config, name, url, default)?;
+            }
+            ServersCommands::Remove { name, force } => {
+                commands::servers::remove(&mut config, name, force)?;
+            }
+            ServersCommands::SetDefault { name } => {
+                commands::servers::set_default(&mut config, name)?;
+            }
+        },
+        Some(Commands::SelfUpdate { force }) => {
+            eprintln!(
+                "{} `ricochet self-update` is deprecated. Use `ricochet self update` instead.",
+                "warning:".yellow().bold()
+            );
+            commands::update::self_update(force).await?;
+        }
+        Some(Commands::Self_ { command }) => match command {
+            SelfCommands::Update { force } => {
+                commands::update::self_update(force).await?;
             }
         },
         Some(Commands::GenerateDocs) => {
@@ -212,6 +293,18 @@ async fn main() -> Result<()> {
             use clap::CommandFactory;
             Cli::command().print_help()?;
         }
+    }
+
+    // Background update check and notification.
+    // Skipped for Homebrew installs, when RICOCHET_NO_UPDATE_CHECK is set,
+    // or when skip_update_check is set in config (auto-set after repeated failures).
+    if let Some(cache) = update::UpdateCache::load() {
+        cache.maybe_notify(&config);
+    }
+    if let Some(handle) = update::UpdateCache::trigger_background_check(&config) {
+        // Give the background check a short window to complete before exiting.
+        // If it doesn't finish in time, the cache will be written on the next run.
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await;
     }
 
     Ok(())

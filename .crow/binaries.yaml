@@ -3,11 +3,11 @@ when:
   - event: deployment
 
 labels:
-  group: ccx
+  agent: thumper
 
 steps:
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.91-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.94-slim
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
@@ -15,6 +15,16 @@ steps:
       - apt-get update && apt-get install -y just pkg-config musl-tools libssl-dev curl wget nodejs build-essential cmake ca-certificates musl-tools musl-dev gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mingw-w64 clang lld llvm tree git
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+      # Update Cargo.toml version from tag before building
+      - |
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then
+          VERSION="${CI_COMMIT_TAG#v}"
+          echo "Updating Cargo.toml version to $VERSION"
+          sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
+          cargo generate-lockfile
+          echo "Updated Cargo.toml and Cargo.lock to version $VERSION"
+          grep "^version" Cargo.toml
+        fi
       # build sequentially to avoid file conflicts
       - just build-static linux-x86_64
       - just build-static linux-aarch64
@@ -57,7 +67,7 @@ steps:
         ls -la "$outdir/"
 
   'Upload to S3':
-    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.2
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.3
     depends_on:
       - build
     settings:
@@ -73,7 +83,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.devxy.io/docker.io/thegeeklab/git-sv:2.0.7
+    image: reg.devxy.io/docker.io/thegeeklab/git-sv:2.0.11
     depends_on:
       - build
     commands:
@@ -86,11 +96,12 @@ steps:
       event: tag
 
   'Create release':
-    image: reg.devxy.io/docker.io/woodpeckerci/plugin-release:0.2.6
+    image: reg.devxy.io/docker.io/woodpeckerci/plugin-release:0.3.0
     depends_on:
       - changelog
     settings:
       note: CHANGELOG.md
+      overwrite: true
       api_key:
         from_secret: ricochet_issue_token
       files:
@@ -99,29 +110,86 @@ steps:
     when:
       event: tag
 
-  'Clone homebrew-tap':
-    image: alpine:3.23
+  'Update version files':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
-      - changelog
+      - build
     commands:
-      - apk add --no-cache -q git
-      - git clone https://github.com/ricochet-rs/homebrew-tap.git
+      - apk add --no-cache -q git sed
+      - |
+        VERSION="${CI_COMMIT_TAG#v}"
+        echo "Updating version files to $VERSION"
+
+        # Update install.sh - replace the default version
+        sed -i "s/\(RICOCHET_VERSION:-\)[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/\1$VERSION/" install.sh
+
+        # Update install.ps1 - replace the default version
+        sed -i "s/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"[^\"]*\" }/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"$VERSION\" }/" install.ps1
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+        git add Cargo.toml Cargo.lock install.sh install.ps1
+        if git diff --cached --quiet; then
+          echo "No version changes needed — files already at $VERSION"
+        else
+          git commit -m "chore: bump version to $VERSION"
+        fi
     when:
       event: tag
 
-  'Push changes to homebrew-tap':
-    image: reg.ricochet.rs/docker.io/appleboy/drone-git-push:1.1.1
+  'Push version updates':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
-      - 'Clone homebrew-tap'
-    settings:
-      path: homebrew-tap
-      remote: git@github.com:ricochet-rs/homebrew-tap.git
-      branch: main
-      tag: ${CI_COMMIT_TAG}
-      followtags: true
-      ssh_key:
+      - 'Update version files'
+    environment:
+      SSH_KEY:
         from_secret: ricochet-bot-ssh-key
-      author_name: ricochet-bot
-      author_email: droid@ricochet.rs
+    commands:
+      - apk add --no-cache -q git openssh-client
+      - |
+        # Set up SSH key
+        mkdir -p ~/.ssh
+        echo "$SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+
+        # Fetch latest main and rebase our version bump commit on top
+        git remote add origin-push git@github.com:ricochet-rs/cli.git
+        git fetch origin-push main
+
+        # Only push if there's a version bump commit to push
+        if git log --oneline origin-push/main..HEAD | grep -q .; then
+          git rebase origin-push/main
+          git push origin-push HEAD:main
+        else
+          echo "No version bump commit to push — skipping"
+        fi
+    when:
+      event: tag
+
+  'Trigger homebrew-tap update':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    depends_on:
+      - changelog
+    environment:
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
+    commands:
+      - apk add --no-cache -q curl
+      - |
+        HTTP_CODE=$(curl -s -o /tmp/dispatch-response.json -w '%{http_code}' -X POST \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/ricochet-rs/homebrew-tap/actions/workflows/update-formula.yml/dispatches \
+          -d "{\"ref\":\"main\",\"inputs\":{\"version\":\"${CI_COMMIT_TAG}\"}}")
+        if [ "$HTTP_CODE" -ne 204 ]; then
+          echo "Error: GitHub dispatch returned HTTP $HTTP_CODE" >&2
+          cat /tmp/dispatch-response.json >&2
+          exit 1
+        fi
+        echo "==> Homebrew tap dispatch triggered for ${CI_COMMIT_TAG}"
     when:
       event: tag

@@ -13,8 +13,13 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet invoke`↴](#ricochet-invoke)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet init`↴](#ricochet-init)
-* [`ricochet item`↴](#ricochet-item)
-* [`ricochet item toml`↴](#ricochet-item-toml)
+* [`ricochet servers`↴](#ricochet-servers)
+* [`ricochet servers list`↴](#ricochet-servers-list)
+* [`ricochet servers add`↴](#ricochet-servers-add)
+* [`ricochet servers remove`↴](#ricochet-servers-remove)
+* [`ricochet servers set-default`↴](#ricochet-servers-set-default)
+* [`ricochet self`↴](#ricochet-self)
+* [`ricochet self update`↴](#ricochet-self-update)
 
 ## `ricochet`
 
@@ -24,15 +29,16 @@ Ricochet CLI
 
 ###### **Subcommands:**
 
-* `login` — Authenticate with the Ricochet server
+* `login` — Authenticate with a Ricochet server
 * `logout` — Remove stored credentials
-* `deploy` — Deploy content to the server
+* `deploy` — Deploy content to a Ricochet server
 * `list` — List all content items
 * `delete` — Delete a content item
 * `invoke` — Invoke a task
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
-* `item` — Manage deployed content items
+* `servers` — Manage configured Ricochet servers
+* `self` — Manage the ricochet CLI itself
 
 ###### **Options:**
 
@@ -50,7 +56,7 @@ Ricochet CLI
 
 ## `ricochet login`
 
-Authenticate with the Ricochet server
+Authenticate with a Ricochet server
 
 **Usage:** `ricochet login [OPTIONS]`
 
@@ -70,7 +76,7 @@ Remove stored credentials
 
 ## `ricochet deploy`
 
-Deploy content to the server
+Deploy content to a Ricochet server
 
 **Usage:** `ricochet deploy [OPTIONS] [PATH]`
 
@@ -160,31 +166,95 @@ Initialize a new Ricochet deployment
 
 
 
-## `ricochet item`
+## `ricochet servers`
 
-Manage deployed content items
+Manage configured Ricochet servers
 
-**Usage:** `ricochet item <COMMAND>`
+**Usage:** `ricochet servers <COMMAND>`
 
 ###### **Subcommands:**
 
-* `toml` — Fetch the remote _ricochet.toml for an item
+* `list` — List all configured servers
+* `add` — Add a new server
+* `remove` — Remove a server
+* `set-default` — Set the default server
 
 
 
-## `ricochet item toml`
+## `ricochet servers list`
 
-Fetch the remote _ricochet.toml for an item
+List all configured servers
 
-**Usage:** `ricochet item toml [OPTIONS] [ID]`
+**Usage:** `ricochet servers list`
+
+
+
+## `ricochet servers add`
+
+Add a new server
+
+**Usage:** `ricochet servers add [OPTIONS] <NAME> <URL>`
 
 ###### **Arguments:**
 
-* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `<NAME>` — Server name (e.g., 'production', 'staging', 'local')
+* `<URL>` — Server URL (must include http:// or https://)
 
 ###### **Options:**
 
-* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `--default` — Set this server as the default
+
+
+
+## `ricochet servers remove`
+
+Remove a server
+
+**Usage:** `ricochet servers remove [OPTIONS] <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — Server name to remove
+
+###### **Options:**
+
+* `-f`, `--force` — Skip confirmation prompt
+
+
+
+## `ricochet servers set-default`
+
+Set the default server
+
+**Usage:** `ricochet servers set-default <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — Server name to set as default
+
+
+
+## `ricochet self`
+
+Manage the ricochet CLI itself
+
+**Usage:** `ricochet self <COMMAND>`
+
+###### **Subcommands:**
+
+* `update` — Update the ricochet CLI to the latest version
+
+
+
+## `ricochet self update`
+
+Update the ricochet CLI to the latest version
+
+**Usage:** `ricochet self update [OPTIONS]`
+
+###### **Options:**
+
+* `-f`, `--force` — Force reinstall even if already on the latest version
 
 
 

@@ -1,23 +1,29 @@
 use crate::{client::RicochetClient, config::Config};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
-use ricochet_core::content::ContentItem;
+use ricochet_core::{content::ContentItem, language::Package};
 use std::path::PathBuf;
 
 pub async fn deploy(
     config: &Config,
+    server_ref: Option<&str>,
     path: PathBuf,
     _name: Option<String>,
     _description: Option<String>,
     debug: bool,
 ) -> Result<()> {
-    use std::io::IsTerminal;
-
     if !path.exists() {
         anyhow::bail!("Path does not exist: {}", path.display());
     }
+
+    // Resolve server configuration early so we can bail before the init dialog
+    // if the user has no API key configured
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+
+    client.preflight_key_check().await?;
 
     // Check for _ricochet.toml
     let toml_path = if path.is_dir() {
@@ -27,10 +33,13 @@ pub async fn deploy(
     };
 
     if !toml_path.exists() {
-        // Check if we're in an interactive terminal
-        if std::io::stdin().is_terminal() {
+        // Check if we're in an interactive terminal (not in tests or CI)
+        if !crate::utils::is_non_interactive() {
             let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt("No _ricochet.toml found. Would you like to create one?")
+                .with_prompt(format!(
+                    "No _ricochet.toml found. Would you like to create one? (deploying to {})",
+                    server_config.url.as_str().trim_end_matches('/')
+                ))
                 .default(true)
                 .interact()?;
 
@@ -56,6 +65,58 @@ pub async fn deploy(
     let content_id = ricochet_toml.content.id.clone();
     let content_type = ricochet_toml.content.content_type;
 
+    // check for existence of packages file, searching parent dirs for uv workspaces
+    let pkgs = ricochet_toml.language.packages;
+    let pkg_path = path.join(pkgs.to_string());
+    let mut extra_root_files = Vec::new();
+
+    if !pkg_path.exists() {
+        if let Package::UvLock = pkgs {
+            // uv workspaces keep uv.lock at the workspace root — search parent dirs
+            if let Some(found) = crate::utils::find_in_parent_dirs(&path, "uv.lock") {
+                println!(
+                    "  {} Using {} from workspace root",
+                    "→".bright_cyan(),
+                    found.display().to_string().bright_cyan()
+                );
+                extra_root_files.push((found, "uv.lock".to_string()));
+            } else {
+                bail!(
+                    "Required package file `uv.lock` not found.\n  {} Create it by running `uv init`",
+                    "Hint:".yellow().bold(),
+                );
+            }
+        } else {
+            let hint = match pkgs {
+                Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+                Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+                Package::UvLock => unreachable!(),
+            };
+            bail!(
+                "Required package file `{}` not found.\n  {} {}",
+                pkgs,
+                "Hint:".yellow().bold(),
+                hint
+            );
+        }
+    }
+
+    // if python and no .python-version, check parent dirs (workspace root)
+    if let Package::UvLock = pkgs
+        && !path.join(".python-version").exists()
+    {
+        if let Some(found) = crate::utils::find_in_parent_dirs(&path, ".python-version") {
+            println!(
+                "  {} Using {} from workspace root",
+                "→".bright_cyan(),
+                found.display().to_string().bright_cyan()
+            );
+            extra_root_files.push((found, ".python-version".to_string()));
+        } else {
+            bail!("Please create a `.python-version` via `uv python pin`")
+        }
+    }
+
     if let Some(ref id) = content_id {
         println!(
             "📦 Creating new deployment for content item: {}\n",
@@ -76,10 +137,15 @@ pub async fn deploy(
     );
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
-    let client = RicochetClient::new(config)?;
-
     match client
-        .deploy(&path, content_id.clone(), &toml_path, &pb, debug)
+        .deploy(
+            &path,
+            content_id.clone(),
+            &toml_path,
+            &extra_root_files,
+            &pb,
+            debug,
+        )
         .await
     {
         Ok(response) => {
@@ -113,8 +179,7 @@ pub async fn deploy(
                 }
 
                 // Get server URL and construct links
-                let server_url = config.server_url()?;
-                let base_url = server_url.as_str().trim_end_matches('/');
+                let base_url = server_config.url.as_str().trim_end_matches('/');
 
                 println!("\n{}", "Links:".bold());
 
@@ -160,7 +225,7 @@ pub async fn deploy(
                 );
                 eprintln!(
                     "    2. Check if you're connected to the correct server: {}",
-                    config.server.as_str().bright_cyan()
+                    server_config.url.as_str().bright_cyan()
                 );
                 eprintln!(
                     "    3. Remove the 'id' field from _ricochet.toml to create a new content item instead"

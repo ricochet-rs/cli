@@ -1,0 +1,162 @@
+# Release notes workflow - generates user-facing release notes via AI rewrite
+# Fetches raw notes from the GitHub release, rewrites them with Claude,
+# and opens a PR on ricochet-rs/docs with the result.
+#
+# Can run independently for testing by pushing a tag that already has
+# a GitHub release with notes.
+
+clone:
+  git:
+    image: codefloe.com/crow-plugins/clone:1.0.3
+    settings:
+      tags: true
+
+when:
+  - event: tag
+  - event: manual
+
+depends_on:
+  - binaries
+
+labels:
+  agent: thumper
+
+steps:
+  'Generate and publish release notes':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    environment:
+      ANTHROPIC_API_KEY:
+        from_secret: anthropic-api-key
+      GITHUB_TOKEN:
+        from_secret: ricochet_issue_token
+      DOCS_DEPLOY_KEY:
+        from_secret: ricochet-bot-deploy-key-docs
+    commands:
+      - |
+        set -euxo pipefail
+        apk add --no-cache -q git openssh curl jq github-cli
+
+        # Prefer CI variable, fall back to latest git tag
+        TAG=${CI_COMMIT_TAG}
+        if [ -z "$TAG" ]; then
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+        fi
+        if [ -z "$TAG" ]; then
+          echo "Error: no tag available (CI_COMMIT_TAG is empty and no git tags found)" >&2
+          exit 1
+        fi
+        VERSION=$(echo "$TAG" | sed 's/^v//')
+        RELEASE_DATE=$(date +"%B %d, %Y" | sed 's/ 0/ /')
+
+        echo "Generating CLI release notes for v$VERSION..."
+
+        # Fetch raw release notes from the GitHub release
+        NOTES=$(gh release view "$TAG" --repo ricochet-rs/cli --json body -q .body)
+        if [ -z "$NOTES" ]; then
+          echo "Error: no release notes found for $CI_COMMIT_TAG" >&2
+          exit 1
+        fi
+
+        # Build the Anthropic API request payload (jq handles JSON escaping)
+        PAYLOAD=$(jq -n \
+          --arg notes "$NOTES" \
+          --arg version "$VERSION" \
+          --arg date "$RELEASE_DATE" \
+          '{
+            model: "claude-sonnet-4-5",
+            max_tokens: 4096,
+            messages: [{
+              role: "user",
+              content: ("Rewrite the following release notes for the Ricochet CLI v" + $version + " in a clear and user-focused way. Omit any maintenance, CI, and dependency update sections. Only focus on user-visible changes. Use subgroups for scoped conventional commits (if they match).\n\nFormat rules:\n- Use ### headings for sections (e.g., ### Security, ### Fixes, ### Improvements)\n- Each item should be a bullet point starting with **Bold Title**: followed by a description\n- Do NOT include any frontmatter, title, or code fences\n- Start the output with: **Released: " + $date + "**\n\nRelease notes to rewrite:\n\n" + $notes)
+            }]
+          }')
+
+        # Call Anthropic API
+        HTTP_CODE=$(curl -s -o /tmp/api-response.json -w '%{http_code}' \
+          https://api.anthropic.com/v1/messages \
+          -H "x-api-key: $ANTHROPIC_API_KEY" \
+          -H "anthropic-version: 2023-06-01" \
+          -H "content-type: application/json" \
+          -d "$PAYLOAD")
+
+        if [ "$HTTP_CODE" -ne 200 ]; then
+          echo "Error: Anthropic API returned HTTP $HTTP_CODE" >&2
+          cat /tmp/api-response.json >&2
+          exit 1
+        fi
+
+        REWRITTEN=$(jq -r '.content[0].text' /tmp/api-response.json)
+
+        if [ -z "$REWRITTEN" ] || [ "$REWRITTEN" = "null" ]; then
+          echo "Error: AI rewrite returned empty content" >&2
+          cat /tmp/api-response.json >&2
+          exit 1
+        fi
+
+        echo "--- Rewritten release notes ---"
+        echo "$REWRITTEN"
+        echo "---"
+
+        # Setup SSH for docs repo
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        echo "$DOCS_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+        cat > ~/.ssh/config << 'SSHEOF'
+        Host github.com
+          StrictHostKeyChecking no
+          UserKnownHostsFile /dev/null
+        SSHEOF
+
+        # Clone docs repo and create branch
+        rm -rf /tmp/docs-release
+        git clone ssh://git@github.com/ricochet-rs/docs.git /tmp/docs-release
+        cd /tmp/docs-release
+
+        BRANCH="release-notes/cli-v$VERSION"
+        git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+        git reset --hard origin/main
+
+        # Write the .mdx file (printf avoids heredoc escaping issues)
+        mkdir -p src/content/docs/releases
+        {
+          printf '%s\n' '---'
+          printf 'title: CLI v%s\n' "$VERSION"
+          printf 'docs: release notes for Ricochet CLI v%s\n' "$VERSION"
+          printf 'slug: releases/cli-v%s\n' "$VERSION"
+          printf '%s\n' 'tableOfContents: false'
+          printf '%s\n' 'template: splash'
+          printf '%s\n' '---'
+          printf '\n'
+          printf '%s\n' "$REWRITTEN"
+        } > "src/content/docs/releases/cli-v$VERSION.mdx"
+
+        # Update releases index — insert new entry after the first ### CLI heading
+        INDEX="src/content/docs/releases/index.mdx"
+        ENTRY="- [v$VERSION](/releases/cli-v$VERSION/) - $RELEASE_DATE"
+
+        CLI_LINE=$(grep -n "^### CLI" "$INDEX" | head -1 | cut -d: -f1)
+        if [ -n "$CLI_LINE" ]; then
+          { head -n "$((CLI_LINE + 1))" "$INDEX"; echo "$ENTRY"; tail -n +"$((CLI_LINE + 2))" "$INDEX"; } > "$INDEX.tmp"
+          mv "$INDEX.tmp" "$INDEX"
+        else
+          echo "Warning: could not find ### CLI section in index, skipping index update" >&2
+        fi
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+        git add -A
+        git commit -m "docs: add CLI release notes for v$VERSION"
+        git push --force-with-lease origin "$BRANCH"
+
+        # Open PR on docs repo (skip if one already exists for this branch)
+        EXISTING_PR=$(gh pr list --repo ricochet-rs/docs --head "$BRANCH" --json url -q '.[0].url')
+        if [ -n "$EXISTING_PR" ]; then
+          echo "==> PR for $BRANCH already exists: $EXISTING_PR"
+        else
+          gh pr create \
+            --repo ricochet-rs/docs \
+            --base main \
+            --head "$BRANCH" \
+            --title "docs: CLI release notes for v$VERSION" \
+            --body "Release notes for Ricochet CLI v$VERSION." \
+            --reviewer pat-s,JosiahParry
+        fi
