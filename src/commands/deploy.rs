@@ -138,7 +138,14 @@ pub async fn deploy(
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
     match client
-        .deploy(&path, content_id.clone(), &toml_path, &extra_root_files, &pb, debug)
+        .deploy(
+            &path,
+            content_id.clone(),
+            &toml_path,
+            &extra_root_files,
+            &pb,
+            debug,
+        )
         .await
     {
         Ok(response) => {

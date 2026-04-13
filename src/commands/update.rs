@@ -91,6 +91,19 @@ fn binary_name_in_tarball(version: &str) -> Result<String> {
     }
 }
 
+pub fn print_version() {
+    let version = env!("CARGO_PKG_VERSION");
+    let git_hash = env!("GIT_HASH");
+    let has_tag = env!("HAS_GIT_TAG");
+    let build_date = env!("BUILD_DATE");
+
+    if has_tag == "true" || git_hash.is_empty() {
+        println!("{}", version);
+    } else {
+        println!("{}-{} ({})", version, git_hash, build_date);
+    }
+}
+
 pub async fn self_update(force: bool) -> Result<()> {
     println!("Checking for updates...");
 
@@ -231,8 +244,8 @@ fn extract_binary_from_tarball(tarball: &[u8], binary_path: &str) -> Result<Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flate2::write::GzEncoder;
     use flate2::Compression;
+    use flate2::write::GzEncoder;
     use std::io::Write;
 
     /// Create a tar.gz in memory with the given entries: (path, content).
@@ -245,9 +258,7 @@ mod tests {
                 header.set_size(content.len() as u64);
                 header.set_mode(0o755);
                 header.set_cksum();
-                builder
-                    .append_data(&mut header, *path, *content)
-                    .unwrap();
+                builder.append_data(&mut header, *path, *content).unwrap();
             }
             builder.finish().unwrap();
         }
@@ -264,8 +275,7 @@ mod tests {
         let content = b"fake-binary-content";
         let tarball = make_tarball(&[("ricochet-0.5.0-linux-x86_64", content)]);
 
-        let result =
-            extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
+        let result = extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
         assert_eq!(result, content);
     }
 
@@ -302,8 +312,7 @@ mod tests {
             ("other-file", b"nope"),
         ]);
 
-        let result =
-            extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
+        let result = extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
         assert_eq!(result, content);
     }
 

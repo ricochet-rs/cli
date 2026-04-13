@@ -294,6 +294,7 @@ mod servers_tests {
     // ==================== Config resolve_server tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_server_by_name() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -309,6 +310,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_server_by_url() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -345,6 +347,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_server_uses_default() {
         cleanup_env();
         let _temp_dir = setup_test_env();
