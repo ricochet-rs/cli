@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 use ricochet_cli::{OutputFormat, commands, config::Config, update};
 
 #[derive(Parser)]
@@ -112,10 +113,17 @@ enum Commands {
         command: ServersCommands,
     },
     /// Update the ricochet CLI to the latest version
+    #[command(hide = true)]
     SelfUpdate {
         /// Force reinstall even if already on the latest version
         #[arg(short = 'f', long)]
         force: bool,
+    },
+    /// Manage the ricochet CLI itself
+    #[command(name = "self")]
+    Self_ {
+        #[command(subcommand)]
+        command: SelfCommands,
     },
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
@@ -151,24 +159,25 @@ enum ServersCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum SelfCommands {
+    /// Update the ricochet CLI to the latest version
+    Update {
+        /// Force reinstall even if already on the latest version
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+    /// Print the current version
+    Version,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Handle version flag
     if cli.version {
-        let version = env!("CARGO_PKG_VERSION");
-        let git_hash = env!("GIT_HASH");
-        let has_tag = env!("HAS_GIT_TAG");
-        let build_date = env!("BUILD_DATE");
-
-        if has_tag == "true" || git_hash.is_empty() {
-            // Tagged release
-            println!("{}", version);
-        } else {
-            // Untagged build
-            println!("{}-{} ({})", version, git_hash, build_date);
-        }
+        commands::update::print_version();
         return Ok(());
     }
 
@@ -244,8 +253,21 @@ async fn main() -> Result<()> {
             }
         },
         Some(Commands::SelfUpdate { force }) => {
+            eprintln!(
+                "{} `ricochet self-update` is deprecated. Use `ricochet self update` instead.",
+                "warning:".yellow().bold()
+            );
             commands::update::self_update(force).await?;
         }
+        Some(Commands::Self_ { command }) => match command {
+            SelfCommands::Update { force } => {
+                commands::update::self_update(force).await?;
+            }
+            SelfCommands::Version => {
+                commands::update::print_version();
+                return Ok(());
+            }
+        },
         Some(Commands::GenerateDocs) => {
             let markdown = clap_markdown::help_markdown::<Cli>();
             println!("{}", markdown);

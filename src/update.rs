@@ -119,7 +119,7 @@ impl UpdateCache {
                 "notice:".yellow().bold(),
                 CURRENT_VERSION.dimmed(),
                 self.latest_version.green().bold(),
-                "ricochet self-update".bright_cyan(),
+                "ricochet self update".bright_cyan(),
                 release_notes_url(&self.latest_version).dimmed(),
             );
         }

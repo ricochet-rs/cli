@@ -118,7 +118,12 @@ pub fn create_bundle(
         }
         for (source, name) in extra_root_files {
             if let Ok(metadata) = std::fs::metadata(source) {
-                println!("  {} (from {}) - {}", name, source.display(), format_size(metadata.len()));
+                println!(
+                    "  {} (from {}) - {}",
+                    name,
+                    source.display(),
+                    format_size(metadata.len())
+                );
             }
         }
         println!();
@@ -148,10 +153,7 @@ pub fn create_bundle(
     // Add extra files at the bundle root (e.g. uv.lock from a parent directory)
     for (source, name) in extra_root_files {
         tar.append_path_with_name(source, name)
-            .context(format!(
-                "Failed to add {} to bundle",
-                source.display()
-            ))?;
+            .context(format!("Failed to add {} to bundle", source.display()))?;
     }
 
     tar.finish().context("Failed to finalize tar bundle")?;
