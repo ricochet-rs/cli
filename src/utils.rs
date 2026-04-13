@@ -96,6 +96,7 @@ pub fn create_bundle(
     output: &Path,
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
+    extra_root_files: &[(PathBuf, String)],
     debug: bool,
 ) -> Result<()> {
     let tar_gz = File::create(output)?;
@@ -113,6 +114,16 @@ pub fn create_bundle(
                 let size = metadata.len();
                 let relative_path = path.strip_prefix(dir).unwrap_or(path);
                 println!("  {} - {}", relative_path.display(), format_size(size));
+            }
+        }
+        for (source, name) in extra_root_files {
+            if let Ok(metadata) = std::fs::metadata(source) {
+                println!(
+                    "  {} (from {}) - {}",
+                    name,
+                    source.display(),
+                    format_size(metadata.len())
+                );
             }
         }
         println!();
@@ -137,6 +148,12 @@ pub fn create_bundle(
                 "Failed to add {} to bundle",
                 relative_path.display()
             ))?;
+    }
+
+    // Add extra files at the bundle root (e.g. uv.lock from a parent directory)
+    for (source, name) in extra_root_files {
+        tar.append_path_with_name(source, name)
+            .context(format!("Failed to add {} to bundle", source.display()))?;
     }
 
     tar.finish().context("Failed to finalize tar bundle")?;
@@ -173,6 +190,20 @@ pub fn truncate_string(s: &str, max_len: usize) -> String {
         s.to_string()
     } else {
         format!("{}...", &s[..max_len - 3])
+    }
+}
+
+/// Search parent directories for a file, stopping at the filesystem root.
+pub fn find_in_parent_dirs(start: &Path, filename: &str) -> Option<PathBuf> {
+    let mut current = start.to_path_buf();
+    loop {
+        let candidate = current.join(filename);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        if !current.pop() {
+            return None;
+        }
     }
 }
 

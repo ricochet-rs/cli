@@ -3,6 +3,7 @@ use colored::Colorize;
 use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
     content::{AccessType, Content, ContentItem, ContentType},
+    kinds::QuartoYml,
     language::{Language, LanguageConfig, Package},
     settings::{ScheduleSettings, ServeSettings, StaticSettings},
 };
@@ -28,6 +29,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
         Language::R => {
             vec![
                 ContentType::R,
+                ContentType::RService,
                 ContentType::Plumber,
                 ContentType::Ambiorix,
                 ContentType::Shiny,
@@ -52,6 +54,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
             ContentType::FastApi,
             ContentType::Flask,
             ContentType::Streamlit,
+            ContentType::ShinyPy,
             ContentType::Dash,
         ],
     };
@@ -216,16 +219,35 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         ContentType::QuartoR
         | ContentType::QuartoRShiny
         | ContentType::QuartoJl
-        | ContentType::QuartoPy => find_candidate_entrypoints("qmd", dir),
+        | ContentType::QuartoPy => {
+            let mut candidates = find_files_by_extension("qmd", dir)?;
+            // Include _quarto.yml files for quarto website/book projects
+            let quarto_ymls = find_files_by_extension("yml", dir)?
+                .into_iter()
+                .filter(|p| p.file_name().is_some_and(|n| n == "_quarto.yml"))
+                .collect::<Vec<_>>();
+            candidates.extend(quarto_ymls);
+
+            if candidates.is_empty() {
+                bail!("No .qmd files or _quarto.yml found in {}", dir.display());
+            }
+
+            let display_candidates = candidates.iter().map(|i| i.display()).collect::<Vec<_>>();
+            let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select entrypoint file")
+                .highlight_matches(true)
+                .items(display_candidates)
+                .interact()?;
+
+            Ok(candidates[selection].clone())
+        }
         ContentType::Python
         | ContentType::PythonService
         | ContentType::FastApi
         | ContentType::Flask
         | ContentType::Streamlit
+        | ContentType::ShinyPy
         | ContentType::Dash => find_candidate_entrypoints("py", dir),
-        ContentType::ServerlessJl => {
-            bail!("Requested content type not yet implemented")
-        }
     }
 }
 
@@ -249,12 +271,62 @@ fn choose_access_type() -> AccessType {
 fn static_settings(
     path: &PathBuf,
     content_type: &ContentType,
+    entrypoint: &std::path::Path,
 ) -> anyhow::Result<Option<StaticSettings>> {
     if !content_type.maybe_static() {
         return Ok(None);
     }
 
     let theme = ColorfulTheme::default();
+
+    // Auto-detect quarto website projects
+    let is_quarto = matches!(
+        content_type,
+        ContentType::QuartoR | ContentType::QuartoJl | ContentType::QuartoPy
+    );
+    if is_quarto {
+        // Determine _quarto.yml path relative to entrypoint
+        let quarto_yml_path = {
+            let entry_path = path.join(entrypoint);
+            if entrypoint.extension().is_some_and(|ext| ext == "yml") {
+                entry_path
+            } else {
+                entry_path
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| path.to_path_buf())
+                    .join("_quarto.yml")
+            }
+        };
+
+        if let Ok(quarto) = QuartoYml::from_file(&quarto_yml_path)
+            && let Some(output_dir) = quarto.project.as_ref().and_then(|p| p.get_output_dir())
+        {
+            // Build full path relative to entrypoint parent
+            let entrypoint_parent = entrypoint
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_default();
+
+            let full_output_dir = if entrypoint_parent.as_os_str().is_empty() {
+                output_dir
+            } else {
+                entrypoint_parent.join(output_dir)
+            };
+
+            println!(
+                "  {} Detected quarto website project (output: {})",
+                "→".bright_cyan(),
+                full_output_dir.display().to_string().bright_cyan()
+            );
+
+            return Ok(Some(StaticSettings {
+                index: Some("index.html".to_string()),
+                output_dir: Some(full_output_dir.display().to_string()),
+                render_fn: None,
+            }));
+        }
+    }
 
     // if they skip non static html
     let Some(opt) = Confirm::with_theme(&theme)
@@ -391,7 +463,7 @@ pub fn init_rico_toml(
     let content_type = choose_content_type(&lang)?;
     let entrypoint = choose_entrypoint(&content_type, dir)?;
     let schedule = schedule(&content_type)?;
-    let static_ = static_settings(dir, &content_type)?;
+    let static_ = static_settings(dir, &content_type, &entrypoint)?;
     let name = choose_item_name();
     let access_type = choose_access_type();
 
@@ -430,6 +502,7 @@ pub fn init_rico_toml(
         static_,
         resources: None,
         repositories: None,
+        retention: None,
     };
 
     let toml_content = toml::to_string_pretty(&res)?;
@@ -447,17 +520,34 @@ pub fn init_rico_toml(
         // Warn if the required package file is missing
         let pkg_path = dir.join(res.language.packages.to_string());
         if !pkg_path.exists() {
-            let hint = match res.language.packages {
-                Package::RenvLock => "Create it by running `renv::snapshot()` in R",
-                Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
-                Package::UvLock => "Create it by running `uv init`",
-            };
-            eprintln!(
-                "\n{} Required package file `{}` not found. {}",
-                "⚠".yellow().bold(),
-                res.language.packages.to_string().bright_cyan(),
-                hint
-            );
+            // For uv.lock, check parent dirs (uv workspace support)
+            if let Package::UvLock = res.language.packages {
+                if let Some(found) = crate::utils::find_in_parent_dirs(dir, "uv.lock") {
+                    println!(
+                        "  {} Found {} in workspace root (will be included during deploy)",
+                        "→".bright_cyan(),
+                        found.display().to_string().bright_cyan()
+                    );
+                } else {
+                    eprintln!(
+                        "\n{} Required package file `{}` not found. Create it by running `uv init`",
+                        "⚠".yellow().bold(),
+                        res.language.packages.to_string().bright_cyan(),
+                    );
+                }
+            } else {
+                let hint = match res.language.packages {
+                    Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+                    Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+                    Package::UvLock => unreachable!(),
+                };
+                eprintln!(
+                    "\n{} Required package file `{}` not found. {}",
+                    "⚠".yellow().bold(),
+                    res.language.packages.to_string().bright_cyan(),
+                    hint
+                );
+            }
         }
     }
 

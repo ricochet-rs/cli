@@ -100,8 +100,7 @@ impl Config {
             && legacy_path.exists()
         {
             if let Some(parent) = config_path.parent() {
-                std::fs::create_dir_all(parent)
-                    .context("Failed to create config directory")?;
+                std::fs::create_dir_all(parent).context("Failed to create config directory")?;
             }
             std::fs::rename(&legacy_path, &config_path).with_context(|| {
                 format!(
@@ -114,10 +113,7 @@ impl Config {
             if let Some(old_dir) = legacy_path.parent() {
                 let _ = std::fs::remove_dir(old_dir);
             }
-            eprintln!(
-                "Migrated config to {}",
-                config_path.display()
-            );
+            eprintln!("Migrated config to {}", config_path.display());
         }
 
         if config_path.exists() {
@@ -634,8 +630,6 @@ mod tests {
                 .contains("No servers configured")
         );
     }
-
-    // ==================== resolve_server tests ====================
 
     #[test]
     fn test_resolve_server_by_name() {

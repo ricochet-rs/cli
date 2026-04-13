@@ -168,6 +168,7 @@ impl RicochetClient {
         path: &Path,
         content_id: Option<String>,
         toml_path: &Path,
+        extra_root_files: &[(std::path::PathBuf, String)],
         pb: &indicatif::ProgressBar,
         debug: bool,
     ) -> Result<serde_json::Value> {
@@ -186,7 +187,7 @@ impl RicochetClient {
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
         let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
-        crate::utils::create_bundle(path, &tar_path, include, exclude, debug)?;
+        crate::utils::create_bundle(path, &tar_path, include, exclude, extra_root_files, debug)?;
 
         // Get file size for progress tracking
         let file_size = tokio::fs::metadata(&tar_path).await?.len();
