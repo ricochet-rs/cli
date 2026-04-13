@@ -18,7 +18,9 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet servers add`↴](#ricochet-servers-add)
 * [`ricochet servers remove`↴](#ricochet-servers-remove)
 * [`ricochet servers set-default`↴](#ricochet-servers-set-default)
-* [`ricochet self-update`↴](#ricochet-self-update)
+* [`ricochet self`↴](#ricochet-self)
+* [`ricochet self update`↴](#ricochet-self-update)
+* [`ricochet self version`↴](#ricochet-self-version)
 
 ## `ricochet`
 
@@ -37,7 +39,7 @@ Ricochet CLI
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
 * `servers` — Manage configured Ricochet servers
-* `self-update` — Update the ricochet CLI to the latest version
+* `self` — Manage the ricochet CLI itself
 
 ###### **Options:**
 
@@ -233,15 +235,36 @@ Set the default server
 
 
 
-## `ricochet self-update`
+## `ricochet self`
+
+Manage the ricochet CLI itself
+
+**Usage:** `ricochet self <COMMAND>`
+
+###### **Subcommands:**
+
+* `update` — Update the ricochet CLI to the latest version
+* `version` — Print the current version
+
+
+
+## `ricochet self update`
 
 Update the ricochet CLI to the latest version
 
-**Usage:** `ricochet self-update [OPTIONS]`
+**Usage:** `ricochet self update [OPTIONS]`
 
 ###### **Options:**
 
 * `-f`, `--force` — Force reinstall even if already on the latest version
+
+
+
+## `ricochet self version`
+
+Print the current version
+
+**Usage:** `ricochet self version`
 
 
 
