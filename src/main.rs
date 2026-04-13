@@ -167,8 +167,6 @@ enum SelfCommands {
         #[arg(short = 'f', long)]
         force: bool,
     },
-    /// Print the current version
-    Version,
 }
 
 #[tokio::main]
@@ -262,10 +260,6 @@ async fn main() -> Result<()> {
         Some(Commands::Self_ { command }) => match command {
             SelfCommands::Update { force } => {
                 commands::update::self_update(force).await?;
-            }
-            SelfCommands::Version => {
-                commands::update::print_version();
-                return Ok(());
             }
         },
         Some(Commands::GenerateDocs) => {
