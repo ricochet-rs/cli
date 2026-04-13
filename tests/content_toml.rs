@@ -1,5 +1,5 @@
 use mockito::Server;
-use ricochet_cli::{commands::item::toml::get_toml, config::Config};
+use ricochet_cli::{config::Config, item::toml::get_toml};
 use std::{env, fs};
 use tempfile::TempDir;
 
@@ -43,10 +43,10 @@ fn cleanup_env() {
 
 /// Helper to create a config with mock server and API key
 fn create_test_config(server_url: String) -> Config {
-    let mut config = Config::default();
-    config.server = url::Url::parse(&server_url).unwrap();
-    config.api_key = Some("rico_test_key_123".to_string());
-    config
+    Config::for_test(
+        url::Url::parse(&server_url).unwrap(),
+        Some("rico_test_key_123".to_string()),
+    )
 }
 
 /// Mock the check_key endpoint

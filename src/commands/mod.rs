@@ -4,7 +4,6 @@ pub mod delete;
 pub mod deploy;
 pub mod init;
 pub mod invoke;
-pub mod item;
 pub mod list;
 pub mod servers;
 pub mod update;

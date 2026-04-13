@@ -8,7 +8,8 @@ pub async fn get_toml(
     id: Option<String>,
     path: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let client = RicochetClient::new(config)?;
+    let server_config = config.resolve_server(None)?;
+    let client = RicochetClient::new(&server_config)?;
     client.preflight_key_check().await?;
 
     let id = match id {
