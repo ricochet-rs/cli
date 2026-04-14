@@ -95,7 +95,10 @@ fn find_files_by_extension(extension: &str, search_dir: &PathBuf) -> anyhow::Res
     let res = WalkDir::new(search_dir)
         .sort_by_file_name()
         .into_iter()
-        .filter_entry(|entry| !entry.file_name().eq("renv"))
+        .filter_entry(|entry| {
+            let name = entry.file_name();
+            !name.eq("renv") && !name.eq(".venv") && !name.eq("venv") && !name.eq("env")
+        })
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             entry.file_type().is_file()
