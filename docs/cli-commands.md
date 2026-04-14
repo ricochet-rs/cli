@@ -13,6 +13,10 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet invoke`↴](#ricochet-invoke)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet init`↴](#ricochet-init)
+* [`ricochet app`↴](#ricochet-app)
+* [`ricochet app toml`↴](#ricochet-app-toml)
+* [`ricochet task`↴](#ricochet-task)
+* [`ricochet task toml`↴](#ricochet-task-toml)
 * [`ricochet servers`↴](#ricochet-servers)
 * [`ricochet servers list`↴](#ricochet-servers-list)
 * [`ricochet servers add`↴](#ricochet-servers-add)
@@ -37,6 +41,8 @@ Ricochet CLI
 * `invoke` — Invoke a task
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
+* `app` — Manage deployed app items
+* `task` — Manage deployed task items
 * `servers` — Manage configured Ricochet servers
 * `self` — Manage the ricochet CLI itself
 
@@ -163,6 +169,62 @@ Initialize a new Ricochet deployment
 
 * `--overwrite` — Overwrite existing _ricochet.toml file without confirmation
 * `--dry-run` — Preview the _ricochet.toml without saving to file
+
+
+
+## `ricochet app`
+
+Manage deployed app items
+
+**Usage:** `ricochet app <COMMAND>`
+
+###### **Subcommands:**
+
+* `toml` — Fetch the remote _ricochet.toml for an item
+
+
+
+## `ricochet app toml`
+
+Fetch the remote _ricochet.toml for an item
+
+**Usage:** `ricochet app toml [OPTIONS] [ID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet task`
+
+Manage deployed task items
+
+**Usage:** `ricochet task <COMMAND>`
+
+###### **Subcommands:**
+
+* `toml` — Fetch the remote _ricochet.toml for an item
+
+
+
+## `ricochet task toml`
+
+Fetch the remote _ricochet.toml for an item
+
+**Usage:** `ricochet task toml [OPTIONS] [ID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
 
 
 

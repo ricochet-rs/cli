@@ -1,7 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ricochet_cli::{OutputFormat, commands, config::Config, update};
+use ricochet_cli::{OutputFormat, commands, config::Config, item, update};
+
+// App specific methods go in `src/app/`
+// Task specific methods go in `src/task`
+// Shared methods for in `src/commands/item`
 
 #[derive(Parser)]
 #[command(name = "ricochet")]
@@ -107,6 +111,16 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Manage deployed app items
+    App {
+        #[command(subcommand)]
+        command: ItemCommands,
+    },
+    /// Manage deployed task items
+    Task {
+        #[command(subcommand)]
+        command: ItemCommands,
+    },
     /// Manage configured Ricochet servers
     Servers {
         #[command(subcommand)]
@@ -128,6 +142,18 @@ enum Commands {
     /// Generate markdown documentation (hidden command)
     #[command(hide = true)]
     GenerateDocs,
+}
+
+#[derive(Subcommand)]
+enum ItemCommands {
+    /// Fetch the remote _ricochet.toml for an item
+    Toml {
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -236,6 +262,12 @@ async fn main() -> Result<()> {
         }) => {
             commands::init::init_rico_toml(&path, overwrite, dry_run)?;
         }
+
+        Some(Commands::App { command } | Commands::Task { command }) => match command {
+            ItemCommands::Toml { id, path } => {
+                item::toml::get_toml(&config, id, path).await?;
+            }
+        },
         Some(Commands::Servers { command }) => match command {
             ServersCommands::List => {
                 commands::servers::list(&config)?;
