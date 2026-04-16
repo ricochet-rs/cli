@@ -71,18 +71,17 @@ steps:
     depends_on:
       - build
     settings:
+      acl: ''
       bucket: ricochet-cli
       region: eu-central-003
       endpoint: https://s3.eu-central-003.backblazeb2.com
       access_key:
         from_secret:
-          from_secret:
           integration: 1
           path: backblaze/tokens/cicd
           key: keyID
       secret_key:
         from_secret:
-          from_secret:
           integration: 1
           path: backblaze/tokens/cicd
           key: applicationKey

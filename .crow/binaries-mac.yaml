@@ -158,13 +158,11 @@ steps:
       RCLONE_CONFIG_S3_REGION: eu-central-003
       RCLONE_CONFIG_S3_ACCESS_KEY_ID:
         from_secret:
-          from_secret:
           integration: 1
           path: backblaze/tokens/cicd
           key: keyID
       RCLONE_CONFIG_S3_SECRET_ACCESS_KEY:
         from_secret:
-          from_secret:
           integration: 1
           path: backblaze/tokens/cicd
           key: applicationKey
