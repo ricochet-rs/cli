@@ -71,19 +71,26 @@ steps:
     depends_on:
       - build
     settings:
+      acl: ''
       bucket: ricochet-cli
-      region: hel1
-      endpoint: https://hel1.your-objectstorage.com
+      region: eu-central-003
+      endpoint: https://s3.eu-central-003.backblazeb2.com
       access_key:
-        from_secret: s3_access_key
+        from_secret:
+          integration: 1
+          path: backblaze/tokens/cicd
+          key: keyID
       secret_key:
-        from_secret: s3_secret_key
+        from_secret:
+          integration: 1
+          path: backblaze/tokens/cicd
+          key: applicationKey
       source: target/binaries/**/*
       strip_prefix: target/binaries/
       target: /
 
   changelog:
-    image: reg.devxy.io/docker.io/thegeeklab/git-sv:2.0.11
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.0.11
     depends_on:
       - build
     commands:
@@ -96,7 +103,7 @@ steps:
       event: tag
 
   'Create release':
-    image: reg.devxy.io/docker.io/woodpeckerci/plugin-release:0.3.0
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-release:0.3.0
     depends_on:
       - changelog
     settings:
