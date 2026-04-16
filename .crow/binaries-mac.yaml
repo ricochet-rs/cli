@@ -160,13 +160,13 @@ steps:
         from_secret:
           from_secret:
           integration: 1
-          path: saas/backblaze/tokens/cicd
+          path: backblaze/tokens/cicd
           key: keyID
       RCLONE_CONFIG_S3_SECRET_ACCESS_KEY:
         from_secret:
           from_secret:
           integration: 1
-          path: saas/backblaze/tokens/cicd
+          path: backblaze/tokens/cicd
           key: applicationKey
     depends_on:
       - build

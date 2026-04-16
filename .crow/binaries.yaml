@@ -78,13 +78,13 @@ steps:
         from_secret:
           from_secret:
           integration: 1
-          path: saas/backblaze/tokens/cicd
+          path: backblaze/tokens/cicd
           key: keyID
       secret_key:
         from_secret:
           from_secret:
           integration: 1
-          path: saas/backblaze/tokens/cicd
+          path: backblaze/tokens/cicd
           key: applicationKey
       source: target/binaries/**/*
       strip_prefix: target/binaries/
