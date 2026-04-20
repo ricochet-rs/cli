@@ -19,10 +19,13 @@ steps:
       s3-access-key:
         from_secret:
           integration: 1
-          path: backblaze/tokens/cicd
-          key: keyID
+          path: hetzner/s3/infrastructure
+          key: id
       s3-secret-key:
-        from_secret: s3_secret_key
+        from_secret:
+          integration: 1
+          path: hetzner/s3/infrastructure
+          key: secret
 
   test:
     image: reg.ricochet.rs/docker.io/library/rust:1.94
