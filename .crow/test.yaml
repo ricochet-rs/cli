@@ -19,7 +19,7 @@ steps:
       s3-access-key:
         from_secret:
           integration: 1
-          path: saas/backblaze/tokens/cicd
+          path: backblaze/tokens/cicd
           key: keyID
       s3-secret-key:
         from_secret: s3_secret_key
