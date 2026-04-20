@@ -28,7 +28,7 @@ steps:
           key: secret
 
   test:
-    image: reg.ricochet.rs/docker.io/library/rust:1.94
+    image: reg.ricochet.rs/docker.io/library/rust:1.95
     environment:
       SQLX_OFFLINE: true
       GITHUB_TOKEN:
