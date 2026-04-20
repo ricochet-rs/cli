@@ -32,7 +32,7 @@ steps:
           key: secret
 
   rust-fmt:
-    image: reg.ricochet.rs/docker.io/library/rust:1.94
+    image: reg.ricochet.rs/docker.io/library/rust:1.95
     depends_on: cache
     commands:
       - export PATH=".sccache-cache:$PATH"
@@ -42,7 +42,7 @@ steps:
       - sccache --show-stats
 
   rust-lint:
-    image: reg.ricochet.rs/docker.io/library/rust:1.94
+    image: reg.ricochet.rs/docker.io/library/rust:1.95
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
@@ -64,7 +64,7 @@ steps:
       - sccache --show-stats
 
   check-docs:
-    image: reg.ricochet.rs/docker.io/library/rust:1.94
+    image: reg.ricochet.rs/docker.io/library/rust:1.95
     depends_on: cache
     environment:
       GITHUB_TOKEN:
