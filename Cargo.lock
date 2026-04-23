@@ -2142,6 +2142,7 @@ dependencies = [
  "clap-markdown",
  "colored",
  "comfy-table",
+ "croner",
  "dialoguer",
  "dirs",
  "flate2",
