@@ -281,7 +281,7 @@ async fn oauth_login_with_callback(
         println!("Please create an API key manually in the browser");
 
         let mut keys_url = server.clone();
-        keys_url.set_path("/keys");
+        keys_url.set_path("/credentials");
         if webbrowser::open(keys_url.as_str()).is_err() {
             println!("Open: {}", keys_url.as_str().bright_cyan().underline());
         }
