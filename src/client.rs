@@ -380,33 +380,6 @@ impl RicochetClient {
         Ok(())
     }
 
-    pub async fn update_schedule(&self, id: &str, schedule: Option<String>) -> Result<()> {
-        let mut url = self.base_url.clone();
-        url.set_path(&format!("/api/v0/content/{}/schedule", id));
-
-        let body = serde_json::json!({
-            "schedule": schedule
-        });
-
-        let response = self
-            .client
-            .patch(url)
-            .header("Authorization", format!("Key {}", self.api_key))
-            .json(&body)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            anyhow::bail!("Failed to update schedule: {}", error_text)
-        }
-
-        Ok(())
-    }
-
     pub async fn update_settings(&self, id: &str, settings: &str) -> Result<()> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/settings", id));
