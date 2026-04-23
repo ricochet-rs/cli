@@ -21,7 +21,7 @@ fn download_url(version: &str) -> Result<String> {
 
     #[cfg(target_os = "macos")]
     let base = format!(
-        "https://hel1.your-objectstorage.com/ricochet-cli/v{}",
+        "https://s3.eu-central-003.backblazeb2.com/ricochet-cli/v{}",
         version
     );
 
