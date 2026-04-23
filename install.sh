@@ -6,7 +6,7 @@ set -e
 
 VERSION="${RICOCHET_VERSION:-0.6.1}"
 GITHUB_RELEASES_BASE="https://github.com/ricochet-rs/cli/releases/download/v${VERSION}"
-S3_BASE_URL="https://hel1.your-objectstorage.com/ricochet-cli/v${VERSION}"
+S3_BASE_URL="https://s3.eu-central-003.backblazeb2.com/ricochet-cli/v${VERSION}"
 
 # Detect OS and architecture
 OS="$(uname -s)"
