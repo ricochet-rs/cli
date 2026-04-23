@@ -88,7 +88,8 @@ enum Commands {
         #[arg(short = 'f', long)]
         force: bool,
     },
-    /// Invoke a task
+    /// Invoke a task (deprecated: use `ricochet task invoke` instead)
+    #[command(hide = true)]
     Invoke {
         /// Content item ID (ULID)
         id: String,
@@ -119,7 +120,7 @@ enum Commands {
     /// Manage deployed task items
     Task {
         #[command(subcommand)]
-        command: ItemCommands,
+        command: TaskCommands,
     },
     /// Manage configured Ricochet servers
     Servers {
@@ -153,6 +154,30 @@ enum ItemCommands {
         /// Path to _ricochet.toml file
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum TaskCommands {
+    /// Fetch the remote _ricochet.toml for a task
+    Toml {
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
+    /// Invoke a task
+    Invoke {
+        /// Content item ID (ULID)
+        id: String,
+    },
+    /// Set or update the schedule for a task
+    Schedule {
+        /// Content item ID (ULID)
+        id: String,
+        /// Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
+        schedule: String,
     },
 }
 
@@ -250,7 +275,11 @@ async fn main() -> Result<()> {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
         }
         Some(Commands::Invoke { id }) => {
-            commands::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
+            eprintln!(
+                "{} `ricochet invoke` is deprecated. Use `ricochet task invoke` instead.",
+                "warning:".yellow().bold()
+            );
+            item::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all)?;
@@ -263,9 +292,27 @@ async fn main() -> Result<()> {
             commands::init::init_rico_toml(&path, overwrite, dry_run)?;
         }
 
-        Some(Commands::App { command } | Commands::Task { command }) => match command {
+        Some(Commands::App { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
+            }
+        },
+        Some(Commands::Task { command }) => match command {
+            TaskCommands::Toml { id, path } => {
+                item::toml::get_toml(&config, id, path).await?;
+            }
+            TaskCommands::Invoke { id } => {
+                item::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
+            }
+            TaskCommands::Schedule { id, schedule } => {
+                item::schedule::schedule_task(
+                    &config,
+                    cli.server.as_deref(),
+                    &id,
+                    &schedule,
+                    cli.format,
+                )
+                .await?;
             }
         },
         Some(Commands::Servers { command }) => match command {

@@ -4,6 +4,7 @@ use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::content::ContentItem;
 use serde::de::DeserializeOwned;
+use serde_json::json;
 use std::{
     fs::read_to_string,
     path::Path,
@@ -275,7 +276,7 @@ impl RicochetClient {
 
     pub async fn invoke(&self, id: &str, params: Option<String>) -> Result<serde_json::Value> {
         let mut url = self.base_url.clone();
-        url.set_path(&format!("/api/v0/content/{}/invoke", id));
+        url.set_path(&format!("/api/v0/content/{id}/invoke"));
 
         let body = if let Some(params) = params {
             serde_json::from_str(&params)?
@@ -292,6 +293,22 @@ impl RicochetClient {
             .await?;
 
         Self::handle_response(response).await
+    }
+
+    /// Schedule a task to run on a cron schedule
+    pub async fn schedule(&self, id: &str, schedule: &str) -> Result<serde_json::Value> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{id}/schedule"));
+
+        let resp = self
+            .client
+            .patch(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .json(&json!({"schedule": schedule}))
+            .send()
+            .await?;
+
+        Self::handle_response(resp).await
     }
 
     pub async fn stop_invocation(&self, id: &str, invocation_id: &str) -> Result<()> {
