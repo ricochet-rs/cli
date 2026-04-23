@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ricochet_cli::{OutputFormat, commands, config::Config, item, update};
+use ricochet_cli::{OutputFormat, app, commands, config::Config, item, update};
 
 // App specific methods go in `src/app/`
 // Task specific methods go in `src/task`
@@ -154,6 +154,18 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
+    /// List running instances of an app
+    Instances {
+        /// Content item ID (ULID)
+        id: String,
+    },
+    /// Stop a running instance of an app
+    StopInstance {
+        /// Content item ID (ULID)
+        id: String,
+        /// Instance ID to stop
+        pid: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -266,6 +278,13 @@ async fn main() -> Result<()> {
         Some(Commands::App { command } | Commands::Task { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
+            }
+            ItemCommands::Instances { id } => {
+                app::instances::list_instances(&config, cli.server.as_deref(), &id, cli.format)
+                    .await?;
+            }
+            ItemCommands::StopInstance { id, pid } => {
+                app::instances::stop_instance(&config, cli.server.as_deref(), &id, &pid).await?;
             }
         },
         Some(Commands::Servers { command }) => match command {
