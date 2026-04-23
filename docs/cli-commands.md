@@ -15,8 +15,12 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
+* [`ricochet app instances`↴](#ricochet-app-instances)
+* [`ricochet app stop-instance`↴](#ricochet-app-stop-instance)
 * [`ricochet task`↴](#ricochet-task)
 * [`ricochet task toml`↴](#ricochet-task-toml)
+* [`ricochet task instances`↴](#ricochet-task-instances)
+* [`ricochet task stop-instance`↴](#ricochet-task-stop-instance)
 * [`ricochet servers`↴](#ricochet-servers)
 * [`ricochet servers list`↴](#ricochet-servers-list)
 * [`ricochet servers add`↴](#ricochet-servers-add)
@@ -181,6 +185,8 @@ Manage deployed app items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
+* `instances` — List running instances of an app
+* `stop-instance` — Stop a running instance of an app
 
 
 
@@ -200,6 +206,31 @@ Fetch the remote _ricochet.toml for an item
 
 
 
+## `ricochet app instances`
+
+List running instances of an app
+
+**Usage:** `ricochet app instances <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+
+
+
+## `ricochet app stop-instance`
+
+Stop a running instance of an app
+
+**Usage:** `ricochet app stop-instance <ID> <PID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+* `<PID>` — Instance ID to stop
+
+
+
 ## `ricochet task`
 
 Manage deployed task items
@@ -209,6 +240,8 @@ Manage deployed task items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
+* `instances` — List running instances of an app
+* `stop-instance` — Stop a running instance of an app
 
 
 
@@ -225,6 +258,31 @@ Fetch the remote _ricochet.toml for an item
 ###### **Options:**
 
 * `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet task instances`
+
+List running instances of an app
+
+**Usage:** `ricochet task instances <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+
+
+
+## `ricochet task stop-instance`
+
+Stop a running instance of an app
+
+**Usage:** `ricochet task stop-instance <ID> <PID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+* `<PID>` — Instance ID to stop
 
 
 

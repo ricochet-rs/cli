@@ -91,7 +91,7 @@ pub async fn list_instances(
                     Cell::new(pid),
                     conn_cell,
                     Cell::new(started),
-                    Cell::new(&last_conn),
+                    Cell::new(last_conn),
                 ]);
             }
 
