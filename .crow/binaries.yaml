@@ -90,7 +90,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.0.11
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.1.0
     depends_on:
       - build
     commands:
