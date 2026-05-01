@@ -23,6 +23,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet servers add`↴](#ricochet-servers-add)
 * [`ricochet servers remove`↴](#ricochet-servers-remove)
 * [`ricochet servers set-default`↴](#ricochet-servers-set-default)
+* [`ricochet db`↴](#ricochet-db)
+* [`ricochet db doctor`↴](#ricochet-db-doctor)
 * [`ricochet self`↴](#ricochet-self)
 * [`ricochet self update`↴](#ricochet-self-update)
 
@@ -44,6 +46,7 @@ Ricochet CLI
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
 * `servers` — Manage configured Ricochet servers
+* `db` — Database administration commands
 * `self` — Manage the ricochet CLI itself
 
 ###### **Options:**
@@ -308,6 +311,26 @@ Set the default server
 ###### **Arguments:**
 
 * `<NAME>` — Server name to set as default
+
+
+
+## `ricochet db`
+
+Database administration commands
+
+**Usage:** `ricochet db <COMMAND>`
+
+###### **Subcommands:**
+
+* `doctor` — Compare the server's live database schema against the build-time expected schema and report any drift. Requires an admin API key
+
+
+
+## `ricochet db doctor`
+
+Compare the server's live database schema against the build-time expected schema and report any drift. Requires an admin API key
+
+**Usage:** `ricochet db doctor`
 
 
 
