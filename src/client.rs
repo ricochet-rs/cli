@@ -2,8 +2,8 @@ use crate::config::{ServerConfig, parse_server_url};
 use anyhow::{Context, Result};
 use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
-use ricochet_core::content::ContentItem;
-use serde::de::DeserializeOwned;
+use ricochet_core::{content::ContentItem, drift::DriftReport};
+use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::json;
 use std::{
     fs::read_to_string,
@@ -43,6 +43,14 @@ pub struct RicochetClient {
     pub(crate) client: Client,
     pub(crate) base_url: Url,
     pub(crate) api_key: String,
+}
+
+/// Shape of `GET /api/admin/db/doctor`. `healthy == true` means `drift` is
+/// empty; both fields are always populated.
+#[derive(Debug, Deserialize)]
+pub struct DoctorResponse {
+    pub healthy: bool,
+    pub drift: DriftReport,
 }
 
 impl RicochetClient {
@@ -403,6 +411,25 @@ impl RicochetClient {
         }
 
         Ok(())
+    }
+
+    /// Response body from `GET /api/admin/db/doctor`. Mirrors the
+    /// `DoctorResponse` defined server-side in
+    /// `ricochet-api/src/admin/db_doctor.rs`. Kept inline here because it's a
+    /// thin wire-format wrapper around the shared `DriftReport`; the CLI
+    /// never produces values of this type, only deserializes them.
+    pub async fn db_doctor(&self) -> Result<DoctorResponse> {
+        let mut url = self.base_url.clone();
+        url.set_path("/api/admin/db/doctor");
+
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        Self::handle_response(response).await
     }
 
     pub async fn get_ricochet_toml(&self, id: &str) -> Result<String> {

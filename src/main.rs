@@ -127,6 +127,11 @@ enum Commands {
         #[command(subcommand)]
         command: ServersCommands,
     },
+    /// Database administration commands
+    Db {
+        #[command(subcommand)]
+        command: DbCommands,
+    },
     /// Update the ricochet CLI to the latest version
     #[command(hide = true)]
     SelfUpdate {
@@ -218,6 +223,13 @@ enum SelfCommands {
         #[arg(short = 'f', long)]
         force: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum DbCommands {
+    /// Compare the server's live database schema against the build-time
+    /// expected schema and report any drift. Requires an admin API key.
+    Doctor,
 }
 
 #[tokio::main]
@@ -327,6 +339,11 @@ async fn main() -> Result<()> {
             }
             ServersCommands::SetDefault { name } => {
                 commands::servers::set_default(&mut config, name)?;
+            }
+        },
+        Some(Commands::Db { command }) => match command {
+            DbCommands::Doctor => {
+                commands::db::doctor(&config, cli.server.as_deref(), cli.format).await?;
             }
         },
         Some(Commands::SelfUpdate { force }) => {
