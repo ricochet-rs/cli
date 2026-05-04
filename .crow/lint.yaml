@@ -14,7 +14,7 @@ steps:
     depends_on: []
 
   cache:
-    image: codefloe.com/crow-plugins/sccache:0.2.3
+    image: codefloe.com/crow-plugins/sccache:0.2.4
     settings:
       s3-endpoint: https://hel1.your-objectstorage.com
       s3-bucket: ricochet-sccache
@@ -94,6 +94,6 @@ steps:
     when:
       - event: pull_request
       - event: pull_request_edited
-    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.5.2
+    image: reg.ricochet.rs/docker.io/commitlint/commitlint:20.5.3
     commands:
       - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
