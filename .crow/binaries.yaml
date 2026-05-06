@@ -6,8 +6,26 @@ labels:
   agent: thumper
 
 steps:
+  'Verify tag matches Cargo.toml':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    when:
+      event: tag
+    commands:
+      - apk add --no-cache -q grep sed
+      - |
+        EXPECTED="${CI_COMMIT_TAG#v}"
+        ACTUAL=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "([^"]+)"/\1/')
+        if [ "$EXPECTED" != "$ACTUAL" ]; then
+          echo "error: tag is v$EXPECTED but Cargo.toml says $ACTUAL" >&2
+          echo "run 'just bump $EXPECTED' on main first, merge, then re-tag" >&2
+          exit 1
+        fi
+        echo "==> tag matches Cargo.toml ($ACTUAL)"
+
   build:
     image: reg.ricochet.rs/docker.io/library/rust:1.95-slim
+    depends_on:
+      - 'Verify tag matches Cargo.toml'
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
@@ -15,16 +33,6 @@ steps:
       - apt-get update && apt-get install -y just pkg-config musl-tools libssl-dev curl wget nodejs build-essential cmake ca-certificates musl-tools musl-dev gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mingw-w64 clang lld llvm tree git
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
-      # Update Cargo.toml version from tag before building
-      - |
-        if [ -n "${CI_COMMIT_TAG:-}" ]; then
-          VERSION="${CI_COMMIT_TAG#v}"
-          echo "Updating Cargo.toml version to $VERSION"
-          sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
-          cargo generate-lockfile
-          echo "Updated Cargo.toml and Cargo.lock to version $VERSION"
-          grep "^version" Cargo.toml
-        fi
       # build sequentially to avoid file conflicts
       - just build-static linux-x86_64
       - just build-static linux-aarch64
@@ -114,66 +122,6 @@ steps:
       files:
         - target/binaries/**/*.tar.gz
       title: ${CI_COMMIT_TAG}
-    when:
-      event: tag
-
-  'Update version files':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
-    depends_on:
-      - build
-    commands:
-      - apk add --no-cache -q git sed
-      - |
-        VERSION="${CI_COMMIT_TAG#v}"
-        echo "Updating version files to $VERSION"
-
-        # Update install.sh - replace the default version
-        sed -i "s/\(RICOCHET_VERSION:-\)[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/\1$VERSION/" install.sh
-
-        # Update install.ps1 - replace the default version
-        sed -i "s/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"[^\"]*\" }/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"$VERSION\" }/" install.ps1
-
-        git config user.name "ricochet-bot"
-        git config user.email "droid@ricochet.rs"
-        git add Cargo.toml Cargo.lock install.sh install.ps1
-        if git diff --cached --quiet; then
-          echo "No version changes needed — files already at $VERSION"
-        else
-          git commit -m "chore: bump version to $VERSION"
-        fi
-    when:
-      event: tag
-
-  'Push version updates':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
-    depends_on:
-      - 'Update version files'
-    environment:
-      SSH_KEY:
-        from_secret: ricochet-bot-ssh-key
-    commands:
-      - apk add --no-cache -q git openssh-client
-      - |
-        # Set up SSH key
-        mkdir -p ~/.ssh
-        echo "$SSH_KEY" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-        ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-        git config user.name "ricochet-bot"
-        git config user.email "droid@ricochet.rs"
-
-        # Fetch latest main and rebase our version bump commit on top
-        git remote add origin-push git@github.com:ricochet-rs/cli.git
-        git fetch origin-push main
-
-        # Only push if there's a version bump commit to push
-        if git log --oneline origin-push/main..HEAD | grep -q .; then
-          git rebase origin-push/main
-          git push origin-push HEAD:main
-        else
-          echo "No version bump commit to push — skipping"
-        fi
     when:
       event: tag
 
