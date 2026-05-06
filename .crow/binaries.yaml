@@ -10,8 +10,14 @@ steps:
     image: reg.ricochet.rs/docker.io/library/rust:1.95-slim
     when:
       event: tag
+    environment:
+      GITHUB_TOKEN:
+        from_secret: ricochet_bot_token
     commands:
       - apt-get update -q && apt-get install -y -q git sed
+      # cargo update -p ricochet-cli verifies the pinned ricochet-core git rev,
+      # which lives in a private repo — same auth shim as the build step.
+      - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       - |
         set -euxo pipefail
         VERSION="${CI_COMMIT_TAG#v}"
