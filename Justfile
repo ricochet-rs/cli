@@ -324,23 +324,3 @@ docs-check:
         echo "✓ CLI documentation is up-to-date"; \
         rm -f /tmp/cli-commands-generated.md; \
     fi
-
-# Bump version across Cargo.toml, Cargo.lock, install.sh, install.ps1.
-# Open a PR with the result, merge, then tag: git tag vX.Y.Z && git push --tags.
-# The CI tag pipeline verifies Cargo.toml matches the tag before building.
-bump VERSION:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if ! [[ "{{VERSION}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "error: version must be X.Y.Z (got '{{VERSION}}')" >&2
-        exit 1
-    fi
-    sed -i.bak "s/^version = \"[^\"]*\"/version = \"{{VERSION}}\"/" Cargo.toml && rm Cargo.toml.bak
-    sed -i.bak "s/\(RICOCHET_VERSION:-\)[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/\1{{VERSION}}/" install.sh && rm install.sh.bak
-    sed -i.bak "s/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"[^\"]*\" }/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"{{VERSION}}\" }/" install.ps1 && rm install.ps1.bak
-    cargo update -p ricochet-cli
-    echo ""
-    echo "==> bumped to {{VERSION}}"
-    echo "    review: git diff"
-    echo "    commit: git commit -am 'chore: bump version to {{VERSION}}'"
-    echo "    PR, merge, then: git tag v{{VERSION}} && git push --tags"
