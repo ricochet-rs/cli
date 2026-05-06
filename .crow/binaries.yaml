@@ -6,26 +6,40 @@ labels:
   agent: thumper
 
 steps:
-  'Verify tag matches Cargo.toml':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+  bump:
+    image: reg.ricochet.rs/docker.io/library/rust:1.95-slim
     when:
       event: tag
     commands:
-      - apk add --no-cache -q grep sed
+      - apt-get update -q && apt-get install -y -q git sed
       - |
-        EXPECTED="${CI_COMMIT_TAG#v}"
-        ACTUAL=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "([^"]+)"/\1/')
-        if [ "$EXPECTED" != "$ACTUAL" ]; then
-          echo "error: tag is v$EXPECTED but Cargo.toml says $ACTUAL" >&2
-          echo "run 'just bump $EXPECTED' on main first, merge, then re-tag" >&2
-          exit 1
+        set -euxo pipefail
+        VERSION="${CI_COMMIT_TAG#v}"
+
+        # Idempotent: sed is a no-op if the file is already at $VERSION.
+        sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
+        sed -i "s/\(RICOCHET_VERSION:-\)[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*/\1$VERSION/" install.sh
+        sed -i "s/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"[^\"]*\" }/\$Version = if (\$env:RICOCHET_VERSION) { \$env:RICOCHET_VERSION } else { \"$VERSION\" }/" install.ps1
+        cargo update -p ricochet-cli
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+        git add Cargo.toml Cargo.lock install.sh install.ps1
+        if git diff --cached --quiet; then
+          echo "==> Files already at v$VERSION; no bump commit needed"
+        else
+          git commit -m "chore: bump version to $VERSION"
+          # Move the tag locally so 'build' picks up the bump commit and
+          # 'Push bump and tag' has the right SHA to force-update on the remote.
+          git tag -d "$CI_COMMIT_TAG"
+          git tag "$CI_COMMIT_TAG" HEAD
+          echo "==> Created bump commit and moved $CI_COMMIT_TAG to it"
         fi
-        echo "==> tag matches Cargo.toml ($ACTUAL)"
 
   build:
     image: reg.ricochet.rs/docker.io/library/rust:1.95-slim
     depends_on:
-      - 'Verify tag matches Cargo.toml'
+      - bump
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
@@ -74,6 +88,45 @@ steps:
         echo -e "All binaries processed in $outdir/"
         ls -la "$outdir/"
 
+  'Push bump and tag':
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    when:
+      event: tag
+    depends_on:
+      - build
+    environment:
+      SSH_KEY:
+        from_secret: ricochet-bot-ssh-key
+    commands:
+      - apk add --no-cache -q git openssh-client
+      - |
+        set -euxo pipefail
+        mkdir -p ~/.ssh
+        echo "$SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+        git config user.name "ricochet-bot"
+        git config user.email "droid@ricochet.rs"
+        git remote add origin-push git@github.com:ricochet-rs/cli.git
+        git fetch origin-push main
+
+        # If 'bump' didn't create a commit, nothing to push.
+        if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin-push/main)" ]; then
+          echo "==> No bump commit to push (Cargo.toml already at v${CI_COMMIT_TAG#v})"
+          exit 0
+        fi
+
+        # Rebase the bump commit onto latest main (handles a race where main
+        # advanced between the user's tag push and this step). Then push and
+        # force-update the tag to the rebased bump commit.
+        git rebase origin-push/main
+        git push origin-push HEAD:main
+        git tag -d "$CI_COMMIT_TAG"
+        git tag "$CI_COMMIT_TAG" HEAD
+        git push origin-push --force "$CI_COMMIT_TAG"
+        echo "==> Pushed bump commit to main and force-updated $CI_COMMIT_TAG"
+
   'Upload to S3':
     image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.3
     depends_on:
@@ -100,7 +153,7 @@ steps:
   changelog:
     image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.1.0
     depends_on:
-      - build
+      - 'Push bump and tag'
     commands:
       - apk add --no-cache -q sed
       - git sv current-version
@@ -128,7 +181,7 @@ steps:
   'Trigger homebrew-tap update':
     image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on:
-      - changelog
+      - 'Push bump and tag'
     environment:
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
