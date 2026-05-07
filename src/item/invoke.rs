@@ -14,6 +14,7 @@ pub async fn invoke(
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
+    client.preflight_key_check().await?;
 
     match client.invoke(id, None).await {
         Ok(result) => {

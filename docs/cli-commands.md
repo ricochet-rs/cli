@@ -10,7 +10,6 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet deploy`↴](#ricochet-deploy)
 * [`ricochet list`↴](#ricochet-list)
 * [`ricochet delete`↴](#ricochet-delete)
-* [`ricochet invoke`↴](#ricochet-invoke)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
@@ -20,9 +19,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet app instance stop`↴](#ricochet-app-instance-stop)
 * [`ricochet task`↴](#ricochet-task)
 * [`ricochet task toml`↴](#ricochet-task-toml)
-* [`ricochet task instance`↴](#ricochet-task-instance)
-* [`ricochet task instance list`↴](#ricochet-task-instance-list)
-* [`ricochet task instance stop`↴](#ricochet-task-instance-stop)
+* [`ricochet task invoke`↴](#ricochet-task-invoke)
+* [`ricochet task schedule`↴](#ricochet-task-schedule)
 * [`ricochet servers`↴](#ricochet-servers)
 * [`ricochet servers list`↴](#ricochet-servers-list)
 * [`ricochet servers add`↴](#ricochet-servers-add)
@@ -44,7 +42,6 @@ Ricochet CLI
 * `deploy` — Deploy content to a Ricochet server
 * `list` — List all content items
 * `delete` — Delete a content item
-* `invoke` — Invoke a task
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
 * `app` — Manage deployed app items
@@ -132,18 +129,6 @@ Delete a content item
 ###### **Options:**
 
 * `-f`, `--force` — Skip confirmation
-
-
-
-## `ricochet invoke`
-
-Invoke a task
-
-**Usage:** `ricochet invoke <ID>`
-
-###### **Arguments:**
-
-* `<ID>` — Content item ID (ULID)
 
 
 
@@ -253,14 +238,15 @@ Manage deployed task items
 
 ###### **Subcommands:**
 
-* `toml` — Fetch the remote _ricochet.toml for an item
-* `instance` — Manage running instances
+* `toml` — Fetch the remote _ricochet.toml for a task
+* `invoke` — Invoke a task
+* `schedule` — Set or update the schedule for a task
 
 
 
 ## `ricochet task toml`
 
-Fetch the remote _ricochet.toml for an item
+Fetch the remote _ricochet.toml for a task
 
 **Usage:** `ricochet task toml [OPTIONS] [ID]`
 
@@ -274,24 +260,11 @@ Fetch the remote _ricochet.toml for an item
 
 
 
-## `ricochet task instance`
+## `ricochet task invoke`
 
-Manage running instances
+Invoke a task
 
-**Usage:** `ricochet task instance <COMMAND>`
-
-###### **Subcommands:**
-
-* `list` — List running instances
-* `stop` — Stop a running instance
-
-
-
-## `ricochet task instance list`
-
-List running instances
-
-**Usage:** `ricochet task instance list <ID>`
+**Usage:** `ricochet task invoke <ID>`
 
 ###### **Arguments:**
 
@@ -299,16 +272,16 @@ List running instances
 
 
 
-## `ricochet task instance stop`
+## `ricochet task schedule`
 
-Stop a running instance
+Set or update the schedule for a task
 
-**Usage:** `ricochet task instance stop <ID> <PID>`
+**Usage:** `ricochet task schedule <ID> <SCHEDULE>`
 
 ###### **Arguments:**
 
 * `<ID>` — Content item ID (ULID)
-* `<PID>` — Instance ID to stop
+* `<SCHEDULE>` — Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
 
 
 
