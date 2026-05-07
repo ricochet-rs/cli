@@ -15,12 +15,14 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
-* [`ricochet app instances`↴](#ricochet-app-instances)
-* [`ricochet app stop-instance`↴](#ricochet-app-stop-instance)
+* [`ricochet app instance`↴](#ricochet-app-instance)
+* [`ricochet app instance list`↴](#ricochet-app-instance-list)
+* [`ricochet app instance stop`↴](#ricochet-app-instance-stop)
 * [`ricochet task`↴](#ricochet-task)
 * [`ricochet task toml`↴](#ricochet-task-toml)
-* [`ricochet task instances`↴](#ricochet-task-instances)
-* [`ricochet task stop-instance`↴](#ricochet-task-stop-instance)
+* [`ricochet task instance`↴](#ricochet-task-instance)
+* [`ricochet task instance list`↴](#ricochet-task-instance-list)
+* [`ricochet task instance stop`↴](#ricochet-task-instance-stop)
 * [`ricochet servers`↴](#ricochet-servers)
 * [`ricochet servers list`↴](#ricochet-servers-list)
 * [`ricochet servers add`↴](#ricochet-servers-add)
@@ -185,8 +187,7 @@ Manage deployed app items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
-* `instances` — List running instances of an app
-* `stop-instance` — Stop a running instance of an app
+* `instance` — Manage running instances
 
 
 
@@ -206,11 +207,24 @@ Fetch the remote _ricochet.toml for an item
 
 
 
-## `ricochet app instances`
+## `ricochet app instance`
 
-List running instances of an app
+Manage running instances
 
-**Usage:** `ricochet app instances <ID>`
+**Usage:** `ricochet app instance <COMMAND>`
+
+###### **Subcommands:**
+
+* `list` — List running instances
+* `stop` — Stop a running instance
+
+
+
+## `ricochet app instance list`
+
+List running instances
+
+**Usage:** `ricochet app instance list <ID>`
 
 ###### **Arguments:**
 
@@ -218,11 +232,11 @@ List running instances of an app
 
 
 
-## `ricochet app stop-instance`
+## `ricochet app instance stop`
 
-Stop a running instance of an app
+Stop a running instance
 
-**Usage:** `ricochet app stop-instance <ID> <PID>`
+**Usage:** `ricochet app instance stop <ID> <PID>`
 
 ###### **Arguments:**
 
@@ -240,8 +254,7 @@ Manage deployed task items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
-* `instances` — List running instances of an app
-* `stop-instance` — Stop a running instance of an app
+* `instance` — Manage running instances
 
 
 
@@ -261,11 +274,24 @@ Fetch the remote _ricochet.toml for an item
 
 
 
-## `ricochet task instances`
+## `ricochet task instance`
 
-List running instances of an app
+Manage running instances
 
-**Usage:** `ricochet task instances <ID>`
+**Usage:** `ricochet task instance <COMMAND>`
+
+###### **Subcommands:**
+
+* `list` — List running instances
+* `stop` — Stop a running instance
+
+
+
+## `ricochet task instance list`
+
+List running instances
+
+**Usage:** `ricochet task instance list <ID>`
 
 ###### **Arguments:**
 
@@ -273,11 +299,11 @@ List running instances of an app
 
 
 
-## `ricochet task stop-instance`
+## `ricochet task instance stop`
 
-Stop a running instance of an app
+Stop a running instance
 
-**Usage:** `ricochet task stop-instance <ID> <PID>`
+**Usage:** `ricochet task instance stop <ID> <PID>`
 
 ###### **Arguments:**
 

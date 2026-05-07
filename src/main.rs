@@ -154,13 +154,22 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
-    /// List running instances of an app
-    Instances {
+    /// Manage running instances
+    Instance {
+        #[command(subcommand)]
+        command: InstanceCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum InstanceCommands {
+    /// List running instances
+    List {
         /// Content item ID (ULID)
         id: String,
     },
-    /// Stop a running instance of an app
-    StopInstance {
+    /// Stop a running instance
+    Stop {
         /// Content item ID (ULID)
         id: String,
         /// Instance ID to stop
@@ -279,13 +288,16 @@ async fn main() -> Result<()> {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
             }
-            ItemCommands::Instances { id } => {
-                app::instances::list_instances(&config, cli.server.as_deref(), &id, cli.format)
-                    .await?;
-            }
-            ItemCommands::StopInstance { id, pid } => {
-                app::instances::stop_instance(&config, cli.server.as_deref(), &id, &pid).await?;
-            }
+            ItemCommands::Instance { command } => match command {
+                InstanceCommands::List { id } => {
+                    app::instances::list_instances(&config, cli.server.as_deref(), &id, cli.format)
+                        .await?;
+                }
+                InstanceCommands::Stop { id, pid } => {
+                    app::instances::stop_instance(&config, cli.server.as_deref(), &id, &pid)
+                        .await?;
+                }
+            },
         },
         Some(Commands::Servers { command }) => match command {
             ServersCommands::List => {
