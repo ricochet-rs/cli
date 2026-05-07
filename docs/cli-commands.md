@@ -96,6 +96,7 @@ Deploy content to a Ricochet server
 
 * `-n`, `--name <NAME>` — Name for the deployment
 * `-d`, `--description <DESCRIPTION>` — Description for the deployment
+* `--new` — Force a new deployment, ignoring any existing content ID in _ricochet.toml
 
 
 
