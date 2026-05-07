@@ -12,6 +12,7 @@ pub async fn deploy(
     path: PathBuf,
     _name: Option<String>,
     _description: Option<String>,
+    new: bool,
     debug: bool,
 ) -> Result<()> {
     if !path.exists() {
@@ -144,6 +145,7 @@ pub async fn deploy(
             &toml_path,
             &extra_root_files,
             &pb,
+            new,
             debug,
         )
         .await

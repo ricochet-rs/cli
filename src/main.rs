@@ -66,6 +66,9 @@ enum Commands {
         /// Description for the deployment
         #[arg(short = 'd', long)]
         description: Option<String>,
+        /// Force a new deployment, ignoring any existing content ID in _ricochet.toml
+        #[arg(long)]
+        new: bool,
     },
     /// List all content items
     List {
@@ -245,6 +248,7 @@ async fn main() -> Result<()> {
             path,
             name,
             description,
+            new,
         }) => {
             commands::deploy::deploy(
                 &config,
@@ -252,6 +256,7 @@ async fn main() -> Result<()> {
                 path,
                 name,
                 description,
+                new,
                 cli.debug,
             )
             .await?;

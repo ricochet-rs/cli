@@ -166,6 +166,7 @@ impl RicochetClient {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn deploy(
         &self,
         path: &Path,
@@ -173,6 +174,7 @@ impl RicochetClient {
         toml_path: &Path,
         extra_root_files: &[(std::path::PathBuf, String)],
         pb: &indicatif::ProgressBar,
+        new: bool,
         debug: bool,
     ) -> Result<serde_json::Value> {
         let mut url = self.base_url.clone();
@@ -222,7 +224,9 @@ impl RicochetClient {
                 .mime_str("application/x-tar")?,
         );
 
-        if let Some(id) = content_id {
+        if let Some(id) = content_id
+            && !new
+        {
             // Updating existing content
             form = form.text("id", id);
         } else {

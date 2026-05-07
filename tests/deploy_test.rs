@@ -135,6 +135,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -192,6 +193,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -227,6 +229,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -273,6 +276,7 @@ key = "value"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -311,6 +315,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -369,6 +374,7 @@ key = "value"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -425,6 +431,7 @@ key = "value"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -475,6 +482,7 @@ key = "value"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -524,6 +532,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -576,6 +585,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -643,6 +653,7 @@ packages = "uv.lock"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -689,6 +700,7 @@ packages = "renv.lock"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -720,6 +732,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -753,6 +766,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -800,6 +814,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -858,6 +873,7 @@ packages = "renv.lock"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -902,6 +918,7 @@ packages = "renv.lock"
             None,
             None,
             false,
+            false,
         )
         .await;
 
@@ -926,6 +943,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            false,
             false,
         )
         .await;
