@@ -14,10 +14,16 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
+* [`ricochet app deployment`↴](#ricochet-app-deployment)
+* [`ricochet app deployment list`↴](#ricochet-app-deployment-list)
+* [`ricochet app deployment get`↴](#ricochet-app-deployment-get)
 * [`ricochet task`↴](#ricochet-task)
 * [`ricochet task toml`↴](#ricochet-task-toml)
 * [`ricochet task invoke`↴](#ricochet-task-invoke)
 * [`ricochet task schedule`↴](#ricochet-task-schedule)
+* [`ricochet task deployment`↴](#ricochet-task-deployment)
+* [`ricochet task deployment list`↴](#ricochet-task-deployment-list)
+* [`ricochet task deployment get`↴](#ricochet-task-deployment-get)
 * [`ricochet servers`↴](#ricochet-servers)
 * [`ricochet servers list`↴](#ricochet-servers-list)
 * [`ricochet servers add`↴](#ricochet-servers-add)
@@ -169,6 +175,7 @@ Manage deployed app items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
+* `deployment` — Manage deployments for an app
 
 
 
@@ -188,6 +195,47 @@ Fetch the remote _ricochet.toml for an item
 
 
 
+## `ricochet app deployment`
+
+Manage deployments for an app
+
+**Usage:** `ricochet app deployment <COMMAND>`
+
+###### **Subcommands:**
+
+* `list` — List deployments for a content item
+* `get` — Get a specific deployment
+
+
+
+## `ricochet app deployment list`
+
+List deployments for a content item
+
+**Usage:** `ricochet app deployment list [OPTIONS] <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+
+###### **Options:**
+
+* `--fields <FIELDS>` — Fields to display: 'all' or comma-separated names (id, status, deployed_at, deployed_by, content_id, requested_ver, matched_ver, git_hash)
+
+
+
+## `ricochet app deployment get`
+
+Get a specific deployment
+
+**Usage:** `ricochet app deployment get <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Deployment ID (ULID)
+
+
+
 ## `ricochet task`
 
 Manage deployed task items
@@ -199,6 +247,7 @@ Manage deployed task items
 * `toml` — Fetch the remote _ricochet.toml for a task
 * `invoke` — Invoke a task
 * `schedule` — Set or update the schedule for a task
+* `deployment` — Manage deployments for a task
 
 
 
@@ -240,6 +289,47 @@ Set or update the schedule for a task
 
 * `<ID>` — Content item ID (ULID)
 * `<SCHEDULE>` — Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
+
+
+
+## `ricochet task deployment`
+
+Manage deployments for a task
+
+**Usage:** `ricochet task deployment <COMMAND>`
+
+###### **Subcommands:**
+
+* `list` — List deployments for a content item
+* `get` — Get a specific deployment
+
+
+
+## `ricochet task deployment list`
+
+List deployments for a content item
+
+**Usage:** `ricochet task deployment list [OPTIONS] <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+
+###### **Options:**
+
+* `--fields <FIELDS>` — Fields to display: 'all' or comma-separated names (id, status, deployed_at, deployed_by, content_id, requested_ver, matched_ver, git_hash)
+
+
+
+## `ricochet task deployment get`
+
+Get a specific deployment
+
+**Usage:** `ricochet task deployment get <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Deployment ID (ULID)
 
 
 

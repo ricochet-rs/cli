@@ -29,6 +29,7 @@ steps:
 
   test:
     image: reg.ricochet.rs/docker.io/library/rust:1.95
+    depends_on: cache
     environment:
       SQLX_OFFLINE: true
       GITHUB_TOKEN:
