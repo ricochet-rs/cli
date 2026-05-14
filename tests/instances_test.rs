@@ -159,6 +159,112 @@ mod instances_tests {
     }
 
     #[tokio::test]
+    async fn test_stop_all_instances() {
+        let mut server = Server::new_async().await;
+        let content_id = "01JSZAXZ3TSTAYXP56ARDVFJCJ";
+        let instance_a = "01KPXMKQ8N9XCBQ06ZV33JFXAA";
+        let instance_b = "01KPXMKQ8N9XCBQ06ZV33JFXBB";
+
+        let _check = server
+            .mock("GET", "/api/v0/check_key")
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .create();
+
+        let _list = server
+            .mock(
+                "GET",
+                format!("/api/v0/content/{content_id}/instances").as_str(),
+            )
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .with_body(
+                json!([
+                    {"instance_id": instance_a, "connections": 2, "created_at": "2026-04-23T17:01:14Z", "last_connection": 1776963683145i64},
+                    {"instance_id": instance_b, "connections": 1, "created_at": "2026-04-23T17:02:00Z", "last_connection": 1776963683145i64}
+                ])
+                .to_string(),
+            )
+            .create();
+
+        let _stop_a = server
+            .mock(
+                "POST",
+                format!("/api/v0/content/{content_id}/instances/{instance_a}/stop").as_str(),
+            )
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .with_body(json!({"success": true}).to_string())
+            .create();
+
+        let _stop_b = server
+            .mock(
+                "POST",
+                format!("/api/v0/content/{content_id}/instances/{instance_b}/stop").as_str(),
+            )
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .with_body(json!({"success": true}).to_string())
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::app::instances::stop_instance(
+            &config,
+            None,
+            Some(content_id),
+            None,
+            None,
+        )
+        .await;
+
+        assert!(result.is_ok());
+        _stop_a.assert();
+        _stop_b.assert();
+    }
+
+    #[tokio::test]
+    async fn test_stop_all_instances_empty() {
+        let mut server = Server::new_async().await;
+        let content_id = "01JSZAXZ3TSTAYXP56ARDVFJCJ";
+
+        let _check = server
+            .mock("GET", "/api/v0/check_key")
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .create();
+
+        let _list = server
+            .mock(
+                "GET",
+                format!("/api/v0/content/{content_id}/instances").as_str(),
+            )
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .with_body(json!([]).to_string())
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::app::instances::stop_instance(
+            &config,
+            None,
+            Some(content_id),
+            None,
+            None,
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn test_list_instances_response_serializes_to_json() {
         let mut server = Server::new_async().await;
         let content_id = "01JSZAXZ3TSTAYXP56ARDVFJCJ";

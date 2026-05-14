@@ -14,9 +14,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
-* [`ricochet app instance`↴](#ricochet-app-instance)
-* [`ricochet app instance list`↴](#ricochet-app-instance-list)
-* [`ricochet app instance stop`↴](#ricochet-app-instance-stop)
+* [`ricochet app list`↴](#ricochet-app-list)
+* [`ricochet app stop`↴](#ricochet-app-stop)
 * [`ricochet task`↴](#ricochet-task)
 * [`ricochet task toml`↴](#ricochet-task-toml)
 * [`ricochet task invoke`↴](#ricochet-task-invoke)
@@ -172,7 +171,8 @@ Manage deployed app items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
-* `instance` — Manage running instances
+* `list` — List running instances
+* `stop` — Stop a running instance, or all instances if no instance ID is given
 
 
 
@@ -192,41 +192,36 @@ Fetch the remote _ricochet.toml for an item
 
 
 
-## `ricochet app instance`
-
-Manage running instances
-
-**Usage:** `ricochet app instance <COMMAND>`
-
-###### **Subcommands:**
-
-* `list` — List running instances
-* `stop` — Stop a running instance
-
-
-
-## `ricochet app instance list`
+## `ricochet app list`
 
 List running instances
 
-**Usage:** `ricochet app instance list <ID>`
+**Usage:** `ricochet app list [OPTIONS] [ID]`
 
 ###### **Arguments:**
 
-* `<ID>` — Content item ID (ULID)
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
 
 
 
-## `ricochet app instance stop`
+## `ricochet app stop`
 
-Stop a running instance
+Stop a running instance, or all instances if no instance ID is given
 
-**Usage:** `ricochet app instance stop <ID> <PID>`
+**Usage:** `ricochet app stop [OPTIONS] [ID] [PID]`
 
 ###### **Arguments:**
 
-* `<ID>` — Content item ID (ULID)
-* `<PID>` — Instance ID to stop
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `<PID>` — Instance ID to stop. If not provided, stops all instances
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
 
 
 

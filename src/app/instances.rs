@@ -2,20 +2,50 @@ use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use jiff::Timestamp;
+use ricochet_core::content::ContentItem;
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
+
+fn resolve_id(id: Option<&str>, path: Option<&Path>) -> Result<String> {
+    match id {
+        Some(id) => Ok(id.to_string()),
+        None => {
+            let toml_path = path
+                .map(|p| p.to_path_buf())
+                .unwrap_or(PathBuf::from("_ricochet.toml"));
+            if !toml_path.exists() {
+                anyhow::bail!(
+                    "{} Provide either an item ID or a path to a `_ricochet.toml` file.",
+                    "⚠".yellow()
+                );
+            }
+            let toml = read_to_string(toml_path)?;
+            let item = ContentItem::from_toml(&toml)?;
+            let Some(id) = item.content.id else {
+                anyhow::bail!("Provided _ricochet.toml does not have an item ID")
+            };
+            Ok(id)
+        }
+    }
+}
 
 pub async fn list_instances(
     config: &Config,
     server_ref: Option<&str>,
-    id: &str,
+    id: Option<&str>,
+    path: Option<&Path>,
     format: OutputFormat,
 ) -> Result<()> {
+    let id = resolve_id(id, path)?;
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
     client.preflight_key_check().await?;
 
-    let mut instances = client.list_instances(id).await?;
+    let mut instances = client.list_instances(&id).await?;
 
     if let Some(arr) = instances.as_array_mut() {
         for instance in arr.iter_mut() {
@@ -106,20 +136,45 @@ pub async fn list_instances(
 pub async fn stop_instance(
     config: &Config,
     server_ref: Option<&str>,
-    id: &str,
-    pid: &str,
+    id: Option<&str>,
+    pid: Option<&str>,
+    path: Option<&Path>,
 ) -> Result<()> {
+    let id = resolve_id(id, path)?;
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
     client.preflight_key_check().await?;
 
-    client.stop_instance(id, pid).await?;
-
-    println!(
-        "{} Instance {} stopped",
-        "✓".green().bold(),
-        pid.bright_cyan()
-    );
+    match pid {
+        Some(pid) => {
+            client.stop_instance(&id, pid).await?;
+            println!(
+                "{} Instance {} stopped",
+                "✓".green().bold(),
+                pid.bright_cyan()
+            );
+        }
+        None => {
+            let instances = client.list_instances(&id).await?;
+            let arr = instances
+                .as_array()
+                .ok_or_else(|| anyhow::anyhow!("Unexpected response format"))?;
+            if arr.is_empty() {
+                println!("{}", "No instances to stop".yellow());
+                return Ok(());
+            }
+            for instance in arr.clone() {
+                if let Some(iid) = instance.get("instance_id").and_then(|v| v.as_str()) {
+                    client.stop_instance(&id, iid).await?;
+                    println!(
+                        "{} Instance {} stopped",
+                        "✓".green().bold(),
+                        iid.bright_cyan()
+                    );
+                }
+            }
+        }
+    }
 
     Ok(())
 }

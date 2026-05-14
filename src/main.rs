@@ -155,26 +155,23 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
-    /// Manage running instances
-    Instance {
-        #[command(subcommand)]
-        command: InstanceCommands,
-    },
-}
-
-#[derive(Subcommand)]
-enum InstanceCommands {
     /// List running instances
     List {
-        /// Content item ID (ULID)
-        id: String,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
     },
-    /// Stop a running instance
+    /// Stop a running instance, or all instances if no instance ID is given
     Stop {
-        /// Content item ID (ULID)
-        id: String,
-        /// Instance ID to stop
-        pid: String,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Instance ID to stop. If not provided, stops all instances
+        pid: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
     },
 }
 
@@ -317,16 +314,26 @@ async fn main() -> Result<()> {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
             }
-            ItemCommands::Instance { command } => match command {
-                InstanceCommands::List { id } => {
-                    app::instances::list_instances(&config, cli.server.as_deref(), &id, cli.format)
-                        .await?;
-                }
-                InstanceCommands::Stop { id, pid } => {
-                    app::instances::stop_instance(&config, cli.server.as_deref(), &id, &pid)
-                        .await?;
-                }
-            },
+            ItemCommands::List { id, path } => {
+                app::instances::list_instances(
+                    &config,
+                    cli.server.as_deref(),
+                    id.as_deref(),
+                    path.as_deref(),
+                    cli.format,
+                )
+                .await?;
+            }
+            ItemCommands::Stop { id, pid, path } => {
+                app::instances::stop_instance(
+                    &config,
+                    cli.server.as_deref(),
+                    id.as_deref(),
+                    pid.as_deref(),
+                    path.as_deref(),
+                )
+                .await?;
+            }
         },
         Some(Commands::Task { command }) => match command {
             TaskCommands::Toml { id, path } => {
