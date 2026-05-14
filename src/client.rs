@@ -336,6 +336,20 @@ impl RicochetClient {
         Ok(())
     }
 
+    pub async fn list_instances(&self, id: &str) -> Result<serde_json::Value> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/instances", id));
+
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        Self::handle_response(response).await
+    }
+
     pub async fn stop_instance(&self, id: &str, pid: &str) -> Result<()> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/instances/{}/stop", id, pid));

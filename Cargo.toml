@@ -38,6 +38,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "stream"
 ] }
+jiff = { version = "0.2", features = ["serde"] }
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", default-features = false }
 self-replace = "1"
 serde = { version = "1.0", features = ["derive"] }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ricochet_cli::{OutputFormat, commands, config::Config, item, update};
+use ricochet_cli::{OutputFormat, app, commands, config::Config, item, update};
 
 // App specific methods go in `src/app/`
 // Task specific methods go in `src/task`
@@ -151,6 +151,24 @@ enum ItemCommands {
     Toml {
         /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
         id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
+    /// List running instances
+    List {
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
+    /// Stop a running instance, or all instances if no instance ID is given
+    Stop {
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Instance ID to stop. If not provided, stops all instances
+        pid: Option<String>,
         /// Path to _ricochet.toml file
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
@@ -323,6 +341,26 @@ async fn main() -> Result<()> {
         Some(Commands::App { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
+            }
+            ItemCommands::List { id, path } => {
+                app::instances::list_instances(
+                    &config,
+                    cli.server.as_deref(),
+                    id.as_deref(),
+                    path.as_deref(),
+                    cli.format,
+                )
+                .await?;
+            }
+            ItemCommands::Stop { id, pid, path } => {
+                app::instances::stop_instance(
+                    &config,
+                    cli.server.as_deref(),
+                    id.as_deref(),
+                    pid.as_deref(),
+                    path.as_deref(),
+                )
+                .await?;
             }
             ItemCommands::Deployment { command } => match command {
                 DeploymentCommands::List { id, fields } => {

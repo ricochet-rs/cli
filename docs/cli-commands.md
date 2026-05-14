@@ -14,6 +14,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
+* [`ricochet app list`↴](#ricochet-app-list)
+* [`ricochet app stop`↴](#ricochet-app-stop)
 * [`ricochet app deployment`↴](#ricochet-app-deployment)
 * [`ricochet app deployment list`↴](#ricochet-app-deployment-list)
 * [`ricochet app deployment get`↴](#ricochet-app-deployment-get)
@@ -175,6 +177,8 @@ Manage deployed app items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
+* `list` — List running instances
+* `stop` — Stop a running instance, or all instances if no instance ID is given
 * `deployment` — Manage deployments for an app
 
 
@@ -188,6 +192,39 @@ Fetch the remote _ricochet.toml for an item
 ###### **Arguments:**
 
 * `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet app list`
+
+List running instances
+
+**Usage:** `ricochet app list [OPTIONS] [ID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet app stop`
+
+Stop a running instance, or all instances if no instance ID is given
+
+**Usage:** `ricochet app stop [OPTIONS] [ID] [PID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `<PID>` — Instance ID to stop. If not provided, stops all instances
 
 ###### **Options:**
 
