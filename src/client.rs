@@ -419,6 +419,36 @@ impl RicochetClient {
         Ok(())
     }
 
+    pub async fn list_deployments(
+        &self,
+        content_ulid: &str,
+    ) -> Result<Vec<crate::item::deployment::DeploymentRow>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/deployments", content_ulid));
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    pub async fn get_deployment(
+        &self,
+        deployment_ulid: &str,
+    ) -> Result<crate::item::deployment::DeploymentRow> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/deployments/{}", deployment_ulid));
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
     pub async fn get_ricochet_toml(&self, id: &str) -> Result<String> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/toml", id));

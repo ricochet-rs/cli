@@ -173,6 +173,11 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
+    /// Manage deployments for an app
+    Deployment {
+        #[command(subcommand)]
+        command: DeploymentCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -196,6 +201,29 @@ enum TaskCommands {
         id: String,
         /// Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
         schedule: String,
+    },
+    /// Manage deployments for a task
+    Deployment {
+        #[command(subcommand)]
+        command: DeploymentCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum DeploymentCommands {
+    /// List deployments for a content item
+    List {
+        /// Content item ID (ULID)
+        id: String,
+        /// Fields to display: 'all' or comma-separated names
+        /// (id, status, deployed_at, deployed_by, content_id, requested_ver, matched_ver, git_hash)
+        #[arg(long, value_delimiter = ',')]
+        fields: Option<Vec<String>>,
+    },
+    /// Get a specific deployment
+    Get {
+        /// Deployment ID (ULID)
+        id: String,
     },
 }
 
@@ -334,6 +362,27 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             }
+            ItemCommands::Deployment { command } => match command {
+                DeploymentCommands::List { id, fields } => {
+                    item::deployment::list_deployments(
+                        &config,
+                        cli.server.as_deref(),
+                        &id,
+                        fields,
+                        cli.format,
+                    )
+                    .await?;
+                }
+                DeploymentCommands::Get { id } => {
+                    item::deployment::get_deployment(
+                        &config,
+                        cli.server.as_deref(),
+                        &id,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
         },
         Some(Commands::Task { command }) => match command {
             TaskCommands::Toml { id, path } => {
@@ -352,6 +401,27 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             }
+            TaskCommands::Deployment { command } => match command {
+                DeploymentCommands::List { id, fields } => {
+                    item::deployment::list_deployments(
+                        &config,
+                        cli.server.as_deref(),
+                        &id,
+                        fields,
+                        cli.format,
+                    )
+                    .await?;
+                }
+                DeploymentCommands::Get { id } => {
+                    item::deployment::get_deployment(
+                        &config,
+                        cli.server.as_deref(),
+                        &id,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
         },
         Some(Commands::Servers { command }) => match command {
             ServersCommands::List => {
