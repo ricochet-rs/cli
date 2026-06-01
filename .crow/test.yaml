@@ -28,7 +28,7 @@ steps:
           key: secret
 
   test:
-    image: reg.ricochet.rs/docker.io/library/rust:1.95
+    image: reg.ricochet.rs/docker.io/library/rust:1.96
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
