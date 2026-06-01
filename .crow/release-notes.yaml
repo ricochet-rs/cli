@@ -7,7 +7,7 @@
 
 clone:
   git:
-    image: codefloe.com/crow-plugins/clone:1.0.3
+    image: codefloe.com/crow-plugins/clone:1.0.4
     settings:
       tags: true
 

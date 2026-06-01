@@ -134,7 +134,7 @@ steps:
         echo "==> Pushed bump commit to main and force-updated $CI_COMMIT_TAG"
 
   'Upload to S3':
-    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.3
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.4
     depends_on:
       - build
     settings:
