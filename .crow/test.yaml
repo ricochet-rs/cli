@@ -12,20 +12,20 @@ steps:
   cache:
     image: codefloe.com/crow-plugins/sccache:0.2.4
     settings:
-      s3-endpoint: https://hel1.your-objectstorage.com
+      s3-endpoint: https://s3.eu-central-003.backblazeb2.com
       s3-bucket: ricochet-sccache
-      s3-region: hel1
+      s3-region: eu-central-003
       s3-key-prefix: ${CI_REPO_NAME}
       s3-access-key:
         from_secret:
           integration: 1
-          path: hetzner/s3/infrastructure
-          key: id
+          path: backblaze/tokens/cicd
+          key: keyID
       s3-secret-key:
         from_secret:
           integration: 1
-          path: hetzner/s3/infrastructure
-          key: secret
+          path: backblaze/tokens/cicd
+          key: applicationKey
 
   test:
     image: reg.ricochet.rs/docker.io/library/rust:1.96
