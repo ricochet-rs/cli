@@ -14,7 +14,7 @@ steps:
     depends_on: []
 
   cache:
-    image: codefloe.com/crow-plugins/sccache:0.2.4
+    image: codefloe.com/crow-plugins/sccache:0.2.5
     settings:
       s3-endpoint: https://s3.eu-central-003.backblazeb2.com
       s3-bucket: ricochet-sccache
