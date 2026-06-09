@@ -485,7 +485,7 @@ pub fn init_rico_toml(
 
     let res = ContentItem {
         content: Content {
-            id: None,
+            id: Some(ulid::Ulid::new().to_string()),
             name,
             slug: None,
             entrypoint,
