@@ -10,7 +10,7 @@ labels:
 
 steps:
   editor-config:
-    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.6.1
+    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.7.0
     depends_on: []
 
   cache:
@@ -32,7 +32,7 @@ steps:
           key: applicationKey
 
   rust-fmt:
-    image: reg.ricochet.rs/docker.io/library/rust:1.95
+    image: reg.ricochet.rs/docker.io/library/rust:1.96
     depends_on: cache
     commands:
       - export PATH=".sccache-cache:$PATH"
@@ -42,7 +42,7 @@ steps:
       - sccache --show-stats
 
   rust-lint:
-    image: reg.ricochet.rs/docker.io/library/rust:1.95
+    image: reg.ricochet.rs/docker.io/library/rust:1.96
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
@@ -64,7 +64,7 @@ steps:
       - sccache --show-stats
 
   check-docs:
-    image: reg.ricochet.rs/docker.io/library/rust:1.95
+    image: reg.ricochet.rs/docker.io/library/rust:1.96
     depends_on: cache
     environment:
       GITHUB_TOKEN:
@@ -94,6 +94,6 @@ steps:
     when:
       - event: pull_request
       - event: pull_request_edited
-    image: reg.ricochet.rs/docker.io/commitlint/commitlint:21.0.1
+    image: reg.ricochet.rs/docker.io/commitlint/commitlint:21.0.2
     commands:
       - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
