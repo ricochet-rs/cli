@@ -177,8 +177,8 @@ pub fn compute_patch(
     b.field(
         "content",
         "content_type",
-        serde_json::to_value(&remote.content.content_type)?,
-        serde_json::to_value(&local.content.content_type)?,
+        serde_json::to_value(remote.content.content_type)?,
+        serde_json::to_value(local.content.content_type)?,
     );
 
     // content — optional fields only when set locally
