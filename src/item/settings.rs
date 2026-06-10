@@ -1,12 +1,72 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use colored::Colorize;
 use ricochet_core::content::ContentItem;
 use serde_json::{Map, Value, json};
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
+
+use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldChange {
     pub field: String,
     pub from: String,
     pub to: String,
+}
+
+/// Load the local `_ricochet.toml`, returning its content ID and parsed item.
+fn load_local(path: Option<&Path>) -> Result<(String, ContentItem)> {
+    let toml_path = path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("_ricochet.toml"));
+    if !toml_path.exists() {
+        anyhow::bail!(
+            "{} No `_ricochet.toml` found at {}. Provide one with --path.",
+            "⚠".yellow(),
+            toml_path.display()
+        );
+    }
+    let toml = read_to_string(&toml_path)?;
+    let item = ContentItem::from_toml(&toml).context("parsing local _ricochet.toml")?;
+    let Some(id) = item.content.id.clone() else {
+        anyhow::bail!("Local _ricochet.toml has no item ID. Deploy the item first.");
+    };
+    Ok((id, item))
+}
+
+/// Print the change list as a human-readable diff (remote → local).
+fn print_changes(id: &str, name: &str, changes: &[FieldChange]) {
+    println!(
+        "{} Local settings differ from {} ({})",
+        "⚠".yellow().bold(),
+        id.bright_cyan(),
+        name
+    );
+    println!();
+    let width = changes.iter().map(|c| c.field.len()).max().unwrap_or(0);
+    for c in changes {
+        println!(
+            "  {:<width$}  {} {} {}",
+            c.field,
+            c.from.dimmed(),
+            "→".dimmed(),
+            c.to,
+            width = width
+        );
+    }
+}
+
+/// Fetch the remote item and diff it against the local one.
+async fn diff_against_remote(
+    client: &RicochetClient,
+    id: &str,
+    local: &ContentItem,
+) -> Result<(Vec<FieldChange>, Value)> {
+    let remote_toml = client.get_ricochet_toml(id).await?;
+    let remote = ContentItem::from_toml(&remote_toml).context("parsing remote _ricochet.toml")?;
+    compute_patch(&remote, local)
 }
 
 fn opt_str(o: &Option<String>) -> Value {
@@ -295,6 +355,88 @@ pub fn compute_patch(
     }
 
     Ok(b.finish())
+}
+
+/// Show the diff between the local `_ricochet.toml` and the deployed item.
+pub async fn preview(
+    config: &Config,
+    server_ref: Option<&str>,
+    path: Option<&Path>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (id, local) = load_local(path)?;
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+    client.preflight_key_check().await?;
+
+    let (changes, patch) = diff_against_remote(&client, &id, &local).await?;
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&patch)?),
+        OutputFormat::Yaml => println!("{}", serde_yaml::to_string(&patch)?),
+        OutputFormat::Table => {
+            if changes.is_empty() {
+                println!("{} Settings already up to date", "✓".green().bold());
+            } else {
+                print_changes(&id, &local.content.name, &changes);
+                println!();
+                println!(
+                    "Run {} to apply these changes.",
+                    "settings update".bright_cyan()
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Apply the local `_ricochet.toml` settings to the deployed item.
+pub async fn update(
+    config: &Config,
+    server_ref: Option<&str>,
+    path: Option<&Path>,
+    force: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    let (id, local) = load_local(path)?;
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+    client.preflight_key_check().await?;
+
+    let (changes, patch) = diff_against_remote(&client, &id, &local).await?;
+
+    if changes.is_empty() {
+        println!("{} Settings already up to date", "✓".green().bold());
+        return Ok(());
+    }
+
+    print_changes(&id, &local.content.name, &changes);
+    println!();
+
+    if !force && !utils::confirm("Apply these changes?")? {
+        println!("{}", "Update cancelled".yellow());
+        return Ok(());
+    }
+
+    client
+        .update_settings(&id, &patch)
+        .await
+        .context("sending settings update")?;
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&patch)?),
+        OutputFormat::Yaml => println!("{}", serde_yaml::to_string(&patch)?),
+        OutputFormat::Table => {
+            println!(
+                "{} Settings updated for {}",
+                "✓".green().bold(),
+                id.bright_cyan()
+            )
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
