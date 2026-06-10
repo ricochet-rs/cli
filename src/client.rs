@@ -225,18 +225,16 @@ impl RicochetClient {
         if let Some(id) = content_id {
             // Updating existing content
             form = form.text("id", id);
-        } else {
-            // Creating new content - include the config file
-            let toml_file = tokio::fs::File::open(toml_path).await?;
-            let toml_body =
-                reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
-            form = form.part(
-                "config",
-                reqwest::multipart::Part::stream(toml_body)
-                    .file_name("_ricochet.toml")
-                    .mime_str("application/toml")?,
-            );
         }
+        // always include the config file
+        let toml_file = tokio::fs::File::open(toml_path).await?;
+        let toml_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
+        form = form.part(
+            "config",
+            reqwest::multipart::Part::stream(toml_body)
+                .file_name("_ricochet.toml")
+                .mime_str("application/toml")?,
+        );
 
         let response = self
             .client
