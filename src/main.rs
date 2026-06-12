@@ -173,6 +173,15 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
+    /// Show the diff between the local _ricochet.toml and the deployed item.
+    /// Use the `update` subcommand to apply it.
+    Settings {
+        #[command(subcommand)]
+        command: Option<SettingsCommands>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
     /// Manage deployments for an app
     Deployment {
         #[command(subcommand)]
@@ -202,6 +211,15 @@ enum TaskCommands {
         /// Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
         schedule: String,
     },
+    /// Show the diff between the local _ricochet.toml and the deployed item.
+    /// Use the `update` subcommand to apply it.
+    Settings {
+        #[command(subcommand)]
+        command: Option<SettingsCommands>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
     /// Manage deployments for a task
     Deployment {
         #[command(subcommand)]
@@ -224,6 +242,19 @@ enum DeploymentCommands {
     Get {
         /// Deployment ID (ULID)
         id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum SettingsCommands {
+    /// Apply local _ricochet.toml settings to the server
+    Update {
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+        /// Skip the confirmation prompt
+        #[arg(short = 'f', long)]
+        force: bool,
     },
 }
 
@@ -362,6 +393,31 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             }
+            ItemCommands::Settings { command, path } => match command {
+                None => {
+                    item::settings::preview(
+                        &config,
+                        cli.server.as_deref(),
+                        path.as_deref(),
+                        cli.format,
+                    )
+                    .await?;
+                }
+                Some(SettingsCommands::Update {
+                    path: update_path,
+                    force,
+                }) => {
+                    let resolved = update_path.or(path);
+                    item::settings::update(
+                        &config,
+                        cli.server.as_deref(),
+                        resolved.as_deref(),
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
             ItemCommands::Deployment { command } => match command {
                 DeploymentCommands::List { id, fields } => {
                     item::deployment::list_deployments(
@@ -401,6 +457,31 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             }
+            TaskCommands::Settings { command, path } => match command {
+                None => {
+                    item::settings::preview(
+                        &config,
+                        cli.server.as_deref(),
+                        path.as_deref(),
+                        cli.format,
+                    )
+                    .await?;
+                }
+                Some(SettingsCommands::Update {
+                    path: update_path,
+                    force,
+                }) => {
+                    let resolved = update_path.or(path);
+                    item::settings::update(
+                        &config,
+                        cli.server.as_deref(),
+                        resolved.as_deref(),
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
             TaskCommands::Deployment { command } => match command {
                 DeploymentCommands::List { id, fields } => {
                     item::deployment::list_deployments(

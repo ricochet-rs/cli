@@ -392,17 +392,15 @@ impl RicochetClient {
         Ok(())
     }
 
-    pub async fn update_settings(&self, id: &str, settings: &str) -> Result<()> {
+    pub async fn update_settings(&self, id: &str, settings: &serde_json::Value) -> Result<()> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/settings", id));
-
-        let body: serde_json::Value = serde_json::from_str(settings)?;
 
         let response = self
             .client
             .patch(url)
             .header("Authorization", format!("Key {}", self.api_key))
-            .json(&body)
+            .json(settings)
             .send()
             .await?;
 
