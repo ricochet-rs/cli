@@ -133,6 +133,9 @@ enum Commands {
         /// Force reinstall even if already on the latest version
         #[arg(short = 'f', long)]
         force: bool,
+        /// Check for a newer version and report it without updating
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Manage the ricochet CLI itself
     #[command(name = "self")]
@@ -294,6 +297,9 @@ enum SelfCommands {
         /// Force reinstall even if already on the latest version
         #[arg(short = 'f', long)]
         force: bool,
+        /// Check for a newer version and report it without updating
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -518,16 +524,16 @@ async fn main() -> Result<()> {
                 commands::servers::set_default(&mut config, name)?;
             }
         },
-        Some(Commands::SelfUpdate { force }) => {
+        Some(Commands::SelfUpdate { force, dry_run }) => {
             eprintln!(
                 "{} `ricochet self-update` is deprecated. Use `ricochet self update` instead.",
                 "warning:".yellow().bold()
             );
-            commands::update::self_update(force).await?;
+            commands::update::self_update(force, dry_run).await?;
         }
         Some(Commands::Self_ { command }) => match command {
-            SelfCommands::Update { force } => {
-                commands::update::self_update(force).await?;
+            SelfCommands::Update { force, dry_run } => {
+                commands::update::self_update(force, dry_run).await?;
             }
         },
         Some(Commands::GenerateDocs) => {
