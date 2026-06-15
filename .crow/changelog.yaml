@@ -4,7 +4,7 @@ when:
 
 clone:
   git:
-    image: codefloe.com/crow-plugins/clone:1.0.4
+    image: codefloe.com/crow-plugins/clone:1.1.0
     settings:
       tags: true
 
