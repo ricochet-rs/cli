@@ -523,6 +523,7 @@ Update the ricochet CLI to the latest version
 ###### **Options:**
 
 * `-f`, `--force` — Force reinstall even if already on the latest version
+* `--dry-run` — Check for a newer version and report it without updating
 
 
 
