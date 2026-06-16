@@ -95,7 +95,7 @@ steps:
         ls -la "$outdir/"
 
   'Push bump and tag':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
     when:
       event: tag
     depends_on:
@@ -157,7 +157,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.1.1
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.1.2
     depends_on:
       - 'Push bump and tag'
     commands:
@@ -185,7 +185,7 @@ steps:
       event: tag
 
   'Trigger homebrew-tap update':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
     depends_on:
       - 'Push bump and tag'
     environment:

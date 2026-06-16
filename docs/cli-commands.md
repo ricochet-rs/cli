@@ -16,6 +16,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet app toml`↴](#ricochet-app-toml)
 * [`ricochet app list`↴](#ricochet-app-list)
 * [`ricochet app stop`↴](#ricochet-app-stop)
+* [`ricochet app settings`↴](#ricochet-app-settings)
+* [`ricochet app settings update`↴](#ricochet-app-settings-update)
 * [`ricochet app deployment`↴](#ricochet-app-deployment)
 * [`ricochet app deployment list`↴](#ricochet-app-deployment-list)
 * [`ricochet app deployment get`↴](#ricochet-app-deployment-get)
@@ -23,6 +25,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet task toml`↴](#ricochet-task-toml)
 * [`ricochet task invoke`↴](#ricochet-task-invoke)
 * [`ricochet task schedule`↴](#ricochet-task-schedule)
+* [`ricochet task settings`↴](#ricochet-task-settings)
+* [`ricochet task settings update`↴](#ricochet-task-settings-update)
 * [`ricochet task deployment`↴](#ricochet-task-deployment)
 * [`ricochet task deployment list`↴](#ricochet-task-deployment-list)
 * [`ricochet task deployment get`↴](#ricochet-task-deployment-get)
@@ -179,6 +183,7 @@ Manage deployed app items
 * `toml` — Fetch the remote _ricochet.toml for an item
 * `list` — List running instances
 * `stop` — Stop a running instance, or all instances if no instance ID is given
+* `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for an app
 
 
@@ -229,6 +234,35 @@ Stop a running instance, or all instances if no instance ID is given
 ###### **Options:**
 
 * `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet app settings`
+
+Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
+
+**Usage:** `ricochet app settings [OPTIONS] [COMMAND]`
+
+###### **Subcommands:**
+
+* `update` — Apply local _ricochet.toml settings to the server
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet app settings update`
+
+Apply local _ricochet.toml settings to the server
+
+**Usage:** `ricochet app settings update [OPTIONS]`
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `-f`, `--force` — Skip the confirmation prompt
 
 
 
@@ -284,6 +318,7 @@ Manage deployed task items
 * `toml` — Fetch the remote _ricochet.toml for a task
 * `invoke` — Invoke a task
 * `schedule` — Set or update the schedule for a task
+* `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for a task
 
 
@@ -326,6 +361,35 @@ Set or update the schedule for a task
 
 * `<ID>` — Content item ID (ULID)
 * `<SCHEDULE>` — Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
+
+
+
+## `ricochet task settings`
+
+Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
+
+**Usage:** `ricochet task settings [OPTIONS] [COMMAND]`
+
+###### **Subcommands:**
+
+* `update` — Apply local _ricochet.toml settings to the server
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet task settings update`
+
+Apply local _ricochet.toml settings to the server
+
+**Usage:** `ricochet task settings update [OPTIONS]`
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `-f`, `--force` — Skip the confirmation prompt
 
 
 
