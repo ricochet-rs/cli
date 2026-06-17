@@ -4,6 +4,31 @@ use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use std::cmp::Ordering;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ListKind {
+    App,
+    Task,
+}
+
+pub fn classify_item(item: &serde_json::Value) -> Option<ListKind> {
+    // Extract the content_type field from the JSON item
+    let content_type_str = item.get("content_type")?.as_str()?;
+
+    // Deserialize into ContentType using serde (NOT FromStr)
+    let content_type: ricochet_core::content::ContentType =
+        serde_json::from_value(serde_json::Value::String(content_type_str.to_string()))
+            .ok()?;
+
+    // Classify using is_service() and is_invokable() methods
+    if content_type.is_service() {
+        Some(ListKind::App)
+    } else if content_type.is_invokable() {
+        Some(ListKind::Task)
+    } else {
+        None
+    }
+}
+
 // Helper function to compare items by a specific field
 fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -> Ordering {
     let a_val = match field {
