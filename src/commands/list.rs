@@ -19,10 +19,10 @@ pub fn classify_item(item: &serde_json::Value) -> Option<ListKind> {
         serde_json::from_value(serde_json::Value::String(content_type_str.to_string()))
             .ok()?;
 
-    // Classify using is_service() and is_invokable() methods
-    if content_type.is_service() {
+    // Classify using is_app() / is_task() (ricochet-core v0.11.0 method names)
+    if content_type.is_app() {
         Some(ListKind::App)
-    } else if content_type.is_invokable() {
+    } else if content_type.is_task() {
         Some(ListKind::Task)
     } else {
         None
