@@ -5,6 +5,7 @@ use url::Url;
 #[cfg(test)]
 mod list_tests {
     use super::*;
+    use ricochet_cli::commands::list::ListKind;
 
     #[tokio::test]
     async fn test_list_json_format() {
@@ -51,10 +52,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Json,
+            false,
         )
         .await;
 
@@ -96,10 +99,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Table,
+            false,
         )
         .await;
 
@@ -153,10 +158,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             Some("shiny".to_string()),
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Json,
+            false,
         )
         .await;
 
@@ -166,10 +173,12 @@ mod list_tests {
         let result2 = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             true,
             None, // no sorting
             ricochet_cli::OutputFormat::Json,
+            false,
         )
         .await;
 
@@ -199,10 +208,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Table,
+            false,
         )
         .await;
 

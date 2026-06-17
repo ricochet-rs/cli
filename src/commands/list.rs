@@ -66,13 +66,16 @@ fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn list(
     config: &Config,
     server_ref: Option<&str>,
+    kind: ListKind,
     content_type: Option<String>,
     active_only: bool,
     sort_fields: Option<String>,
     format: OutputFormat,
+    debug: bool,
 ) -> Result<()> {
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
@@ -83,6 +86,19 @@ pub async fn list(
     // Filter items if needed
     let filtered_items: Vec<_> = items
         .iter()
+        .filter(|item| match classify_item(item) {
+            Some(item_kind) => item_kind == kind,
+            None => {
+                if debug {
+                    let ct = item
+                        .get("content_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("<missing>");
+                    eprintln!("debug: skipping item with unrecognized content_type: {ct}");
+                }
+                false
+            }
+        })
         .filter(|item| {
             if let Some(ref ct) = content_type {
                 item.get("content_type")

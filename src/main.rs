@@ -67,19 +67,6 @@ enum Commands {
         #[arg(short = 'd', long)]
         description: Option<String>,
     },
-    /// List all content items
-    List {
-        /// Filter by content type
-        #[arg(short = 't', long)]
-        content_type: Option<String>,
-        /// Show only active deployments (status: deployed, running, or success)
-        #[arg(short = 'a', long)]
-        active_only: bool,
-        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
-        /// Prefix with '-' for descending order (e.g., "-updated,name")
-        #[arg(short = 's', long)]
-        sort: Option<String>,
-    },
     /// Delete a content item
     Delete {
         /// Content item ID (ULID)
@@ -158,8 +145,21 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
-    /// List running instances
+    /// List deployed app content items
     List {
+        /// Filter by content type
+        #[arg(short = 't', long)]
+        content_type: Option<String>,
+        /// Show only active deployments (status: deployed, running, or success)
+        #[arg(short = 'a', long)]
+        active_only: bool,
+        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
+        /// Prefix with '-' for descending order (e.g., "-updated,name")
+        #[arg(short = 's', long)]
+        sort: Option<String>,
+    },
+    /// List running instances
+    Instances {
         /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
         id: Option<String>,
         /// Path to _ricochet.toml file
@@ -194,6 +194,19 @@ enum ItemCommands {
 
 #[derive(Subcommand)]
 enum TaskCommands {
+    /// List deployed task content items
+    List {
+        /// Filter by content type
+        #[arg(short = 't', long)]
+        content_type: Option<String>,
+        /// Show only active deployments (status: deployed, running, or success)
+        #[arg(short = 'a', long)]
+        active_only: bool,
+        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
+        /// Prefix with '-' for descending order (e.g., "-updated,name")
+        #[arg(short = 's', long)]
+        sort: Option<String>,
+    },
     /// Fetch the remote _ricochet.toml for a task
     Toml {
         /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
@@ -339,21 +352,6 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Some(Commands::List {
-            content_type,
-            active_only,
-            sort,
-        }) => {
-            commands::list::list(
-                &config,
-                cli.server.as_deref(),
-                content_type,
-                active_only,
-                sort,
-                cli.format,
-            )
-            .await?;
-        }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
         }
@@ -379,7 +377,24 @@ async fn main() -> Result<()> {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
             }
-            ItemCommands::List { id, path } => {
+            ItemCommands::List {
+                content_type,
+                active_only,
+                sort,
+            } => {
+                commands::list::list(
+                    &config,
+                    cli.server.as_deref(),
+                    commands::list::ListKind::App,
+                    content_type,
+                    active_only,
+                    sort,
+                    cli.format,
+                    cli.debug,
+                )
+                .await?;
+            }
+            ItemCommands::Instances { id, path } => {
                 app::instances::list_instances(
                     &config,
                     cli.server.as_deref(),
@@ -447,6 +462,23 @@ async fn main() -> Result<()> {
             },
         },
         Some(Commands::Task { command }) => match command {
+            TaskCommands::List {
+                content_type,
+                active_only,
+                sort,
+            } => {
+                commands::list::list(
+                    &config,
+                    cli.server.as_deref(),
+                    commands::list::ListKind::Task,
+                    content_type,
+                    active_only,
+                    sort,
+                    cli.format,
+                    cli.debug,
+                )
+                .await?;
+            }
             TaskCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
             }
