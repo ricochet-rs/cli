@@ -110,9 +110,9 @@ enum Commands {
         command: TaskCommands,
     },
     /// Manage configured Ricochet servers
-    Servers {
+    Server {
         #[command(subcommand)]
-        command: ServersCommands,
+        command: ServerCommands,
     },
     /// Update the ricochet CLI to the latest version
     #[command(hide = true)]
@@ -275,7 +275,7 @@ enum SettingsCommands {
 }
 
 #[derive(Subcommand)]
-enum ServersCommands {
+enum ServerCommands {
     /// List all configured servers
     List,
     /// Add a new server
@@ -542,18 +542,18 @@ async fn main() -> Result<()> {
                 }
             },
         },
-        Some(Commands::Servers { command }) => match command {
-            ServersCommands::List => {
-                commands::servers::list(&config)?;
+        Some(Commands::Server { command }) => match command {
+            ServerCommands::List => {
+                commands::server::list(&config)?;
             }
-            ServersCommands::Add { name, url, default } => {
-                commands::servers::add(&mut config, name, url, default)?;
+            ServerCommands::Add { name, url, default } => {
+                commands::server::add(&mut config, name, url, default)?;
             }
-            ServersCommands::Remove { name, force } => {
-                commands::servers::remove(&mut config, name, force)?;
+            ServerCommands::Remove { name, force } => {
+                commands::server::remove(&mut config, name, force)?;
             }
-            ServersCommands::SetDefault { name } => {
-                commands::servers::set_default(&mut config, name)?;
+            ServerCommands::SetDefault { name } => {
+                commands::server::set_default(&mut config, name)?;
             }
         },
         Some(Commands::SelfUpdate { force, dry_run }) => {

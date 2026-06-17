@@ -203,7 +203,7 @@ impl Config {
         let available: Vec<&String> = self.servers.keys().collect();
         if available.is_empty() {
             anyhow::bail!(
-                "Server '{}' not found. No servers configured. Use 'ricochet servers add' to add one.",
+                "Server '{}' not found. No servers configured. Use 'ricochet server add' to add one.",
                 server_str
             )
         } else {
@@ -240,7 +240,7 @@ impl Config {
             return Ok(self.apply_env_key_override(server_config.clone()));
         }
 
-        anyhow::bail!("No servers configured. Use 'ricochet servers add' to add a server.")
+        anyhow::bail!("No servers configured. Use 'ricochet server add' to add a server.")
     }
 
     /// Add or update a server
@@ -697,7 +697,7 @@ mod tests {
     }
 
     // Note: env var override tests (RICOCHET_SERVER, RICOCHET_API_KEY) are in
-    // tests/servers_test.rs to avoid race conditions between unit and integration tests.
+    // tests/server_test.rs to avoid race conditions between unit and integration tests.
 
     // ==================== legacy migration tests ====================
 
