@@ -8,13 +8,13 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet login`↴](#ricochet-login)
 * [`ricochet logout`↴](#ricochet-logout)
 * [`ricochet deploy`↴](#ricochet-deploy)
-* [`ricochet list`↴](#ricochet-list)
 * [`ricochet delete`↴](#ricochet-delete)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
 * [`ricochet app list`↴](#ricochet-app-list)
+* [`ricochet app instances`↴](#ricochet-app-instances)
 * [`ricochet app stop`↴](#ricochet-app-stop)
 * [`ricochet app settings`↴](#ricochet-app-settings)
 * [`ricochet app settings update`↴](#ricochet-app-settings-update)
@@ -22,6 +22,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet app deployment list`↴](#ricochet-app-deployment-list)
 * [`ricochet app deployment get`↴](#ricochet-app-deployment-get)
 * [`ricochet task`↴](#ricochet-task)
+* [`ricochet task list`↴](#ricochet-task-list)
 * [`ricochet task toml`↴](#ricochet-task-toml)
 * [`ricochet task invoke`↴](#ricochet-task-invoke)
 * [`ricochet task schedule`↴](#ricochet-task-schedule)
@@ -30,11 +31,11 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet task deployment`↴](#ricochet-task-deployment)
 * [`ricochet task deployment list`↴](#ricochet-task-deployment-list)
 * [`ricochet task deployment get`↴](#ricochet-task-deployment-get)
-* [`ricochet servers`↴](#ricochet-servers)
-* [`ricochet servers list`↴](#ricochet-servers-list)
-* [`ricochet servers add`↴](#ricochet-servers-add)
-* [`ricochet servers remove`↴](#ricochet-servers-remove)
-* [`ricochet servers set-default`↴](#ricochet-servers-set-default)
+* [`ricochet server`↴](#ricochet-server)
+* [`ricochet server list`↴](#ricochet-server-list)
+* [`ricochet server add`↴](#ricochet-server-add)
+* [`ricochet server remove`↴](#ricochet-server-remove)
+* [`ricochet server set-default`↴](#ricochet-server-set-default)
 * [`ricochet self`↴](#ricochet-self)
 * [`ricochet self update`↴](#ricochet-self-update)
 
@@ -49,13 +50,12 @@ Ricochet CLI
 * `login` — Authenticate with a Ricochet server
 * `logout` — Remove stored credentials
 * `deploy` — Deploy content to a Ricochet server
-* `list` — List all content items
 * `delete` — Delete a content item
 * `config` — Show configuration
 * `init` — Initialize a new Ricochet deployment
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
-* `servers` — Manage configured Ricochet servers
+* `server` — Manage configured Ricochet servers
 * `self` — Manage the ricochet CLI itself
 
 ###### **Options:**
@@ -108,20 +108,6 @@ Deploy content to a Ricochet server
 
 * `-n`, `--name <NAME>` — Name for the deployment
 * `-d`, `--description <DESCRIPTION>` — Description for the deployment
-
-
-
-## `ricochet list`
-
-List all content items
-
-**Usage:** `ricochet list [OPTIONS]`
-
-###### **Options:**
-
-* `-t`, `--content-type <CONTENT_TYPE>` — Filter by content type
-* `-a`, `--active-only` — Show only active deployments (status: deployed, running, or success)
-* `-s`, `--sort <SORT>` — Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name") Prefix with '-' for descending order (e.g., "-updated,name")
 
 
 
@@ -181,7 +167,8 @@ Manage deployed app items
 ###### **Subcommands:**
 
 * `toml` — Fetch the remote _ricochet.toml for an item
-* `list` — List running instances
+* `list` — List deployed app content items
+* `instances` — List running instances
 * `stop` — Stop a running instance, or all instances if no instance ID is given
 * `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for an app
@@ -206,9 +193,23 @@ Fetch the remote _ricochet.toml for an item
 
 ## `ricochet app list`
 
+List deployed app content items
+
+**Usage:** `ricochet app list [OPTIONS]`
+
+###### **Options:**
+
+* `-t`, `--content-type <CONTENT_TYPE>` — Filter by content type
+* `-a`, `--active-only` — Show only active deployments (status: deployed, running, or success)
+* `-s`, `--sort <SORT>` — Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name") Prefix with '-' for descending order (e.g., "-updated,name")
+
+
+
+## `ricochet app instances`
+
 List running instances
 
-**Usage:** `ricochet app list [OPTIONS] [ID]`
+**Usage:** `ricochet app instances [OPTIONS] [ID]`
 
 ###### **Arguments:**
 
@@ -315,11 +316,26 @@ Manage deployed task items
 
 ###### **Subcommands:**
 
+* `list` — List deployed task content items
 * `toml` — Fetch the remote _ricochet.toml for a task
 * `invoke` — Invoke a task
 * `schedule` — Set or update the schedule for a task
 * `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for a task
+
+
+
+## `ricochet task list`
+
+List deployed task content items
+
+**Usage:** `ricochet task list [OPTIONS]`
+
+###### **Options:**
+
+* `-t`, `--content-type <CONTENT_TYPE>` — Filter by content type
+* `-a`, `--active-only` — Show only active deployments (status: deployed, running, or success)
+* `-s`, `--sort <SORT>` — Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name") Prefix with '-' for descending order (e.g., "-updated,name")
 
 
 
@@ -434,11 +450,11 @@ Get a specific deployment
 
 
 
-## `ricochet servers`
+## `ricochet server`
 
 Manage configured Ricochet servers
 
-**Usage:** `ricochet servers <COMMAND>`
+**Usage:** `ricochet server <COMMAND>`
 
 ###### **Subcommands:**
 
@@ -449,19 +465,19 @@ Manage configured Ricochet servers
 
 
 
-## `ricochet servers list`
+## `ricochet server list`
 
 List all configured servers
 
-**Usage:** `ricochet servers list`
+**Usage:** `ricochet server list`
 
 
 
-## `ricochet servers add`
+## `ricochet server add`
 
 Add a new server
 
-**Usage:** `ricochet servers add [OPTIONS] <NAME> <URL>`
+**Usage:** `ricochet server add [OPTIONS] <NAME> <URL>`
 
 ###### **Arguments:**
 
@@ -474,11 +490,11 @@ Add a new server
 
 
 
-## `ricochet servers remove`
+## `ricochet server remove`
 
 Remove a server
 
-**Usage:** `ricochet servers remove [OPTIONS] <NAME>`
+**Usage:** `ricochet server remove [OPTIONS] <NAME>`
 
 ###### **Arguments:**
 
@@ -490,11 +506,11 @@ Remove a server
 
 
 
-## `ricochet servers set-default`
+## `ricochet server set-default`
 
 Set the default server
 
-**Usage:** `ricochet servers set-default <NAME>`
+**Usage:** `ricochet server set-default <NAME>`
 
 ###### **Arguments:**
 
