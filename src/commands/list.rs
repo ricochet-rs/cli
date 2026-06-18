@@ -4,6 +4,31 @@ use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use std::cmp::Ordering;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ListKind {
+    App,
+    Task,
+}
+
+pub fn classify_item(item: &serde_json::Value) -> Option<ListKind> {
+    // Extract the content_type field from the JSON item
+    let content_type_str = item.get("content_type")?.as_str()?;
+
+    // Deserialize into ContentType using serde (NOT FromStr)
+    let content_type: ricochet_core::content::ContentType =
+        serde_json::from_value(serde_json::Value::String(content_type_str.to_string()))
+            .ok()?;
+
+    // Classify using is_app() / is_task() (ricochet-core v0.11.0 method names)
+    if content_type.is_app() {
+        Some(ListKind::App)
+    } else if content_type.is_task() {
+        Some(ListKind::Task)
+    } else {
+        None
+    }
+}
+
 // Helper function to compare items by a specific field
 fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -> Ordering {
     let a_val = match field {
@@ -41,13 +66,16 @@ fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn list(
     config: &Config,
     server_ref: Option<&str>,
+    kind: ListKind,
     content_type: Option<String>,
     active_only: bool,
     sort_fields: Option<String>,
     format: OutputFormat,
+    debug: bool,
 ) -> Result<()> {
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
@@ -58,6 +86,19 @@ pub async fn list(
     // Filter items if needed
     let filtered_items: Vec<_> = items
         .iter()
+        .filter(|item| match classify_item(item) {
+            Some(item_kind) => item_kind == kind,
+            None => {
+                if debug {
+                    let ct = item
+                        .get("content_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("<missing>");
+                    eprintln!("debug: skipping item with unrecognized content_type: {ct}");
+                }
+                false
+            }
+        })
         .filter(|item| {
             if let Some(ref ct) = content_type {
                 item.get("content_type")

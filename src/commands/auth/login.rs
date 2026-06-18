@@ -126,7 +126,7 @@ fn resolve_login_server(
 
         // It's a new server name - prompt for URL? For now, use default URL
         anyhow::bail!(
-            "Server '{}' not found. Add it first with: ricochet servers add {} <url>",
+            "Server '{}' not found. Add it first with: ricochet server add {} <url>",
             ref_str,
             ref_str
         );
