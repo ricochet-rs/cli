@@ -179,12 +179,14 @@ impl RicochetClient {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn deploy(
         &self,
         path: &Path,
         content_id: Option<String>,
         toml_path: &Path,
         extra_root_files: &[(std::path::PathBuf, String)],
+        env_vars: Option<crate::crypto::RsaEncryptedEnvVars>,
         pb: &indicatif::ProgressBar,
         debug: bool,
     ) -> Result<serde_json::Value> {
@@ -249,6 +251,10 @@ impl RicochetClient {
                     .file_name("_ricochet.toml")
                     .mime_str("application/toml")?,
             );
+        }
+
+        if let Some(envs) = env_vars {
+            form = form.text("env_vars", serde_json::to_string(&envs)?);
         }
 
         let response = self

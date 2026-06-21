@@ -66,6 +66,11 @@ enum Commands {
         /// Description for the deployment
         #[arg(short = 'd', long)]
         description: Option<String>,
+        /// Set an environment variable on the initial deployment.
+        /// `KEY=VALUE` sets it directly; `KEY` alone resolves the value from
+        /// .env, .Renviron, or the calling environment. Repeatable.
+        #[arg(short = 'e', long = "env", value_name = "KEY[=VALUE]")]
+        env: Vec<String>,
     },
     /// List all content items
     List {
@@ -291,6 +296,7 @@ async fn main() -> Result<()> {
             path,
             name,
             description,
+            env,
         }) => {
             commands::deploy::deploy(
                 &config,
@@ -298,6 +304,7 @@ async fn main() -> Result<()> {
                 path,
                 name,
                 description,
+                env,
                 cli.debug,
             )
             .await?;

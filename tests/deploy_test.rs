@@ -134,6 +134,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -191,6 +192,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -227,6 +229,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -272,6 +275,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -311,6 +315,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -368,6 +373,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -424,6 +430,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -474,6 +481,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -524,6 +532,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -576,6 +585,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -642,6 +652,7 @@ packages = "uv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -688,6 +699,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -720,6 +732,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -753,6 +766,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -800,6 +814,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -857,6 +872,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -901,6 +917,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -926,6 +943,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
