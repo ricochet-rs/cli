@@ -36,3 +36,10 @@ repos:
         entry: YAML filenames must have .yaml extension.
         language: fail
         files: .yml$
+      - id: cargo-check
+        name: cargo check (all targets)
+        entry: cargo check --all-targets
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-push]
