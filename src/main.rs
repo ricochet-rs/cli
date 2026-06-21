@@ -72,19 +72,6 @@ enum Commands {
         #[arg(short = 'e', long = "env", value_name = "KEY[=VALUE]")]
         env: Vec<String>,
     },
-    /// List all content items
-    List {
-        /// Filter by content type
-        #[arg(short = 't', long)]
-        content_type: Option<String>,
-        /// Show only active deployments (status: deployed, running, or success)
-        #[arg(short = 'a', long)]
-        active_only: bool,
-        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
-        /// Prefix with '-' for descending order (e.g., "-updated,name")
-        #[arg(short = 's', long)]
-        sort: Option<String>,
-    },
     /// Delete a content item
     Delete {
         /// Content item ID (ULID)
@@ -128,9 +115,9 @@ enum Commands {
         command: TaskCommands,
     },
     /// Manage configured Ricochet servers
-    Servers {
+    Server {
         #[command(subcommand)]
-        command: ServersCommands,
+        command: ServerCommands,
     },
     /// Update the ricochet CLI to the latest version
     #[command(hide = true)]
@@ -138,6 +125,9 @@ enum Commands {
         /// Force reinstall even if already on the latest version
         #[arg(short = 'f', long)]
         force: bool,
+        /// Check for a newer version and report it without updating
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Manage the ricochet CLI itself
     #[command(name = "self")]
@@ -160,8 +150,21 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
-    /// List running instances
+    /// List deployed app content items
     List {
+        /// Filter by content type
+        #[arg(short = 't', long)]
+        content_type: Option<String>,
+        /// Show only active deployments (status: deployed, running, or success)
+        #[arg(short = 'a', long)]
+        active_only: bool,
+        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
+        /// Prefix with '-' for descending order (e.g., "-updated,name")
+        #[arg(short = 's', long)]
+        sort: Option<String>,
+    },
+    /// List running instances
+    Instances {
         /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
         id: Option<String>,
         /// Path to _ricochet.toml file
@@ -178,6 +181,15 @@ enum ItemCommands {
         #[arg(short = 'p', long)]
         path: Option<std::path::PathBuf>,
     },
+    /// Show the diff between the local _ricochet.toml and the deployed item.
+    /// Use the `update` subcommand to apply it.
+    Settings {
+        #[command(subcommand)]
+        command: Option<SettingsCommands>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
     /// Manage deployments for an app
     Deployment {
         #[command(subcommand)]
@@ -187,6 +199,19 @@ enum ItemCommands {
 
 #[derive(Subcommand)]
 enum TaskCommands {
+    /// List deployed task content items
+    List {
+        /// Filter by content type
+        #[arg(short = 't', long)]
+        content_type: Option<String>,
+        /// Show only active deployments (status: deployed, running, or success)
+        #[arg(short = 'a', long)]
+        active_only: bool,
+        /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
+        /// Prefix with '-' for descending order (e.g., "-updated,name")
+        #[arg(short = 's', long)]
+        sort: Option<String>,
+    },
     /// Fetch the remote _ricochet.toml for a task
     Toml {
         /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
@@ -206,6 +231,15 @@ enum TaskCommands {
         id: String,
         /// Cron expression (e.g. "0 9 * * 1-5" for weekdays at 9am)
         schedule: String,
+    },
+    /// Show the diff between the local _ricochet.toml and the deployed item.
+    /// Use the `update` subcommand to apply it.
+    Settings {
+        #[command(subcommand)]
+        command: Option<SettingsCommands>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
     },
     /// Manage deployments for a task
     Deployment {
@@ -233,7 +267,20 @@ enum DeploymentCommands {
 }
 
 #[derive(Subcommand)]
-enum ServersCommands {
+enum SettingsCommands {
+    /// Apply local _ricochet.toml settings to the server
+    Update {
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+        /// Skip the confirmation prompt
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ServerCommands {
     /// List all configured servers
     List,
     /// Add a new server
@@ -268,6 +315,9 @@ enum SelfCommands {
         /// Force reinstall even if already on the latest version
         #[arg(short = 'f', long)]
         force: bool,
+        /// Check for a newer version and report it without updating
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -309,21 +359,6 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Some(Commands::List {
-            content_type,
-            active_only,
-            sort,
-        }) => {
-            commands::list::list(
-                &config,
-                cli.server.as_deref(),
-                content_type,
-                active_only,
-                sort,
-                cli.format,
-            )
-            .await?;
-        }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
         }
@@ -349,7 +384,24 @@ async fn main() -> Result<()> {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
             }
-            ItemCommands::List { id, path } => {
+            ItemCommands::List {
+                content_type,
+                active_only,
+                sort,
+            } => {
+                commands::list::list(
+                    &config,
+                    cli.server.as_deref(),
+                    commands::list::ListKind::App,
+                    content_type,
+                    active_only,
+                    sort,
+                    cli.format,
+                    cli.debug,
+                )
+                .await?;
+            }
+            ItemCommands::Instances { id, path } => {
                 app::instances::list_instances(
                     &config,
                     cli.server.as_deref(),
@@ -369,6 +421,31 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             }
+            ItemCommands::Settings { command, path } => match command {
+                None => {
+                    item::settings::preview(
+                        &config,
+                        cli.server.as_deref(),
+                        path.as_deref(),
+                        cli.format,
+                    )
+                    .await?;
+                }
+                Some(SettingsCommands::Update {
+                    path: update_path,
+                    force,
+                }) => {
+                    let resolved = update_path.or(path);
+                    item::settings::update(
+                        &config,
+                        cli.server.as_deref(),
+                        resolved.as_deref(),
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
             ItemCommands::Deployment { command } => match command {
                 DeploymentCommands::List { id, fields } => {
                     item::deployment::list_deployments(
@@ -392,6 +469,23 @@ async fn main() -> Result<()> {
             },
         },
         Some(Commands::Task { command }) => match command {
+            TaskCommands::List {
+                content_type,
+                active_only,
+                sort,
+            } => {
+                commands::list::list(
+                    &config,
+                    cli.server.as_deref(),
+                    commands::list::ListKind::Task,
+                    content_type,
+                    active_only,
+                    sort,
+                    cli.format,
+                    cli.debug,
+                )
+                .await?;
+            }
             TaskCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, id, path).await?;
             }
@@ -408,6 +502,31 @@ async fn main() -> Result<()> {
                 )
                 .await?;
             }
+            TaskCommands::Settings { command, path } => match command {
+                None => {
+                    item::settings::preview(
+                        &config,
+                        cli.server.as_deref(),
+                        path.as_deref(),
+                        cli.format,
+                    )
+                    .await?;
+                }
+                Some(SettingsCommands::Update {
+                    path: update_path,
+                    force,
+                }) => {
+                    let resolved = update_path.or(path);
+                    item::settings::update(
+                        &config,
+                        cli.server.as_deref(),
+                        resolved.as_deref(),
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
             TaskCommands::Deployment { command } => match command {
                 DeploymentCommands::List { id, fields } => {
                     item::deployment::list_deployments(
@@ -430,30 +549,30 @@ async fn main() -> Result<()> {
                 }
             },
         },
-        Some(Commands::Servers { command }) => match command {
-            ServersCommands::List => {
-                commands::servers::list(&config)?;
+        Some(Commands::Server { command }) => match command {
+            ServerCommands::List => {
+                commands::server::list(&config)?;
             }
-            ServersCommands::Add { name, url, default } => {
-                commands::servers::add(&mut config, name, url, default)?;
+            ServerCommands::Add { name, url, default } => {
+                commands::server::add(&mut config, name, url, default)?;
             }
-            ServersCommands::Remove { name, force } => {
-                commands::servers::remove(&mut config, name, force)?;
+            ServerCommands::Remove { name, force } => {
+                commands::server::remove(&mut config, name, force)?;
             }
-            ServersCommands::SetDefault { name } => {
-                commands::servers::set_default(&mut config, name)?;
+            ServerCommands::SetDefault { name } => {
+                commands::server::set_default(&mut config, name)?;
             }
         },
-        Some(Commands::SelfUpdate { force }) => {
+        Some(Commands::SelfUpdate { force, dry_run }) => {
             eprintln!(
                 "{} `ricochet self-update` is deprecated. Use `ricochet self update` instead.",
                 "warning:".yellow().bold()
             );
-            commands::update::self_update(force).await?;
+            commands::update::self_update(force, dry_run).await?;
         }
         Some(Commands::Self_ { command }) => match command {
-            SelfCommands::Update { force } => {
-                commands::update::self_update(force).await?;
+            SelfCommands::Update { force, dry_run } => {
+                commands::update::self_update(force, dry_run).await?;
             }
         },
         Some(Commands::GenerateDocs) => {

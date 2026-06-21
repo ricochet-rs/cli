@@ -7,7 +7,7 @@ labels:
 
 steps:
   bump:
-    image: reg.ricochet.rs/docker.io/library/rust:1.95-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.96-slim
     when:
       event: tag
     environment:
@@ -43,7 +43,7 @@ steps:
         fi
 
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.95-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.96-slim
     depends_on:
       - bump
     environment:
@@ -95,7 +95,7 @@ steps:
         ls -la "$outdir/"
 
   'Push bump and tag':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
     when:
       event: tag
     depends_on:
@@ -134,7 +134,7 @@ steps:
         echo "==> Pushed bump commit to main and force-updated $CI_COMMIT_TAG"
 
   'Upload to S3':
-    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.3
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-s3:1.5.4
     depends_on:
       - build
     settings:
@@ -157,7 +157,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.1.1
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:2.1.2
     depends_on:
       - 'Push bump and tag'
     commands:
@@ -185,7 +185,7 @@ steps:
       event: tag
 
   'Trigger homebrew-tap update':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
     depends_on:
       - 'Push bump and tag'
     environment:

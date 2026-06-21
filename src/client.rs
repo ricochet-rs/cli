@@ -240,18 +240,16 @@ impl RicochetClient {
         if let Some(id) = content_id {
             // Updating existing content
             form = form.text("id", id);
-        } else {
-            // Creating new content - include the config file
-            let toml_file = tokio::fs::File::open(toml_path).await?;
-            let toml_body =
-                reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
-            form = form.part(
-                "config",
-                reqwest::multipart::Part::stream(toml_body)
-                    .file_name("_ricochet.toml")
-                    .mime_str("application/toml")?,
-            );
         }
+        // always include the config file
+        let toml_file = tokio::fs::File::open(toml_path).await?;
+        let toml_body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(toml_file));
+        form = form.part(
+            "config",
+            reqwest::multipart::Part::stream(toml_body)
+                .file_name("_ricochet.toml")
+                .mime_str("application/toml")?,
+        );
 
         if let Some(envs) = env_vars {
             form = form.text("env_vars", serde_json::to_string(&envs)?);
@@ -413,17 +411,15 @@ impl RicochetClient {
         Ok(())
     }
 
-    pub async fn update_settings(&self, id: &str, settings: &str) -> Result<()> {
+    pub async fn update_settings(&self, id: &str, settings: &serde_json::Value) -> Result<()> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/settings", id));
-
-        let body: serde_json::Value = serde_json::from_str(settings)?;
 
         let response = self
             .client
             .patch(url)
             .header("Authorization", format!("Key {}", self.api_key))
-            .json(&body)
+            .json(settings)
             .send()
             .await?;
 

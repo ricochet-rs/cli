@@ -242,8 +242,9 @@ pub async fn deploy(
                 eprintln!("    • The content item was created on a different server\n");
                 eprintln!("  Try:");
                 eprintln!(
-                    "    1. Run {} to verify the content item exists",
-                    "ricochet list".bright_cyan()
+                    "    1. Run {} or {} to verify the content item exists",
+                    "ricochet app list".bright_cyan(),
+                    "ricochet task list".bright_cyan()
                 );
                 eprintln!(
                     "    2. Check if you're connected to the correct server: {}",

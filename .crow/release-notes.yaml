@@ -7,7 +7,7 @@
 
 clone:
   git:
-    image: codefloe.com/crow-plugins/clone:1.0.3
+    image: codefloe.com/crow-plugins/clone:1.1.0
     settings:
       tags: true
 
@@ -23,7 +23,7 @@ labels:
 
 steps:
   'Generate and publish release notes':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
     environment:
       ANTHROPIC_API_KEY:
         from_secret: anthropic-api-key

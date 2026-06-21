@@ -378,7 +378,7 @@ fn static_settings(
 }
 
 fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSettings>> {
-    if !content_type.is_invokable() {
+    if !content_type.is_task() {
         return Ok(None);
     }
     let theme = ColorfulTheme::default();
@@ -477,7 +477,7 @@ pub fn init_rico_toml(
         packages,
     };
 
-    let serve = if content_type.is_service() {
+    let serve = if content_type.is_app() {
         Some(ServeSettings::default())
     } else {
         None
@@ -485,7 +485,7 @@ pub fn init_rico_toml(
 
     let res = ContentItem {
         content: Content {
-            id: None,
+            id: Some(ulid::Ulid::new().to_string()),
             name,
             slug: None,
             entrypoint,

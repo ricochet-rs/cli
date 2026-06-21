@@ -12,7 +12,7 @@ pub fn list(config: &Config) -> Result<()> {
         println!("{}", "No servers configured.".yellow());
         println!(
             "\nAdd a server with: {}",
-            "ricochet servers add <name> <url>".bright_cyan()
+            "ricochet server add <name> <url>".bright_cyan()
         );
         return Ok(());
     }
@@ -150,7 +150,7 @@ pub fn remove(config: &mut Config, name: String, force: bool) -> Result<()> {
     if was_default && !config.servers.is_empty() {
         println!(
             "  {}",
-            "No default server set. Use 'ricochet servers set-default <name>' to set one.".yellow()
+            "No default server set. Use 'ricochet server set-default <name>' to set one.".yellow()
         );
     }
 

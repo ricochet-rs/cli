@@ -4,5 +4,5 @@ pub mod delete;
 pub mod deploy;
 pub mod init;
 pub mod list;
-pub mod servers;
+pub mod server;
 pub mod update;

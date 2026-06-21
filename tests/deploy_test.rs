@@ -426,6 +426,9 @@ key = "value"
             .match_body(Matcher::Regex(
                 r#"Content-Disposition: form-data; name="id""#.to_string(),
             ))
+            .match_body(Matcher::Regex(
+                r#"Content-Disposition: form-data; name="config""#.to_string(),
+            ))
             .with_status(200)
             .with_body(
                 json!({
@@ -453,6 +456,59 @@ key = "value"
             false,
         )
         .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deploy_update_always_sends_config() {
+        // Regression: config field must be included even when updating existing content (content_id is set).
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        let existing_id = "01JZA237920RN65T2XHCCV7296";
+        create_test_project(project_path, Some(existing_id)).unwrap();
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+
+        // The mock requires the config part to be present; if it's absent mockito won't match
+        // and the request returns 501, causing the test to fail.
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
+            .match_header("authorization", "Key test_api_key")
+            .match_body(Matcher::Regex(
+                r#"Content-Disposition: form-data; name="config""#.to_string(),
+            ))
+            .with_status(200)
+            .with_body(
+                json!({
+                    "id": existing_id,
+                    "name": "test-content",
+                    "content_type": "shiny",
+                    "status": "deployed"
+                })
+                .to_string(),
+            )
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            false,
+        )
+        .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        }
 
         assert!(result.is_ok());
     }

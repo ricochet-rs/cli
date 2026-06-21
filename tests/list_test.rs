@@ -5,6 +5,7 @@ use url::Url;
 #[cfg(test)]
 mod list_tests {
     use super::*;
+    use ricochet_cli::commands::list::ListKind;
 
     #[tokio::test]
     async fn test_list_json_format() {
@@ -51,10 +52,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Json,
+            false,
         )
         .await;
 
@@ -96,10 +99,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Table,
+            false,
         )
         .await;
 
@@ -153,10 +158,12 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             Some("shiny".to_string()),
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Json,
+            false,
         )
         .await;
 
@@ -166,10 +173,12 @@ mod list_tests {
         let result2 = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             true,
             None, // no sorting
             ricochet_cli::OutputFormat::Json,
+            false,
         )
         .await;
 
@@ -199,13 +208,105 @@ mod list_tests {
         let result = ricochet_cli::commands::list::list(
             &config,
             None,
+            ListKind::App,
             None,
             false,
             None, // no sorting
             ricochet_cli::OutputFormat::Table,
+            false,
         )
         .await;
 
         assert!(result.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod classify_tests {
+    use ricochet_cli::commands::list::{ListKind, classify_item};
+    use serde_json::json;
+
+    #[test]
+    fn test_classify_app_types() {
+        let app_types = vec![
+            "shiny",
+            "fast-api",
+            "r-service",
+            "flask",
+            "streamlit",
+            "dash",
+            "plumber",
+            "ambiorix",
+            "quarto-r-shiny",
+            "rmd-shiny",
+        ];
+
+        for content_type in app_types {
+            let item = json!({
+                "id": "test-id",
+                "content_type": content_type,
+                "name": "test-item"
+            });
+
+            let result = classify_item(&item);
+            assert_eq!(
+                result,
+                Some(ListKind::App),
+                "Failed to classify {} as App",
+                content_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_classify_task_types() {
+        let task_types = vec![
+            "r",
+            "python",
+            "julia",
+            "rmd",
+            "quarto-r",
+            "quarto-jl",
+            "quarto-py",
+        ];
+
+        for content_type in task_types {
+            let item = json!({
+                "id": "test-id",
+                "content_type": content_type,
+                "name": "test-item"
+            });
+
+            let result = classify_item(&item);
+            assert_eq!(
+                result,
+                Some(ListKind::Task),
+                "Failed to classify {} as Task",
+                content_type
+            );
+        }
+    }
+
+    #[test]
+    fn test_classify_unparseable_type() {
+        let item = json!({
+            "id": "test-id",
+            "content_type": "unknown-type",
+            "name": "test-item"
+        });
+
+        let result = classify_item(&item);
+        assert_eq!(result, None, "Unknown type should return None");
+    }
+
+    #[test]
+    fn test_classify_missing_content_type() {
+        let item = json!({
+            "id": "test-id",
+            "name": "test-item"
+        });
+
+        let result = classify_item(&item);
+        assert_eq!(result, None, "Missing content_type should return None");
     }
 }

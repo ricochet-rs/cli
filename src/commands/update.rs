@@ -104,7 +104,7 @@ pub fn print_version() {
     }
 }
 
-pub async fn self_update(force: bool) -> Result<()> {
+pub async fn self_update(force: bool, dry_run: bool) -> Result<()> {
     println!("Checking for updates...");
 
     let latest = update::fetch_latest_version()
@@ -112,6 +112,29 @@ pub async fn self_update(force: bool) -> Result<()> {
         .context("Failed to fetch latest version from GitHub")?;
 
     let latest_cache = update::UpdateCache::for_version(latest.clone());
+
+    if dry_run {
+        println!("  Current version: {}", CURRENT_VERSION.bright_cyan());
+        println!("  Latest version:  {}", latest.bright_cyan());
+
+        if latest_cache.is_update_available() {
+            println!(
+                "\n{} Update available: {} -> {}",
+                "→".green().bold(),
+                CURRENT_VERSION.dimmed(),
+                latest.green().bold()
+            );
+            println!(
+                "  Release notes: {}",
+                update::release_notes_url(&latest).bright_cyan()
+            );
+            println!("\nRun {} to update.", "ricochet self update".bright_cyan());
+        } else {
+            println!("\n{} Already on the latest version.", "✓".green().bold());
+        }
+
+        return Ok(());
+    }
 
     if !latest_cache.is_update_available() && !force {
         println!(
