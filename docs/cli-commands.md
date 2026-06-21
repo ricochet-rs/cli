@@ -104,6 +104,7 @@ Deploy content to a Ricochet server
 
 * `-n`, `--name <NAME>` — Name for the deployment
 * `-d`, `--description <DESCRIPTION>` — Description for the deployment
+* `-e`, `--env <KEY[=VALUE]>` — Set an environment variable on the initial deployment. `KEY=VALUE` sets it directly; `KEY` alone resolves the value from .env, .Renviron, or the calling environment. Repeatable
 
 
 
