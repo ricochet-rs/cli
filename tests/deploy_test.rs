@@ -502,6 +502,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
