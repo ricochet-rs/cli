@@ -2,6 +2,7 @@ pub mod app;
 pub mod client;
 pub mod commands;
 pub mod config;
+pub mod env_vars;
 pub mod item;
 pub mod task;
 pub mod update;
