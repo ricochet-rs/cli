@@ -42,8 +42,22 @@ steps:
           # inline tables), which fails to parse on older cargo. Linux/Windows
           # pin rust:1.96 via the image; here we update in place. rustup
           # re-adds the already-installed darwin targets on update.
+          #
+          # The macos-x86_64 and macos-arm64 matrix jobs share this runner's
+          # RUSTUP_HOME, so running `rustup update` in both at once races on the
+          # shared downloads dir (renaming a *.partial fails with ENOENT). macOS
+          # has no flock, so serialize with an atomic mkdir spinlock; the second
+          # job then finds the toolchain already current and is a fast no-op.
+          LOCK=/tmp/ricochet-rustup-update.lock
+          for _ in $(seq 1 180); do
+            mkdir "$LOCK" 2>/dev/null && break
+            sleep 2
+          done
+          trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT
           rustup update stable
           rustup default stable
+          rmdir "$LOCK" 2>/dev/null || true
+          trap - EXIT
 
           VERSION="${CI_COMMIT_TAG#v}"
           echo "Updating Cargo.toml version to $VERSION"
