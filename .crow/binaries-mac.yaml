@@ -40,7 +40,11 @@ steps:
           VERSION="${CI_COMMIT_TAG#v}"
           echo "Updating Cargo.toml version to $VERSION"
           sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
-          cargo generate-lockfile
+          # Sync only the ricochet-cli version in Cargo.lock; keep the pinned
+          # ricochet-core git rev. `cargo generate-lockfile` would re-resolve
+          # the unpinned git dep to upstream HEAD and drift off the tested
+          # version (matches the Linux job in binaries.yaml).
+          cargo update -p ricochet-cli
           echo "Updated Cargo.toml and Cargo.lock to version $VERSION"
           grep "^version" Cargo.toml
         fi
