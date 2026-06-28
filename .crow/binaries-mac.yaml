@@ -37,6 +37,14 @@ steps:
             exit 1
           fi
 
+          # Refresh the toolchain. The self-hosted runner's cargo can lag
+          # behind upstream ricochet's manifest syntax (e.g. newlines in
+          # inline tables), which fails to parse on older cargo. Linux/Windows
+          # pin rust:1.96 via the image; here we update in place. rustup
+          # re-adds the already-installed darwin targets on update.
+          rustup update stable
+          rustup default stable
+
           VERSION="${CI_COMMIT_TAG#v}"
           echo "Updating Cargo.toml version to $VERSION"
           sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" Cargo.toml
