@@ -70,14 +70,12 @@ mod tests {
         for (enc_name, enc_value) in &encrypted.0 {
             let name_ct = BASE64_STANDARD.decode(enc_name).unwrap();
             let value_ct = BASE64_STANDARD.decode(enc_value).unwrap();
-            let name = String::from_utf8(
-                priv_key.decrypt(Oaep::new::<Sha256>(), &name_ct).unwrap(),
-            )
-            .unwrap();
-            let value = String::from_utf8(
-                priv_key.decrypt(Oaep::new::<Sha256>(), &value_ct).unwrap(),
-            )
-            .unwrap();
+            let name =
+                String::from_utf8(priv_key.decrypt(Oaep::new::<Sha256>(), &name_ct).unwrap())
+                    .unwrap();
+            let value =
+                String::from_utf8(priv_key.decrypt(Oaep::new::<Sha256>(), &value_ct).unwrap())
+                    .unwrap();
             recovered.insert(name, value);
         }
         assert_eq!(recovered, vars);

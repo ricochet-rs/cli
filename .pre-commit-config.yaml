@@ -12,6 +12,7 @@ repos:
       - id: trailing-whitespace
         args:
           - --markdown-linebreak-ext=md
+        exclude_types: [rust]
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.22.1
     hooks:
@@ -36,10 +37,24 @@ repos:
         entry: YAML filenames must have .yaml extension.
         language: fail
         files: .yml$
-      - id: cargo-check
-        name: cargo check (all targets)
-        entry: cargo check --all-targets
+      - id: cargo-fmt
+        name: cargo fmt
+        description: Format Rust files with rustfmt. Modifies files in place; re-stage after the hook runs.
+        entry: cargo fmt --all
         language: system
-        types: [rust]
+        files: \.rs$
         pass_filenames: false
+        require_serial: true
+      # Runs only on `git push` (install with `prek install -t pre-push`).
+      # Mirrors CI clippy so compile failures and lint regressions surface
+      # locally instead of in CI. Skipped on pre-commit because it is too slow
+      # for that stage.
+      - id: cargo-clippy-push
+        name: cargo clippy (pre-push)
+        description: Catch clippy and compile failures before push.
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        files: (\.rs$|^Cargo\.toml$|^Cargo\.lock$)
+        pass_filenames: false
+        require_serial: true
         stages: [pre-push]
