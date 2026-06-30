@@ -222,7 +222,10 @@ pub async fn deploy(
                 eprintln!(
                     "  Environment variables can only be set on a content item's first deployment."
                 );
-                eprintln!("  Re-deploy without {} and set or change variables via the web UI.", "--env".bright_cyan());
+                eprintln!(
+                    "  Re-deploy without {} and set or change variables via the web UI.",
+                    "--env".bright_cyan()
+                );
                 anyhow::bail!("")
             }
 

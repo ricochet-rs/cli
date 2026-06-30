@@ -62,10 +62,7 @@ pub fn resolve_env_vars(entries: &[String], dir: &Path) -> Result<HashMap<String
         } else {
             let key = entry.as_str();
             let files = dotfiles.get_or_insert_with(|| load_dotfiles(dir));
-            let value = files
-                .get(key)
-                .cloned()
-                .or_else(|| std::env::var(key).ok());
+            let value = files.get(key).cloned().or_else(|| std::env::var(key).ok());
             match value {
                 Some(v) => {
                     result.insert(key.to_string(), v);
@@ -123,7 +120,11 @@ NOT A KEY=ignored
     #[test]
     fn key_value_entry_used_literally() {
         let dir = TempDir::new().unwrap();
-        let entries = vec!["A=1".to_string(), "B=with=equals".to_string(), "C=".to_string()];
+        let entries = vec![
+            "A=1".to_string(),
+            "B=with=equals".to_string(),
+            "C=".to_string(),
+        ];
         let map = resolve_env_vars(&entries, dir.path()).unwrap();
         assert_eq!(map.get("A"), Some(&"1".to_string()));
         assert_eq!(map.get("B"), Some(&"with=equals".to_string()));
@@ -133,7 +134,11 @@ NOT A KEY=ignored
     #[test]
     fn key_only_resolves_env_then_renviron_then_process() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join(".env"), "FROM_ENV=env_value\nSHARED=env_wins\n").unwrap();
+        fs::write(
+            dir.path().join(".env"),
+            "FROM_ENV=env_value\nSHARED=env_wins\n",
+        )
+        .unwrap();
         fs::write(
             dir.path().join(".Renviron"),
             "FROM_RENV=renv_value\nSHARED=renv_loses\n",
@@ -152,7 +157,10 @@ NOT A KEY=ignored
         assert_eq!(map.get("FROM_ENV"), Some(&"env_value".to_string()));
         assert_eq!(map.get("FROM_RENV"), Some(&"renv_value".to_string()));
         assert_eq!(map.get("SHARED"), Some(&"env_wins".to_string()));
-        assert_eq!(map.get("RICO_TEST_PROC_ONLY"), Some(&"proc_value".to_string()));
+        assert_eq!(
+            map.get("RICO_TEST_PROC_ONLY"),
+            Some(&"proc_value".to_string())
+        );
 
         unsafe { std::env::remove_var("RICO_TEST_PROC_ONLY") };
     }
@@ -161,7 +169,9 @@ NOT A KEY=ignored
     fn unresolved_key_errors_with_hint() {
         let dir = TempDir::new().unwrap();
         let entries = vec!["DEFINITELY_MISSING_KEY_XYZ".to_string()];
-        let err = resolve_env_vars(&entries, dir.path()).unwrap_err().to_string();
+        let err = resolve_env_vars(&entries, dir.path())
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("DEFINITELY_MISSING_KEY_XYZ"));
         assert!(err.contains("--env DEFINITELY_MISSING_KEY_XYZ=value"));
     }

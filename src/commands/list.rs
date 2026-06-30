@@ -16,8 +16,7 @@ pub fn classify_item(item: &serde_json::Value) -> Option<ListKind> {
 
     // Deserialize into ContentType using serde (NOT FromStr)
     let content_type: ricochet_core::content::ContentType =
-        serde_json::from_value(serde_json::Value::String(content_type_str.to_string()))
-            .ok()?;
+        serde_json::from_value(serde_json::Value::String(content_type_str.to_string())).ok()?;
 
     // Classify using is_app() / is_task() (ricochet-core v0.11.0 method names)
     if content_type.is_app() {
