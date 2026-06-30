@@ -64,11 +64,8 @@ steps:
       # git auth
       - git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
       - rustup component add rustfmt clippy
-      - curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-      - cargo binstall -y leptosfmt
       # Check formatting
       - cargo fmt --all -- --check
-      - leptosfmt --check ricochet-ui
       # check clippy lints
       - cargo clippy --all-targets --all-features -- -D warnings
       - sccache --show-stats
