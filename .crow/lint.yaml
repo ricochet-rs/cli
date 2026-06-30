@@ -9,9 +9,19 @@ labels:
   type: static
 
 steps:
-  editor-config:
-    image: reg.ricochet.rs/docker.io/mstruebing/editorconfig-checker:v3.8.0
+  prek:
+    image: reg.ricochet.rs/docker.io/library/alpine:3.23
     depends_on: []
+    environment:
+      PREK_VERSION: v0.3.9
+      # cargo-fmt is a local-only auto-fix hook that needs the Rust toolchain,
+      # which is absent in this minimal alpine image. The rust-lint step below
+      # runs the equivalent `cargo fmt --check` with the real toolchain.
+      SKIP: cargo-fmt
+    commands:
+      - apk add -q --no-cache curl git nodejs npm python3 py3-pip >/dev/null 2>&1
+      - curl --proto '=https' --tlsv1.2 -LsSf https://github.com/j178/prek/releases/download/$$PREK_VERSION/prek-installer.sh | sh -s -- -q
+      - $HOME/.local/bin/prek run -a
 
   cache:
     image: codefloe.com/crow-plugins/sccache:0.2.5
