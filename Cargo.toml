@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 axum = "0.8"
+base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = [
   "clock",
   "serde",
@@ -30,6 +31,7 @@ html-escape = "0.2"
 indicatif = "0.18"
 prefixed-api-key = "0.3"
 regex = "1.11.3"
+rsa = { version = "0.9", features = ["getrandom", "sha2"] }
 reqwest = { version = "0.13", default-features = false, features = [
   "cookies",
   "hickory-dns",

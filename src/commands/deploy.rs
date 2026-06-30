@@ -12,6 +12,7 @@ pub async fn deploy(
     path: PathBuf,
     _name: Option<String>,
     _description: Option<String>,
+    env: Vec<String>,
     debug: bool,
 ) -> Result<()> {
     if !path.exists() {
@@ -129,6 +130,16 @@ pub async fn deploy(
         );
     }
 
+    // Resolve and encrypt environment variables, if any were provided.
+    // Only named keys are sent; whole dotfiles are never auto-loaded.
+    let env_vars = if env.is_empty() {
+        None
+    } else {
+        let resolved = crate::env_vars::resolve_env_vars(&env, &path)?;
+        let pub_key = client.get_public_key().await?;
+        Some(crate::crypto::encrypt_env_vars(&pub_key, &resolved)?)
+    };
+
     let pb = ProgressBar::new_spinner();
     pb.set_style(
         ProgressStyle::default_spinner()
@@ -143,6 +154,7 @@ pub async fn deploy(
             content_id.clone(),
             &toml_path,
             &extra_root_files,
+            env_vars,
             &pb,
             debug,
         )
@@ -203,6 +215,16 @@ pub async fn deploy(
         }
         Err(e) => {
             pb.finish_and_clear();
+
+            if e.to_string().contains("first deployment") {
+                eprintln!("{} Deployment failed: {}\n", "✗".red().bold(), e);
+                eprintln!("{}", "Hint:".yellow().bold());
+                eprintln!(
+                    "  Environment variables can only be set on a content item's first deployment."
+                );
+                eprintln!("  Re-deploy without {} and set or change variables via the web UI.", "--env".bright_cyan());
+                anyhow::bail!("")
+            }
 
             // Provide helpful context for 403 errors when updating existing content
             if let Some(id) = content_id.as_ref()

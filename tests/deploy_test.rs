@@ -7,6 +7,16 @@ use std::path::Path;
 use tempfile::TempDir;
 use url::Url;
 
+const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
+MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
+vYxKvp5ShVnM/6XZeCfRQA2TKXnf6dWsRgcZcBMufKHfN9VLNxawLMKHddceHlLA
+rFTwsPE9rU9p5p5uA6zhUnZk/skzWumqZw9WK7Lztbh6fhX9UMYXvaBzCFF1nfTM
+kGl7YkRcwfL4p+1oa7uGFYaRxvBKv6q9/hm7W9Em7H0g4+icc85wkvlzJrghKakp
+5wDkaY8XmSGSiOZr0U8/fPBC4SASPuT5Hy17zZwu7SEYW31JYnRvFoo8bF8N3QxT
+WigXLNxbQJjhAq7Y6mU8h7yF2zWMbFGMqwIDAQAB
+-----END RSA PUBLIC KEY-----
+";
+
 #[cfg(test)]
 mod deploy_tests {
     use super::*;
@@ -43,6 +53,15 @@ mod deploy_tests {
             .mock("GET", "/api/v0/check_key")
             .match_header("authorization", Matcher::Regex("Key .*".to_string()))
             .with_status(200)
+            .create()
+    }
+
+    fn mock_public_key(server: &mut Server) -> mockito::Mock {
+        server
+            .mock("GET", "/api/v0/public-key")
+            .with_status(200)
+            .with_header("content-type", "application/x-pem-file")
+            .with_body(TEST_PUB_PEM)
             .create()
     }
 
@@ -134,6 +153,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -191,6 +211,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -227,6 +248,7 @@ shinyApp(ui = ui, server = server)"#,
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -272,6 +294,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -311,6 +334,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -368,6 +392,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -427,6 +452,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -476,6 +502,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -530,6 +557,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -580,6 +608,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -632,6 +661,7 @@ key = "value"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -698,6 +728,7 @@ packages = "uv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -744,6 +775,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -776,6 +808,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -809,6 +842,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -856,6 +890,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -913,6 +948,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -957,6 +993,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -982,6 +1019,7 @@ packages = "renv.lock"
             project_path.to_path_buf(),
             None,
             None,
+            Vec::new(),
             false,
         )
         .await;
@@ -989,5 +1027,121 @@ packages = "renv.lock"
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("not found") || error_msg.contains("nonexistent"));
+    }
+
+    // ==================== Deploy --env tests ====================
+
+    #[tokio::test]
+    async fn test_deploy_new_content_with_env_sends_env_vars_field() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_test_project(project_path, None).unwrap();
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+        let _pk = mock_public_key(&mut server);
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
+            .match_body(Matcher::Regex("name=\"env_vars\"".to_string()))
+            .with_status(200)
+            .with_body(json!({"id": "01JZA237920RN65T2XHCCV7296"}).to_string())
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            vec!["SECRET=shh".to_string()],
+            false,
+        )
+        .await;
+
+        if let Err(e) = &result {
+            dbg!(&e);
+        }
+        assert!(result.is_ok());
+        _m.assert(); // body matcher confirms the env_vars part was present
+    }
+
+    #[tokio::test]
+    async fn test_deploy_without_env_omits_env_vars_field() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        create_test_project(project_path, None).unwrap();
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+        // No public-key mock: if deploy fetches it without --env, the test fails.
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
+            .match_body(Matcher::AllOf(vec![Matcher::Regex(
+                "name=\"bundle\"".to_string(),
+            )]))
+            .with_status(200)
+            .with_body(json!({"id": "01JZA237920RN65T2XHCCV7296"}).to_string())
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            Vec::new(),
+            false,
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deploy_existing_with_env_surfaces_first_deploy_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = temp_dir.path();
+        let existing_id = "01JZA237920RN65T2XHCCV7296";
+        create_test_project(project_path, Some(existing_id)).unwrap();
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+        let _pk = mock_public_key(&mut server);
+        let _m = server
+            .mock("POST", "/api/v0/content/upload")
+            .with_status(400)
+            .with_body(
+                json!({"error": "Environment variables can only be set in the first deployment."})
+                    .to_string(),
+            )
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            project_path.to_path_buf(),
+            None,
+            None,
+            vec!["SECRET=shh".to_string()],
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
     }
 }

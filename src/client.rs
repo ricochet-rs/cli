@@ -117,6 +117,19 @@ impl RicochetClient {
         Ok(response.status() == StatusCode::OK)
     }
 
+    /// Fetch the server's RSA public key (PKCS#1 PEM) used to encrypt env vars.
+    pub async fn get_public_key(&self) -> Result<rsa::RsaPublicKey> {
+        let mut url = self.base_url.clone();
+        url.set_path("/api/v0/public-key");
+        let response = self.client.get(url).send().await?;
+        let status = response.status();
+        let body = response.text().await?;
+        if !status.is_success() {
+            anyhow::bail!("Failed to fetch public key (status {status}): {body}");
+        }
+        crate::crypto::parse_public_key_pem(&body)
+    }
+
     /// Check if a key is expired and report if so
     /// Use this as a pre-flight check for all API calls where appropriate
     pub async fn preflight_key_check(&self) -> Result<()> {
@@ -166,12 +179,14 @@ impl RicochetClient {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn deploy(
         &self,
         path: &Path,
         content_id: Option<String>,
         toml_path: &Path,
         extra_root_files: &[(std::path::PathBuf, String)],
+        env_vars: Option<crate::crypto::RsaEncryptedEnvVars>,
         pb: &indicatif::ProgressBar,
         debug: bool,
     ) -> Result<serde_json::Value> {
@@ -235,6 +250,10 @@ impl RicochetClient {
                 .file_name("_ricochet.toml")
                 .mime_str("application/toml")?,
         );
+
+        if let Some(envs) = env_vars {
+            form = form.text("env_vars", serde_json::to_string(&envs)?);
+        }
 
         let response = self
             .client
