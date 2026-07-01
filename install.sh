@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="${RICOCHET_VERSION:-0.8.0}"
+VERSION="${RICOCHET_VERSION:-1.0.0}"
 GITHUB_RELEASES_BASE="https://github.com/ricochet-rs/cli/releases/download/v${VERSION}"
 S3_BASE_URL="https://s3.eu-central-003.backblazeb2.com/ricochet-cli/v${VERSION}"
 
