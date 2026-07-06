@@ -24,7 +24,7 @@ steps:
       - $HOME/.local/bin/prek run -a
 
   cache:
-    image: codefloe.com/crow-plugins/sccache:0.2.5
+    image: codefloe.com/crow-plugins/sccache:0.2.6
     settings:
       s3-endpoint: https://s3.eu-central-003.backblazeb2.com
       s3-bucket: ricochet-sccache
