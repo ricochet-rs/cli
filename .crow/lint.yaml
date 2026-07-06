@@ -10,7 +10,7 @@ labels:
 
 steps:
   prek:
-    image: reg.ricochet.rs/docker.io/library/alpine:3.23
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
     depends_on: []
     environment:
       PREK_VERSION: v0.3.9
@@ -101,6 +101,6 @@ steps:
     when:
       - event: pull_request
       - event: pull_request_edited
-    image: reg.ricochet.rs/docker.io/commitlint/commitlint:21.1.0
+    image: reg.ricochet.rs/docker.io/commitlint/commitlint:21.2.0
     commands:
       - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
