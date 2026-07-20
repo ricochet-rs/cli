@@ -7,7 +7,7 @@ labels:
 
 steps:
   bump:
-    image: reg.ricochet.rs/docker.io/library/rust:1.96-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.97-slim
     when:
       event: tag
     environment:
@@ -43,7 +43,7 @@ steps:
         fi
 
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.96-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.97-slim
     depends_on:
       - bump
     environment:

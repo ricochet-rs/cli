@@ -28,7 +28,7 @@ steps:
           key: applicationKey
 
   test:
-    image: reg.ricochet.rs/docker.io/library/rust:1.96
+    image: reg.ricochet.rs/docker.io/library/rust:1.97
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
