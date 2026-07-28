@@ -32,12 +32,17 @@ pub fn prepare_bundle(
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
 ) -> Result<Vec<PathBuf>> {
-    // prevent including virtual environments and renv caches
+    // prevent including virtual environments, renv caches, and Python bytecode caches
     let mut blacklist_builder = GlobSetBuilder::new();
     blacklist_builder.add(Glob::new(".venv")?);
     blacklist_builder.add(Glob::new(".venv/**")?);
     blacklist_builder.add(Glob::new(".renv")?);
     blacklist_builder.add(Glob::new(".renv/**")?);
+    // __pycache__ can appear at any nesting level, so match it recursively
+    blacklist_builder.add(Glob::new("__pycache__")?);
+    blacklist_builder.add(Glob::new("__pycache__/**")?);
+    blacklist_builder.add(Glob::new("**/__pycache__")?);
+    blacklist_builder.add(Glob::new("**/__pycache__/**")?);
     let blacklist = blacklist_builder.build()?;
 
     let include_matcher = if let Some(patterns) = include {
@@ -257,6 +262,102 @@ mod tests {
         assert!(relative_paths.contains(&"main.py".to_string()));
         assert!(relative_paths.contains(&"uv.lock".to_string()));
         assert!(relative_paths.contains(&"pyproject.toml".to_string()));
+    }
+
+    #[test]
+    fn test_prepare_bundle_excludes_pycache() {
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+
+        // Create test files and a top-level plus a nested __pycache__ directory
+        fs::write(dir_path.join("main.py"), "print('hello')").unwrap();
+        fs::create_dir(dir_path.join("__pycache__")).unwrap();
+        fs::write(
+            dir_path.join("__pycache__").join("main.cpython-311.pyc"),
+            "bytecode",
+        )
+        .unwrap();
+        fs::create_dir(dir_path.join("pkg")).unwrap();
+        fs::write(dir_path.join("pkg").join("mod.py"), "x = 1").unwrap();
+        fs::create_dir(dir_path.join("pkg").join("__pycache__")).unwrap();
+        fs::write(
+            dir_path
+                .join("pkg")
+                .join("__pycache__")
+                .join("mod.cpython-311.pyc"),
+            "bytecode",
+        )
+        .unwrap();
+
+        // Run prepare_bundle with no include/exclude patterns
+        let result = prepare_bundle(dir_path, None, None).unwrap();
+
+        // Convert results to relative paths for easier assertion
+        let relative_paths: Vec<String> = result
+            .iter()
+            .map(|p| {
+                p.strip_prefix(dir_path)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        // Verify no __pycache__ directory or its contents are included at any level
+        assert!(
+            !relative_paths.iter().any(|p| p.contains("__pycache__")),
+            "Bundle should not contain any __pycache__ directory or its contents"
+        );
+
+        // Verify expected files ARE included
+        assert!(relative_paths.contains(&"main.py".to_string()));
+        assert!(
+            relative_paths
+                .iter()
+                .any(|p| p == "pkg/mod.py" || p == "pkg\\mod.py")
+        );
+    }
+
+    #[test]
+    fn test_prepare_bundle_excludes_pycache_even_when_included() {
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+
+        fs::write(dir_path.join("main.py"), "print('hello')").unwrap();
+        fs::create_dir(dir_path.join("__pycache__")).unwrap();
+        fs::write(
+            dir_path.join("__pycache__").join("main.cpython-311.pyc"),
+            "bytecode",
+        )
+        .unwrap();
+
+        // Try to explicitly include __pycache__ in the include patterns
+        let include = Some(vec![
+            "__pycache__".to_string(),
+            "__pycache__/**".to_string(),
+            "**/*.py".to_string(),
+        ]);
+
+        let result = prepare_bundle(dir_path, include, None).unwrap();
+
+        let relative_paths: Vec<String> = result
+            .iter()
+            .map(|p| {
+                p.strip_prefix(dir_path)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        // Verify __pycache__ is STILL NOT included despite being in include patterns
+        assert!(
+            !relative_paths.iter().any(|p| p.contains("__pycache__")),
+            "Bundle should not contain __pycache__ even when explicitly included"
+        );
+
+        // Verify main.py is included (matches **/*.py pattern)
+        assert!(relative_paths.contains(&"main.py".to_string()));
     }
 
     #[test]
