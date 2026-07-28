@@ -204,7 +204,7 @@ impl RicochetClient {
 
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
-        let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::new()));
+        let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::generate()));
         crate::utils::create_bundle(path, &tar_path, include, exclude, extra_root_files, debug)?;
 
         // Get file size for progress tracking
