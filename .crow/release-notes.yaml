@@ -17,6 +17,7 @@ when:
 
 depends_on:
   - binaries
+  - binaries-mac
 
 labels:
   agent: thumper
