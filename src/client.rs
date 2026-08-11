@@ -465,6 +465,71 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
+    /// List the names of an item's environment variables.
+    pub async fn get_env_vars(&self, id: &str) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars", id));
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    /// Delete an environment variable by name. Returns the item's remaining
+    /// environment variable names.
+    pub async fn delete_env_var(&self, id: &str, name: &str) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars/{}", id, name));
+        let response = self
+            .client
+            .delete(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    /// Upsert environment variables, leaving others untouched. Returns the
+    /// item's remaining environment variable names.
+    pub async fn upsert_env_vars(
+        &self,
+        id: &str,
+        encrypted: &crate::crypto::RsaEncryptedEnvVars,
+    ) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars", id));
+        let response = self
+            .client
+            .patch(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .json(encrypted)
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    /// Replace all environment variables. Returns the item's remaining
+    /// environment variable names.
+    pub async fn replace_env_vars(
+        &self,
+        id: &str,
+        encrypted: &crate::crypto::RsaEncryptedEnvVars,
+    ) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars", id));
+        let response = self
+            .client
+            .put(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .json(encrypted)
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
     pub async fn get_ricochet_toml(&self, id: &str) -> Result<String> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/toml", id));

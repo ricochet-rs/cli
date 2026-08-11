@@ -47,7 +47,7 @@ fn strip_quotes(value: &str) -> &str {
     }
 }
 
-/// Resolve `--env` entries into concrete key/value pairs.
+/// Resolve env var entries into concrete key/value pairs.
 ///
 /// `KEY=VALUE` is taken literally. `KEY` alone is looked up in `.env`, then
 /// `.Renviron` (both in `dir`), then the process environment; an unresolved
@@ -68,7 +68,7 @@ pub fn resolve_env_vars(entries: &[String], dir: &Path) -> Result<HashMap<String
                     result.insert(key.to_string(), v);
                 }
                 None => bail!(
-                    "env var `{key}` not found in .env, .Renviron, or the environment; pass it explicitly as `--env {key}=value`"
+                    "env var `{key}` not found in .env, .Renviron, or the environment; pass it explicitly as `{key}=value`"
                 ),
             }
         }
@@ -173,7 +173,7 @@ NOT A KEY=ignored
             .unwrap_err()
             .to_string();
         assert!(err.contains("DEFINITELY_MISSING_KEY_XYZ"));
-        assert!(err.contains("--env DEFINITELY_MISSING_KEY_XYZ=value"));
+        assert!(err.contains("`DEFINITELY_MISSING_KEY_XYZ=value`"));
     }
 
     #[test]
