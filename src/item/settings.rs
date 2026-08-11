@@ -2,38 +2,15 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use ricochet_core::content::ContentItem;
 use serde_json::{Map, Value, json};
-use std::{
-    fs::read_to_string,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
-use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
+use crate::{OutputFormat, client::RicochetClient, config::Config, item::load_local, utils};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldChange {
     pub field: String,
     pub from: String,
     pub to: String,
-}
-
-/// Load the local `_ricochet.toml`, returning its content ID and parsed item.
-fn load_local(path: Option<&Path>) -> Result<(String, ContentItem)> {
-    let toml_path = path
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("_ricochet.toml"));
-    if !toml_path.exists() {
-        anyhow::bail!(
-            "{} No `_ricochet.toml` found at {}. Provide one with --path.",
-            "⚠".yellow(),
-            toml_path.display()
-        );
-    }
-    let toml = read_to_string(&toml_path)?;
-    let item = ContentItem::from_toml(&toml).context("parsing local _ricochet.toml")?;
-    let Some(id) = item.content.id.clone() else {
-        anyhow::bail!("Local _ricochet.toml has no item ID. Deploy the item first.");
-    };
-    Ok((id, item))
 }
 
 /// Print the change list as a human-readable diff (remote → local).

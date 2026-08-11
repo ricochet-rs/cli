@@ -1,35 +1,8 @@
-use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
+use crate::{OutputFormat, client::RicochetClient, config::Config, item::resolve_id, utils};
 use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Table, presets::UTF8_FULL};
-use ricochet_core::content::ContentItem;
-use std::{
-    fs::read_to_string,
-    path::{Path, PathBuf},
-};
-
-fn resolve_id(id: Option<&str>, path: Option<&Path>) -> Result<String> {
-    match id {
-        Some(id) => Ok(id.to_string()),
-        None => {
-            let toml_path = path
-                .map(|p| p.to_path_buf())
-                .unwrap_or(PathBuf::from("_ricochet.toml"));
-            if !toml_path.exists() {
-                anyhow::bail!(
-                    "{} Provide either an item ID or a path to a `_ricochet.toml` file.",
-                    "⚠".yellow()
-                );
-            }
-            let toml = read_to_string(toml_path)?;
-            let item = ContentItem::from_toml(&toml)?;
-            let Some(id) = item.content.id else {
-                anyhow::bail!("Provided _ricochet.toml does not have an item ID")
-            };
-            Ok(id)
-        }
-    }
-}
+use std::path::{Path, PathBuf};
 
 /// Directory to resolve `.env` / `.Renviron` lookups against for a bare `KEY`
 /// entry: the directory containing `path`, if given, otherwise the current
