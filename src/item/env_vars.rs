@@ -31,9 +31,9 @@ fn resolve_id(id: Option<&str>, path: Option<&Path>) -> Result<String> {
     }
 }
 
-/// Directory to resolve `.env` / `.Renviron` lookups against for a `--env
-/// KEY` (no value) entry: the directory containing `path`, if given,
-/// otherwise the current directory.
+/// Directory to resolve `.env` / `.Renviron` lookups against for a bare `KEY`
+/// entry: the directory containing `path`, if given, otherwise the current
+/// directory.
 fn env_dir(path: Option<&Path>) -> PathBuf {
     path.and_then(|p| p.parent())
         .filter(|p| !p.as_os_str().is_empty())
@@ -123,7 +123,7 @@ pub async fn delete_env_var(
     print_names(server_config.url.as_str(), &names, format)
 }
 
-/// Encrypt the resolved `--env` entries with the server's public key.
+/// Encrypt the resolved entries with the server's public key.
 async fn encrypt_entries(
     client: &RicochetClient,
     env: &[String],
