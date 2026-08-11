@@ -67,12 +67,14 @@ async fn test_get_env_vars_success() {
 #[tokio::test]
 async fn test_get_env_vars_unauthorized() {
     let mut server = Server::new_async().await;
+    let _key_mock = mock_valid_key(&mut server);
 
     let _m = server
         .mock(
             "GET",
             format!("/api/v0/content/{CONTENT_ID}/env-vars").as_str(),
         )
+        .match_header("authorization", "Key test_api_key")
         .with_status(401)
         .with_body(json!({"error": "Unauthorized"}).to_string())
         .create();
@@ -88,6 +90,7 @@ async fn test_get_env_vars_unauthorized() {
     .await;
 
     assert!(result.is_err());
+    _m.assert_async().await;
 }
 
 // --- delete ---
@@ -125,12 +128,14 @@ async fn test_delete_env_var_success() {
 #[tokio::test]
 async fn test_delete_env_var_not_found() {
     let mut server = Server::new_async().await;
+    let _key_mock = mock_valid_key(&mut server);
 
     let _m = server
         .mock(
             "DELETE",
             format!("/api/v0/content/{CONTENT_ID}/env-vars/MISSING").as_str(),
         )
+        .match_header("authorization", "Key test_api_key")
         .with_status(404)
         .with_body(json!({"error": "Variable not found"}).to_string())
         .create();
@@ -148,6 +153,7 @@ async fn test_delete_env_var_not_found() {
     .await;
 
     assert!(result.is_err());
+    _m.assert_async().await;
 }
 
 // --- set ---
@@ -193,6 +199,7 @@ async fn test_set_env_vars_success() {
 #[tokio::test]
 async fn test_set_env_vars_rejects_server_error() {
     let mut server = Server::new_async().await;
+    let _check_key_mock = mock_valid_key(&mut server);
 
     let _key_mock = server
         .mock("GET", "/api/v0/public-key")
@@ -205,6 +212,7 @@ async fn test_set_env_vars_rejects_server_error() {
             "PATCH",
             format!("/api/v0/content/{CONTENT_ID}/env-vars").as_str(),
         )
+        .match_header("authorization", "Key test_api_key")
         .with_status(400)
         .with_body(json!({"error": "name is unusable"}).to_string())
         .create();
@@ -221,6 +229,7 @@ async fn test_set_env_vars_rejects_server_error() {
     .await;
 
     assert!(result.is_err());
+    _set_mock.assert_async().await;
 }
 
 // --- replace ---
@@ -267,6 +276,7 @@ async fn test_replace_env_vars_success() {
 #[tokio::test]
 async fn test_replace_env_vars_not_found() {
     let mut server = Server::new_async().await;
+    let _check_key_mock = mock_valid_key(&mut server);
 
     let _key_mock = server
         .mock("GET", "/api/v0/public-key")
@@ -279,6 +289,7 @@ async fn test_replace_env_vars_not_found() {
             "PUT",
             format!("/api/v0/content/{CONTENT_ID}/env-vars").as_str(),
         )
+        .match_header("authorization", "Key test_api_key")
         .with_status(404)
         .with_body(json!({"error": "Content not found"}).to_string())
         .create();
@@ -296,4 +307,5 @@ async fn test_replace_env_vars_not_found() {
     .await;
 
     assert!(result.is_err());
+    _replace_mock.assert_async().await;
 }
