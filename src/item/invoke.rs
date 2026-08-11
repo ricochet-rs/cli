@@ -32,7 +32,7 @@ pub async fn invoke(
                     println!("{}", server_config.url.as_str().italic().dimmed());
 
                     let mut table = Table::new();
-                    table.load_preset(UTF8_FULL);
+                    table.load_style(UTF8_FULL);
 
                     if let Some(invocation_id) =
                         result.get("invocation_id").and_then(|v| v.as_str())
