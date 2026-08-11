@@ -103,7 +103,7 @@ pub async fn delete_env_var(
     if !force {
         let message = format!("Are you sure you want to delete environment variable '{name}'?");
         if !utils::confirm(&message)? {
-            println!("{}", "Deletion cancelled".yellow());
+            eprintln!("{}", "Deletion cancelled".yellow());
             return Ok(());
         }
     }
@@ -114,7 +114,7 @@ pub async fn delete_env_var(
 
     let names = client.delete_env_var(&id, name).await?;
 
-    println!(
+    eprintln!(
         "{} Environment variable '{}' deleted",
         "✓".green().bold(),
         name.bright_cyan()
@@ -150,7 +150,7 @@ pub async fn set_env_vars(
     let encrypted = encrypt_entries(&client, env, &env_dir(path)).await?;
     let names = client.upsert_env_vars(&id, &encrypted).await?;
 
-    println!(
+    eprintln!(
         "{} Environment variable(s) set. Instances will restart to pick them up",
         "✓".green().bold(),
     );
@@ -173,7 +173,7 @@ pub async fn replace_env_vars(
         let message =
             "This replaces all environment variables. Anything not listed gets deleted. Continue?";
         if !utils::confirm(message)? {
-            println!("{}", "Replace cancelled".yellow());
+            eprintln!("{}", "Replace cancelled".yellow());
             return Ok(());
         }
     }
@@ -185,7 +185,7 @@ pub async fn replace_env_vars(
     let encrypted = encrypt_entries(&client, env, &env_dir(path)).await?;
     let names = client.replace_env_vars(&id, &encrypted).await?;
 
-    println!(
+    eprintln!(
         "{} Environment variables replaced. Instances will restart to pick them up",
         "✓".green().bold(),
     );
