@@ -74,6 +74,7 @@ mod servers_tests {
     // ==================== Config add_server tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_add_server_to_empty_config() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -103,6 +104,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_add_server_with_api_key() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -124,6 +126,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_add_multiple_servers() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -168,6 +171,7 @@ mod servers_tests {
     // ==================== Config remove_server tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_remove_non_default_server() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -186,6 +190,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_remove_default_server_clears_default() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -203,6 +208,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_remove_nonexistent_server_fails() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -220,6 +226,7 @@ mod servers_tests {
     // ==================== Config set_default_server tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_set_default_server() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -235,6 +242,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_set_default_server_nonexistent_fails() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -252,6 +260,7 @@ mod servers_tests {
     // ==================== Config list_servers tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_list_servers_returns_all() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -271,6 +280,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_list_servers_includes_api_key_status() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -329,6 +339,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_server_by_url_unknown() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -454,6 +465,7 @@ mod servers_tests {
     // ==================== default server resolution tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_default_server() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -468,6 +480,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_default_server_fallback() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -483,6 +496,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_resolve_default_server_no_servers() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -511,6 +525,7 @@ mod servers_tests {
     // ==================== Backward compatibility tests ====================
 
     #[test]
+    #[serial(env_tests)]
     fn test_server_url_uses_default() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -525,6 +540,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_api_key_uses_default() {
         cleanup_env();
         let _temp_dir = setup_test_env();
@@ -539,6 +555,7 @@ mod servers_tests {
     }
 
     #[test]
+    #[serial(env_tests)]
     fn test_api_key_error_when_no_key() {
         cleanup_env();
         let _temp_dir = setup_test_env();

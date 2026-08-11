@@ -1,5 +1,6 @@
 use mockito::Server;
 use ricochet_cli::config::Config;
+use serial_test::serial;
 use std::env;
 use tempfile::TempDir;
 use url::Url;
@@ -20,6 +21,7 @@ fn cleanup_env() {
 }
 
 #[tokio::test]
+#[serial(env_tests)]
 async fn test_client_creation_with_valid_key() {
     cleanup_env();
     let mut server = Server::new_async().await;
@@ -50,6 +52,7 @@ async fn test_client_creation_with_valid_key() {
 }
 
 #[tokio::test]
+#[serial(env_tests)]
 async fn test_client_with_invalid_server() -> anyhow::Result<()> {
     cleanup_env();
 
@@ -124,6 +127,7 @@ async fn test_api_key_format() {
 }
 
 #[test]
+#[serial(env_tests)]
 fn test_config_persistence() {
     let (_config, temp_dir) = create_test_config();
 
