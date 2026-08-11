@@ -204,7 +204,8 @@ impl RicochetClient {
 
         // Create a tar bundle from the directory
         pb.set_message("Creating bundle...");
-        let tar_path = std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::generate()));
+        let tar_path =
+            std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::generate()));
         crate::utils::create_bundle(path, &tar_path, include, exclude, extra_root_files, debug)?;
 
         // Get file size for progress tracking
@@ -458,6 +459,33 @@ impl RicochetClient {
         let response = self
             .client
             .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    /// List the names of an item's environment variables.
+    pub async fn get_env_vars(&self, id: &str) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars", id));
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    /// Delete an environment variable by name. Returns the item's remaining
+    /// environment variable names.
+    pub async fn delete_env_var(&self, id: &str, name: &str) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars/{}", id, name));
+        let response = self
+            .client
+            .delete(url)
             .header("Authorization", format!("Key {}", self.api_key))
             .send()
             .await?;

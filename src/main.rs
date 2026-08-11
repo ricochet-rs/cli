@@ -195,6 +195,11 @@ enum ItemCommands {
         #[command(subcommand)]
         command: DeploymentCommands,
     },
+    /// Manage environment variables for an app
+    EnvVars {
+        #[command(subcommand)]
+        command: EnvVarsCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -245,6 +250,37 @@ enum TaskCommands {
     Deployment {
         #[command(subcommand)]
         command: DeploymentCommands,
+    },
+    /// Manage environment variables for a task
+    EnvVars {
+        #[command(subcommand)]
+        command: EnvVarsCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum EnvVarsCommands {
+    /// List the names of an item's environment variables
+    Get {
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
+    /// Delete an environment variable by name
+    Delete {
+        /// Environment variable name
+        name: String,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        #[arg(short = 'i', long)]
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+        /// Skip confirmation
+        #[arg(short = 'f', long)]
+        force: bool,
     },
 }
 
@@ -467,6 +503,35 @@ async fn main() -> Result<()> {
                     .await?;
                 }
             },
+            ItemCommands::EnvVars { command } => match command {
+                EnvVarsCommands::Get { id, path } => {
+                    item::env_vars::get_env_vars(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        cli.format,
+                    )
+                    .await?;
+                }
+                EnvVarsCommands::Delete {
+                    name,
+                    id,
+                    path,
+                    force,
+                } => {
+                    item::env_vars::delete_env_var(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        &name,
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
         },
         Some(Commands::Task { command }) => match command {
             TaskCommands::List {
@@ -543,6 +608,35 @@ async fn main() -> Result<()> {
                         &config,
                         cli.server.as_deref(),
                         &id,
+                        cli.format,
+                    )
+                    .await?;
+                }
+            },
+            TaskCommands::EnvVars { command } => match command {
+                EnvVarsCommands::Get { id, path } => {
+                    item::env_vars::get_env_vars(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        cli.format,
+                    )
+                    .await?;
+                }
+                EnvVarsCommands::Delete {
+                    name,
+                    id,
+                    path,
+                    force,
+                } => {
+                    item::env_vars::delete_env_var(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        &name,
+                        force,
                         cli.format,
                     )
                     .await?;
