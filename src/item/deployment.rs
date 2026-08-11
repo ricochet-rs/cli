@@ -121,7 +121,7 @@ pub async fn list_deployments(
             let cols = resolve_fields(fields);
 
             let mut table = Table::new();
-            table.load_preset(UTF8_FULL);
+            table.load_style(UTF8_FULL);
             table.set_header(cols.iter().map(|c| field_header(c)));
 
             for d in &deployments {
@@ -159,7 +159,7 @@ pub async fn get_deployment(
             println!("{}", server_config.url.as_str().italic().dimmed());
 
             let mut table = Table::new();
-            table.load_preset(UTF8_FULL);
+            table.load_style(UTF8_FULL);
 
             for col in ALL_FIELDS {
                 table.add_row(vec![Cell::new(field_header(col)), field_cell(col, &d)]);

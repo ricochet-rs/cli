@@ -20,7 +20,7 @@ pub fn list(config: &Config) -> Result<()> {
     let default_server = config.default_server();
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_style(UTF8_FULL);
     table.set_header(vec!["Name", "URL", "API Key", "Default"]);
 
     // Collect and sort servers by name

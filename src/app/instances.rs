@@ -83,7 +83,7 @@ pub async fn list_instances(
             }
 
             let mut table = Table::new();
-            table.load_preset(UTF8_FULL);
+            table.load_style(UTF8_FULL);
             table.set_header(vec![
                 "Instance ID",
                 "Connections",
