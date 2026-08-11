@@ -492,10 +492,8 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
-    /// Upsert (PATCH) environment variables. Existing variables not included
-    /// are left untouched. Names and values must already be RSA-OAEP/SHA-256
-    /// encrypted and base64 encoded. Returns the item's remaining
-    /// environment variable names.
+    /// Upsert environment variables, leaving others untouched. Returns the
+    /// item's remaining environment variable names.
     pub async fn upsert_env_vars(
         &self,
         id: &str,
@@ -513,10 +511,8 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
-    /// Replace (PUT) all environment variables. Any variable not included is
-    /// deleted. Names and values must already be RSA-OAEP/SHA-256 encrypted
-    /// and base64 encoded. Returns the item's remaining environment variable
-    /// names.
+    /// Replace all environment variables. Returns the item's remaining
+    /// environment variable names.
     pub async fn replace_env_vars(
         &self,
         id: &str,

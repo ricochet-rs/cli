@@ -21,6 +21,11 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet app deployment`↴](#ricochet-app-deployment)
 * [`ricochet app deployment list`↴](#ricochet-app-deployment-list)
 * [`ricochet app deployment get`↴](#ricochet-app-deployment-get)
+* [`ricochet app env-vars`↴](#ricochet-app-env-vars)
+* [`ricochet app env-vars get`↴](#ricochet-app-env-vars-get)
+* [`ricochet app env-vars delete`↴](#ricochet-app-env-vars-delete)
+* [`ricochet app env-vars set`↴](#ricochet-app-env-vars-set)
+* [`ricochet app env-vars replace`↴](#ricochet-app-env-vars-replace)
 * [`ricochet task`↴](#ricochet-task)
 * [`ricochet task list`↴](#ricochet-task-list)
 * [`ricochet task toml`↴](#ricochet-task-toml)
@@ -31,6 +36,11 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet task deployment`↴](#ricochet-task-deployment)
 * [`ricochet task deployment list`↴](#ricochet-task-deployment-list)
 * [`ricochet task deployment get`↴](#ricochet-task-deployment-get)
+* [`ricochet task env-vars`↴](#ricochet-task-env-vars)
+* [`ricochet task env-vars get`↴](#ricochet-task-env-vars-get)
+* [`ricochet task env-vars delete`↴](#ricochet-task-env-vars-delete)
+* [`ricochet task env-vars set`↴](#ricochet-task-env-vars-set)
+* [`ricochet task env-vars replace`↴](#ricochet-task-env-vars-replace)
 * [`ricochet server`↴](#ricochet-server)
 * [`ricochet server list`↴](#ricochet-server-list)
 * [`ricochet server add`↴](#ricochet-server-add)
@@ -173,6 +183,7 @@ Manage deployed app items
 * `stop` — Stop a running instance, or all instances if no instance ID is given
 * `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for an app
+* `env-vars` — Manage environment variables for an app
 
 
 
@@ -309,6 +320,90 @@ Get a specific deployment
 
 
 
+## `ricochet app env-vars`
+
+Manage environment variables for an app
+
+**Usage:** `ricochet app env-vars <COMMAND>`
+
+###### **Subcommands:**
+
+* `get` — List the names of an item's environment variables
+* `delete` — Delete an environment variable by name
+* `set` — Set (upsert) environment variables, leaving others untouched
+* `replace` — Replace all environment variables (any not listed are deleted)
+
+
+
+## `ricochet app env-vars get`
+
+List the names of an item's environment variables
+
+**Usage:** `ricochet app env-vars get [OPTIONS] [ID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet app env-vars delete`
+
+Delete an environment variable by name
+
+**Usage:** `ricochet app env-vars delete [OPTIONS] <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — Environment variable name
+
+###### **Options:**
+
+* `-i`, `--id <ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `-f`, `--force` — Skip confirmation
+
+
+
+## `ricochet app env-vars set`
+
+Set (upsert) environment variables, leaving others untouched
+
+**Usage:** `ricochet app env-vars set [OPTIONS] <KEY[=VALUE]>...`
+
+###### **Arguments:**
+
+* `<KEY[=VALUE]>` — Variables to set. `KEY=VALUE` sets it directly. `KEY` alone resolves the value from .env, .Renviron, or the calling environment
+
+###### **Options:**
+
+* `-i`, `--id <ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet app env-vars replace`
+
+Replace all environment variables (any not listed are deleted)
+
+**Usage:** `ricochet app env-vars replace [OPTIONS] [KEY[=VALUE]]...`
+
+###### **Arguments:**
+
+* `<KEY[=VALUE]>` — Variables to set. `KEY=VALUE` sets it directly. `KEY` alone resolves the value from .env, .Renviron, or the calling environment. Omit entirely to delete all environment variables
+
+###### **Options:**
+
+* `-i`, `--id <ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `-f`, `--force` — Skip confirmation
+
+
+
 ## `ricochet task`
 
 Manage deployed task items
@@ -323,6 +418,7 @@ Manage deployed task items
 * `schedule` — Set or update the schedule for a task
 * `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for a task
+* `env-vars` — Manage environment variables for a task
 
 
 
@@ -448,6 +544,90 @@ Get a specific deployment
 ###### **Arguments:**
 
 * `<ID>` — Deployment ID (ULID)
+
+
+
+## `ricochet task env-vars`
+
+Manage environment variables for a task
+
+**Usage:** `ricochet task env-vars <COMMAND>`
+
+###### **Subcommands:**
+
+* `get` — List the names of an item's environment variables
+* `delete` — Delete an environment variable by name
+* `set` — Set (upsert) environment variables, leaving others untouched
+* `replace` — Replace all environment variables (any not listed are deleted)
+
+
+
+## `ricochet task env-vars get`
+
+List the names of an item's environment variables
+
+**Usage:** `ricochet task env-vars get [OPTIONS] [ID]`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+
+###### **Options:**
+
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet task env-vars delete`
+
+Delete an environment variable by name
+
+**Usage:** `ricochet task env-vars delete [OPTIONS] <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — Environment variable name
+
+###### **Options:**
+
+* `-i`, `--id <ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `-f`, `--force` — Skip confirmation
+
+
+
+## `ricochet task env-vars set`
+
+Set (upsert) environment variables, leaving others untouched
+
+**Usage:** `ricochet task env-vars set [OPTIONS] <KEY[=VALUE]>...`
+
+###### **Arguments:**
+
+* `<KEY[=VALUE]>` — Variables to set. `KEY=VALUE` sets it directly. `KEY` alone resolves the value from .env, .Renviron, or the calling environment
+
+###### **Options:**
+
+* `-i`, `--id <ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+
+
+
+## `ricochet task env-vars replace`
+
+Replace all environment variables (any not listed are deleted)
+
+**Usage:** `ricochet task env-vars replace [OPTIONS] [KEY[=VALUE]]...`
+
+###### **Arguments:**
+
+* `<KEY[=VALUE]>` — Variables to set. `KEY=VALUE` sets it directly. `KEY` alone resolves the value from .env, .Renviron, or the calling environment. Omit entirely to delete all environment variables
+
+###### **Options:**
+
+* `-i`, `--id <ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
+* `-f`, `--force` — Skip confirmation
 
 
 

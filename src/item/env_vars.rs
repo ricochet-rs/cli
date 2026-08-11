@@ -142,10 +142,6 @@ pub async fn set_env_vars(
     env: &[String],
     format: OutputFormat,
 ) -> Result<()> {
-    if env.is_empty() {
-        anyhow::bail!("Provide at least one `--env KEY[=VALUE]`");
-    }
-
     let id = resolve_id(id, path)?;
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
@@ -155,7 +151,7 @@ pub async fn set_env_vars(
     let names = client.upsert_env_vars(&id, &encrypted).await?;
 
     println!(
-        "{} Environment variable(s) set; instances will restart to pick them up",
+        "{} Environment variable(s) set. Instances will restart to pick them up",
         "✓".green().bold(),
     );
 
@@ -174,7 +170,8 @@ pub async fn replace_env_vars(
     let id = resolve_id(id, path)?;
 
     if !force {
-        let message = "This replaces ALL environment variables; anything not listed will be deleted. Continue?";
+        let message =
+            "This replaces all environment variables. Anything not listed gets deleted. Continue?";
         if !utils::confirm(message)? {
             println!("{}", "Replace cancelled".yellow());
             return Ok(());
@@ -189,7 +186,7 @@ pub async fn replace_env_vars(
     let names = client.replace_env_vars(&id, &encrypted).await?;
 
     println!(
-        "{} Environment variables replaced; instances will restart to pick them up",
+        "{} Environment variables replaced. Instances will restart to pick them up",
         "✓".green().bold(),
     );
 
