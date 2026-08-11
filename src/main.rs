@@ -282,6 +282,36 @@ enum EnvVarsCommands {
         #[arg(short = 'f', long)]
         force: bool,
     },
+    /// Set (upsert) environment variables, leaving others untouched
+    Set {
+        /// Variables to set. `KEY=VALUE` sets it directly. `KEY` alone resolves
+        /// the value from .env, .Renviron, or the calling environment.
+        #[arg(value_name = "KEY[=VALUE]", required = true)]
+        env: Vec<String>,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        #[arg(short = 'i', long)]
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+    },
+    /// Replace all environment variables (any not listed are deleted)
+    Replace {
+        /// Variables to set. `KEY=VALUE` sets it directly. `KEY` alone resolves
+        /// the value from .env, .Renviron, or the calling environment. Omit
+        /// entirely to delete all environment variables.
+        #[arg(value_name = "KEY[=VALUE]")]
+        env: Vec<String>,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        #[arg(short = 'i', long)]
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
+        /// Skip confirmation
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -531,6 +561,34 @@ async fn main() -> Result<()> {
                     )
                     .await?;
                 }
+                EnvVarsCommands::Set { id, path, env } => {
+                    item::env_vars::set_env_vars(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        &env,
+                        cli.format,
+                    )
+                    .await?;
+                }
+                EnvVarsCommands::Replace {
+                    id,
+                    path,
+                    env,
+                    force,
+                } => {
+                    item::env_vars::replace_env_vars(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        &env,
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
             },
         },
         Some(Commands::Task { command }) => match command {
@@ -636,6 +694,34 @@ async fn main() -> Result<()> {
                         id.as_deref(),
                         path.as_deref(),
                         &name,
+                        force,
+                        cli.format,
+                    )
+                    .await?;
+                }
+                EnvVarsCommands::Set { id, path, env } => {
+                    item::env_vars::set_env_vars(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        &env,
+                        cli.format,
+                    )
+                    .await?;
+                }
+                EnvVarsCommands::Replace {
+                    id,
+                    path,
+                    env,
+                    force,
+                } => {
+                    item::env_vars::replace_env_vars(
+                        &config,
+                        cli.server.as_deref(),
+                        id.as_deref(),
+                        path.as_deref(),
+                        &env,
                         force,
                         cli.format,
                     )

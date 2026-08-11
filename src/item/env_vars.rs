@@ -31,6 +31,16 @@ fn resolve_id(id: Option<&str>, path: Option<&Path>) -> Result<String> {
     }
 }
 
+/// Directory to resolve `.env` / `.Renviron` lookups against for a `--env
+/// KEY` (no value) entry: the directory containing `path`, if given,
+/// otherwise the current directory.
+fn env_dir(path: Option<&Path>) -> PathBuf {
+    path.and_then(|p| p.parent())
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
 fn print_names(server_url: &str, names: &[String], format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Json => {
@@ -108,6 +118,79 @@ pub async fn delete_env_var(
         "{} Environment variable '{}' deleted",
         "✓".green().bold(),
         name.bright_cyan()
+    );
+
+    print_names(server_config.url.as_str(), &names, format)
+}
+
+/// Encrypt the resolved `--env` entries with the server's public key.
+async fn encrypt_entries(
+    client: &RicochetClient,
+    env: &[String],
+    dir: &Path,
+) -> Result<crate::crypto::RsaEncryptedEnvVars> {
+    let resolved = crate::env_vars::resolve_env_vars(env, dir)?;
+    let pub_key = client.get_public_key().await?;
+    crate::crypto::encrypt_env_vars(&pub_key, &resolved)
+}
+
+pub async fn set_env_vars(
+    config: &Config,
+    server_ref: Option<&str>,
+    id: Option<&str>,
+    path: Option<&Path>,
+    env: &[String],
+    format: OutputFormat,
+) -> Result<()> {
+    if env.is_empty() {
+        anyhow::bail!("Provide at least one `--env KEY[=VALUE]`");
+    }
+
+    let id = resolve_id(id, path)?;
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+    client.preflight_key_check().await?;
+
+    let encrypted = encrypt_entries(&client, env, &env_dir(path)).await?;
+    let names = client.upsert_env_vars(&id, &encrypted).await?;
+
+    println!(
+        "{} Environment variable(s) set; instances will restart to pick them up",
+        "✓".green().bold(),
+    );
+
+    print_names(server_config.url.as_str(), &names, format)
+}
+
+pub async fn replace_env_vars(
+    config: &Config,
+    server_ref: Option<&str>,
+    id: Option<&str>,
+    path: Option<&Path>,
+    env: &[String],
+    force: bool,
+    format: OutputFormat,
+) -> Result<()> {
+    let id = resolve_id(id, path)?;
+
+    if !force {
+        let message = "This replaces ALL environment variables; anything not listed will be deleted. Continue?";
+        if !utils::confirm(message)? {
+            println!("{}", "Replace cancelled".yellow());
+            return Ok(());
+        }
+    }
+
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+    client.preflight_key_check().await?;
+
+    let encrypted = encrypt_entries(&client, env, &env_dir(path)).await?;
+    let names = client.replace_env_vars(&id, &encrypted).await?;
+
+    println!(
+        "{} Environment variables replaced; instances will restart to pick them up",
+        "✓".green().bold(),
     );
 
     print_names(server_config.url.as_str(), &names, format)

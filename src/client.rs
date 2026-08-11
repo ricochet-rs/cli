@@ -492,6 +492,48 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
+    /// Upsert (PATCH) environment variables. Existing variables not included
+    /// are left untouched. Names and values must already be RSA-OAEP/SHA-256
+    /// encrypted and base64 encoded. Returns the item's remaining
+    /// environment variable names.
+    pub async fn upsert_env_vars(
+        &self,
+        id: &str,
+        encrypted: &crate::crypto::RsaEncryptedEnvVars,
+    ) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars", id));
+        let response = self
+            .client
+            .patch(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .json(encrypted)
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
+    /// Replace (PUT) all environment variables. Any variable not included is
+    /// deleted. Names and values must already be RSA-OAEP/SHA-256 encrypted
+    /// and base64 encoded. Returns the item's remaining environment variable
+    /// names.
+    pub async fn replace_env_vars(
+        &self,
+        id: &str,
+        encrypted: &crate::crypto::RsaEncryptedEnvVars,
+    ) -> Result<Vec<String>> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{}/env-vars", id));
+        let response = self
+            .client
+            .put(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .json(encrypted)
+            .send()
+            .await?;
+        Self::handle_response(response).await
+    }
+
     pub async fn get_ricochet_toml(&self, id: &str) -> Result<String> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{}/toml", id));
