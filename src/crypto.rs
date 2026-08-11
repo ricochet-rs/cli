@@ -1,8 +1,9 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use rsa::pkcs1::DecodeRsaPublicKey;
-use rsa::sha2::Sha256;
+use rsa::sha2::{Digest, Sha256};
+use rsa::traits::PublicKeyParts;
 use rsa::{Oaep, RsaPublicKey};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -16,14 +17,35 @@ pub fn parse_public_key_pem(pem: &str) -> Result<RsaPublicKey> {
     Ok(RsaPublicKey::from_pkcs1_pem(pem.trim())?)
 }
 
+/// The largest plaintext RSA-OAEP with SHA-256 can encrypt under `pub_key`.
+/// 190 bytes for the 2048-bit keys the server issues.
+pub fn max_plaintext_len(pub_key: &RsaPublicKey) -> usize {
+    pub_key
+        .size()
+        .saturating_sub(2 * <Sha256 as Digest>::output_size() + 2)
+}
+
 pub fn encrypt_env_vars(
     pub_key: &RsaPublicKey,
     vars: &HashMap<String, String>,
 ) -> Result<RsaEncryptedEnvVars> {
     use rsa::rand_core::OsRng;
+    let max_len = max_plaintext_len(pub_key);
     let mut rng = OsRng;
     let mut out = HashMap::new();
     for (name, value) in vars {
+        let name_len = name.len();
+        if name_len > max_len {
+            bail!(
+                "environment variable name `{name}` is {name_len} bytes; the server's public key can encrypt at most {max_len} bytes"
+            );
+        }
+        let value_len = value.len();
+        if value_len > max_len {
+            bail!(
+                "value for environment variable `{name}` is {value_len} bytes; the server's public key can encrypt at most {max_len} bytes"
+            );
+        }
         let enc_name = pub_key.encrypt(&mut rng, Oaep::new::<Sha256>(), name.as_bytes())?;
         let enc_value = pub_key.encrypt(&mut rng, Oaep::new::<Sha256>(), value.as_bytes())?;
         out.insert(
@@ -79,6 +101,26 @@ mod tests {
             recovered.insert(name, value);
         }
         assert_eq!(recovered, vars);
+    }
+
+    #[test]
+    fn oversized_value_names_the_variable_and_the_limit() {
+        let mut rng = OsRng;
+        let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
+        let pub_key = RsaPublicKey::from(&priv_key);
+        let max_len = max_plaintext_len(&pub_key);
+        assert_eq!(max_len, 190);
+
+        let mut vars = HashMap::new();
+        vars.insert("JWT".to_string(), "x".repeat(max_len + 1));
+        let err = encrypt_env_vars(&pub_key, &vars).unwrap_err().to_string();
+        assert!(err.contains("JWT"), "{err}");
+        assert!(err.contains("191 bytes"), "{err}");
+        assert!(err.contains("at most 190 bytes"), "{err}");
+
+        // A value of exactly the limit still encrypts.
+        vars.insert("JWT".to_string(), "x".repeat(max_len));
+        assert!(encrypt_env_vars(&pub_key, &vars).is_ok());
     }
 
     #[test]
