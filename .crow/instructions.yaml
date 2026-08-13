@@ -1,0 +1,37 @@
+when:
+  - event: pull_request
+  - event: pull_request_edited
+  - event: push
+    branch:
+      - ${CI_REPO_DEFAULT_BRANCH}
+
+labels:
+  agent: thumper
+
+steps:
+  paired-pr:
+    when:
+      - event: pull_request
+      - event: pull_request_edited
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
+    environment:
+      GH_TOKEN:
+        from_secret: agent_instructions_token
+    commands:
+      - apk add -q --no-cache github-cli jq
+      - gh repo clone ricochet-rs/agent-instructions /tmp/agent-instructions -- --depth=1
+      - /tmp/agent-instructions/scripts/paired-instructions-pr.sh check "$${CI_REPO}" "$${CI_COMMIT_PULL_REQUEST}"
+
+  merge-paired-pr:
+    when:
+      - event: push
+        branch:
+          - ${CI_REPO_DEFAULT_BRANCH}
+    image: reg.ricochet.rs/docker.io/library/alpine:3.24
+    environment:
+      GH_TOKEN:
+        from_secret: agent_instructions_token
+    commands:
+      - apk add -q --no-cache github-cli jq
+      - gh repo clone ricochet-rs/agent-instructions /tmp/agent-instructions -- --depth=1
+      - /tmp/agent-instructions/scripts/paired-instructions-pr.sh merge-for-commit "$${CI_REPO}" "$${CI_COMMIT_SHA}"
