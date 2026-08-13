@@ -41,16 +41,6 @@ steps:
           path: backblaze/tokens/cicd
           key: applicationKey
 
-  rust-fmt:
-    image: reg.ricochet.rs/docker.io/library/rust:1.97
-    depends_on: cache
-    commands:
-      - export PATH=".sccache-cache:$PATH"
-      - . ./.sccache
-      - rustup component add rustfmt
-      - cargo fmt -q --all
-      - sccache --show-stats
-
   rust-lint:
     image: reg.ricochet.rs/docker.io/library/rust:1.97
     depends_on: cache
