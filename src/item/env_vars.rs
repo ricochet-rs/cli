@@ -31,7 +31,7 @@ fn print_names(server_url: &str, names: &[String], format: OutputFormat) -> Resu
             }
 
             let mut table = Table::new();
-            table.load_preset(UTF8_FULL);
+            table.load_style(UTF8_FULL);
             table.set_header(vec!["Name"]);
             for name in names {
                 table.add_row(vec![name]);
