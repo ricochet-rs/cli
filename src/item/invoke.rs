@@ -9,7 +9,7 @@ pub async fn invoke(
     id: &str,
     format: OutputFormat,
 ) -> Result<()> {
-    println!("Invoking task: {}", id.bright_cyan());
+    eprintln!("Invoking task: {}", id.bright_cyan());
 
     // Resolve server configuration
     let server_config = config.resolve_server(server_ref)?;
@@ -18,7 +18,7 @@ pub async fn invoke(
 
     match client.invoke(id, None).await {
         Ok(result) => {
-            println!("{} Task invoked successfully!\n", "✓".green().bold());
+            eprintln!("{} Task invoked successfully!\n", "✓".green().bold());
 
             match format {
                 OutputFormat::Json => {

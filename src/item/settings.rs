@@ -13,26 +13,29 @@ pub struct FieldChange {
     pub to: String,
 }
 
-/// Print the change list as a human-readable diff (remote → local).
-fn print_changes(id: &str, name: &str, changes: &[FieldChange]) {
-    println!(
-        "{} Local settings differ from {} ({})",
+/// Render the change list as a human-readable diff (remote → local).
+fn format_changes(id: &str, name: &str, changes: &[FieldChange]) -> String {
+    let header = format!(
+        "{} Local settings differ from {} ({})\n",
         "⚠".yellow().bold(),
         id.bright_cyan(),
         name
     );
-    println!();
     let width = changes.iter().map(|c| c.field.len()).max().unwrap_or(0);
-    for c in changes {
-        println!(
-            "  {:<width$}  {} {} {}",
-            c.field,
-            c.from.dimmed(),
-            "→".dimmed(),
-            c.to,
-            width = width
-        );
-    }
+    let rows: Vec<String> = changes
+        .iter()
+        .map(|c| {
+            format!(
+                "  {:<width$}  {} {} {}",
+                c.field,
+                c.from.dimmed(),
+                "→".dimmed(),
+                c.to,
+                width = width
+            )
+        })
+        .collect();
+    format!("{header}\n{}", rows.join("\n"))
 }
 
 /// Fetch the remote item and diff it against the local one.
@@ -355,7 +358,7 @@ pub async fn preview(
             if changes.is_empty() {
                 println!("{} Settings already up to date", "✓".green().bold());
             } else {
-                print_changes(&id, &local.content.name, &changes);
+                println!("{}", format_changes(&id, &local.content.name, &changes));
                 println!();
                 println!(
                     "Run {} to apply these changes.",
@@ -384,15 +387,15 @@ pub async fn update(
     let (changes, patch) = diff_against_remote(&client, &id, &local).await?;
 
     if changes.is_empty() {
-        println!("{} Settings already up to date", "✓".green().bold());
+        eprintln!("{} Settings already up to date", "✓".green().bold());
         return Ok(());
     }
 
-    print_changes(&id, &local.content.name, &changes);
-    println!();
+    eprintln!("{}", format_changes(&id, &local.content.name, &changes));
+    eprintln!();
 
     if !force && !utils::confirm("Apply these changes?")? {
-        println!("{}", "Update cancelled".yellow());
+        eprintln!("{}", "Update cancelled".yellow());
         return Ok(());
     }
 
@@ -507,5 +510,32 @@ packages = "renv.lock"
             })
         );
         assert_eq!(changes.len(), 2);
+    }
+
+    #[test]
+    fn format_changes_pads_the_field_column() {
+        colored::control::set_override(false);
+        let changes = vec![
+            FieldChange {
+                field: "access_type".to_string(),
+                from: "private".to_string(),
+                to: "external".to_string(),
+            },
+            FieldChange {
+                field: "serve.min_instances".to_string(),
+                from: "0".to_string(),
+                to: "3".to_string(),
+            },
+        ];
+        let rendered = format_changes("01KE52BY41EQ7NE89K7Z5MMZ84", "example-app", &changes);
+        let expected = [
+            "⚠ Local settings differ from 01KE52BY41EQ7NE89K7Z5MMZ84 (example-app)",
+            "",
+            "  access_type          private → external",
+            "  serve.min_instances  0 → 3",
+        ]
+        .join("\n");
+        assert_eq!(rendered, expected);
+        colored::control::unset_override();
     }
 }
