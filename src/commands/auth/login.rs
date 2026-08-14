@@ -9,6 +9,15 @@ use tokio::sync::Mutex;
 use unicode_icons::icons::symbols;
 use url::Url;
 
+const HOSTED_TRIAL_SERVER: &str = "https://try.ricochet.rs";
+const HOSTED_TRIAL_PROFILE: &str = "try";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoginServerSource {
+    Configured,
+    HostedTrialFallback,
+}
+
 #[derive(Debug)]
 struct AuthState {
     received_callback: bool,
@@ -41,11 +50,18 @@ pub async fn login(
     println!("🔐 Authenticating against Ricochet server\n");
 
     // Resolve which server to authenticate with
-    let (server_url, server_name) = resolve_login_server(config, server_ref)?;
+    let (server_url, server_name, server_source) = resolve_login_server(config, server_ref)?;
 
     println!("Server: {}", server_url.as_str().bright_cyan());
     if let Some(ref name) = server_name {
         println!("Profile: {}", name.bright_cyan());
+    }
+    if server_source == LoginServerSource::HostedTrialFallback {
+        println!("{}", "Using the hosted trial default.".dimmed());
+        println!(
+            "{}",
+            "Register your own server with `ricochet server add <NAME> <URL>`.".dimmed()
+        );
     }
     println!();
 
@@ -75,7 +91,14 @@ pub async fn login(
 
     // If an API key was provided directly, try to validate it
     if let Some(key) = api_key {
-        return validate_and_save_key(config, server_url.clone(), key, server_name.clone()).await;
+        return validate_and_save_key(
+            config,
+            server_url.clone(),
+            key,
+            server_name.clone(),
+            server_source,
+        )
+        .await;
     }
 
     // In headless environments, prompt for manual API key entry instead of OAuth
@@ -90,11 +113,11 @@ pub async fn login(
             .with_prompt("Enter API key (starts with 'rico_')")
             .interact()?;
 
-        return validate_and_save_key(config, server_url, key, server_name).await;
+        return validate_and_save_key(config, server_url, key, server_name, server_source).await;
     }
 
     // Use OAuth with local callback server
-    oauth_login_with_callback(config, server_url, server_name).await?;
+    oauth_login_with_callback(config, server_url, server_name, server_source).await?;
 
     Ok(())
 }
@@ -103,12 +126,15 @@ pub async fn login(
 fn resolve_login_server(
     config: &Config,
     server_ref: Option<&str>,
-) -> Result<(Url, Option<String>)> {
+) -> Result<(Url, Option<String>, LoginServerSource)> {
     if let Some(ref_str) = server_ref {
         // Check if it's a named server
-        if config.servers.contains_key(ref_str) {
-            let server_config = config.servers.get(ref_str).unwrap();
-            return Ok((server_config.url.clone(), Some(ref_str.to_string())));
+        if let Some(server_config) = config.servers.get(ref_str) {
+            return Ok((
+                server_config.url.clone(),
+                Some(ref_str.to_string()),
+                LoginServerSource::Configured,
+            ));
         }
 
         // Check if it's a URL
@@ -117,11 +143,11 @@ fn resolve_login_server(
             // Check if we have a server with this URL
             for (name, server_config) in &config.servers {
                 if server_config.url == url {
-                    return Ok((url, Some(name.clone())));
+                    return Ok((url, Some(name.clone()), LoginServerSource::Configured));
                 }
             }
             // New server by URL - will be added during login
-            return Ok((url, None));
+            return Ok((url, None, LoginServerSource::Configured));
         }
 
         // It's a new server name - prompt for URL? For now, use default URL
@@ -132,16 +158,37 @@ fn resolve_login_server(
         );
     }
 
+    if config_is_untouched_default(config) {
+        return Ok((
+            crate::config::parse_server_url(HOSTED_TRIAL_SERVER)?,
+            Some(HOSTED_TRIAL_PROFILE.to_string()),
+            LoginServerSource::HostedTrialFallback,
+        ));
+    }
+
     // Use default server
     let server_config = config.resolve_server(None)?;
     let server_name = config.default_server().map(|s| s.to_string());
-    Ok((server_config.url, server_name))
+    Ok((
+        server_config.url,
+        server_name,
+        LoginServerSource::Configured,
+    ))
+}
+
+fn config_is_untouched_default(config: &Config) -> bool {
+    config.default_server() == Some("default")
+        && config.servers.len() == 1
+        && config.servers.get("default").is_some_and(|server| {
+            server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
+        })
 }
 
 async fn oauth_login_with_callback(
     config: &mut Config,
     server: url::Url,
     server_name: Option<String>,
+    server_source: LoginServerSource,
 ) -> Result<()> {
     use axum::{Router, extract::Query, response::Html, routing::get};
     use std::collections::HashMap;
@@ -265,12 +312,24 @@ async fn oauth_login_with_callback(
                 "\n{} Received API key directly from server!",
                 symbols::check_mark().to_string().green().bold()
             );
-            validate_and_save_key(config, server.clone(), token.clone(), server_name.clone())
-                .await?;
+            validate_and_save_key(
+                config,
+                server.clone(),
+                token.clone(),
+                server_name.clone(),
+                server_source,
+            )
+            .await?;
         } else {
             // Session token - use it to create API key
-            create_api_key_with_session(config, server.clone(), token.clone(), server_name.clone())
-                .await?;
+            create_api_key_with_session(
+                config,
+                server.clone(),
+                token.clone(),
+                server_name.clone(),
+                server_source,
+            )
+            .await?;
         }
     } else {
         // Fall back to manual entry
@@ -290,7 +349,7 @@ async fn oauth_login_with_callback(
             .with_prompt("Enter API key (starts with 'rico_')")
             .interact()?;
 
-        validate_and_save_key(config, server, key, server_name).await?;
+        validate_and_save_key(config, server, key, server_name, server_source).await?;
     }
 
     Ok(())
@@ -301,6 +360,7 @@ async fn create_api_key_with_session(
     server: Url,
     session_token: String,
     server_name: Option<String>,
+    server_source: LoginServerSource,
 ) -> Result<()> {
     println!("\n{}", "Creating API key using session...".dimmed());
 
@@ -333,11 +393,13 @@ async fn create_api_key_with_session(
     if response.status().is_success() {
         let api_key_data: ApiKeyResponse = response.json().await?;
 
-        // Determine server name for saving
-        let name = determine_server_name(config, &server, server_name);
-
-        // Save the API key to the appropriate server config
-        config.add_server(name.clone(), server.clone(), Some(api_key_data.key.clone()));
+        let name = store_login_credentials(
+            config,
+            &server,
+            api_key_data.key.clone(),
+            server_name,
+            server_source,
+        )?;
         config.save()?;
 
         println!(
@@ -421,6 +483,21 @@ fn determine_server_name(config: &Config, server_url: &Url, server_name: Option<
     "default".to_string()
 }
 
+fn store_login_credentials(
+    config: &mut Config,
+    server: &Url,
+    api_key: String,
+    server_name: Option<String>,
+    server_source: LoginServerSource,
+) -> Result<String> {
+    let name = determine_server_name(config, server, server_name);
+    config.add_server(name.clone(), server.clone(), Some(api_key));
+    if server_source == LoginServerSource::HostedTrialFallback {
+        config.set_default_server(&name)?;
+    }
+    Ok(name)
+}
+
 /// Detect whether we're running in a headless environment where a browser cannot be opened.
 ///
 /// On Linux, checks for `DISPLAY` (X11) and `WAYLAND_DISPLAY`. If neither is set, the
@@ -447,17 +524,15 @@ async fn validate_and_save_key(
     server: url::Url,
     key: String,
     server_name: Option<String>,
+    server_source: LoginServerSource,
 ) -> Result<()> {
     println!("\n{}", "Validating credentials...".dimmed());
     let client = RicochetClient::new_with_key(server.to_string(), key.clone())?;
 
     match client.validate_key().await {
         Ok(true) => {
-            // Determine server name for saving
-            let name = determine_server_name(config, &server, server_name);
-
-            // Save the API key to the appropriate server config
-            config.add_server(name.clone(), server.clone(), Some(key.clone()));
+            let name =
+                store_login_credentials(config, &server, key.clone(), server_name, server_source)?;
             config.save()?;
 
             println!(
@@ -541,4 +616,85 @@ pub fn logout(config: &mut Config, server_ref: Option<&str>) -> Result<()> {
         server_name.bright_cyan()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ServerConfig;
+    use std::collections::HashMap;
+
+    #[test]
+    fn bare_login_uses_hosted_trial_for_untouched_config() {
+        let config = Config::default();
+
+        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+
+        assert_eq!(url.as_str(), "https://try.ricochet.rs/");
+        assert_eq!(profile.as_deref(), Some("try"));
+        assert_eq!(source, LoginServerSource::HostedTrialFallback);
+    }
+
+    #[test]
+    fn explicit_server_preserves_untouched_local_default() {
+        let config = Config::default();
+
+        let (url, profile, source) =
+            resolve_login_server(&config, Some("default")).expect("server resolves");
+
+        assert_eq!(url.as_str(), "http://localhost:3000/");
+        assert_eq!(profile.as_deref(), Some("default"));
+        assert_eq!(source, LoginServerSource::Configured);
+    }
+
+    #[test]
+    fn bare_login_preserves_configured_default() {
+        let mut servers = HashMap::new();
+        servers.insert(
+            "production".to_string(),
+            ServerConfig {
+                url: Url::parse("https://ricochet.example.com").expect("valid URL"),
+                api_key: None,
+            },
+        );
+        let config = Config {
+            server: None,
+            api_key: None,
+            servers,
+            default_server: Some("production".to_string()),
+            default_format: Some("table".to_string()),
+            skip_update_check: None,
+        };
+
+        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+
+        assert_eq!(url.as_str(), "https://ricochet.example.com/");
+        assert_eq!(profile.as_deref(), Some("production"));
+        assert_eq!(source, LoginServerSource::Configured);
+    }
+
+    #[test]
+    fn hosted_trial_credentials_make_try_profile_default() {
+        let mut config = Config::default();
+        let url = Url::parse(HOSTED_TRIAL_SERVER).expect("valid URL");
+
+        let name = store_login_credentials(
+            &mut config,
+            &url,
+            "rico_test".to_string(),
+            Some(HOSTED_TRIAL_PROFILE.to_string()),
+            LoginServerSource::HostedTrialFallback,
+        )
+        .expect("credentials stored");
+
+        assert_eq!(name, "try");
+        assert_eq!(config.default_server(), Some("try"));
+        assert_eq!(
+            config
+                .servers
+                .get("try")
+                .and_then(|server| server.api_key.as_deref()),
+            Some("rico_test")
+        );
+    }
 }
