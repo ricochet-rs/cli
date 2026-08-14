@@ -283,7 +283,10 @@ pub async fn deploy_git(
         path: repo_path,
     };
 
-    let toml_content = config_path.map(std::fs::read_to_string).transpose()?;
+    let toml_content = match config_path {
+        Some(path) => Some(tokio::fs::read_to_string(path).await?),
+        None => None,
+    };
 
     println!(
         "📦 Deploying Git-backed content item from {}\n",
@@ -291,11 +294,7 @@ pub async fn deploy_git(
     );
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
+    pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
     pb.set_message("Creating content item and starting deployment");
 

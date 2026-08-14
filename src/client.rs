@@ -282,8 +282,7 @@ impl RicochetClient {
     }
 
     /// Create a Git-backed content item and start its first deployment.
-    /// `config` is the raw `_ricochet.toml` contents; omit to have the server
-    /// read it from the repository itself.
+    /// `config` is the raw `_ricochet.toml` contents; omit it to read the configuration from the repository.
     pub async fn deploy_git(
         &self,
         repo: &GitRepo,
