@@ -6,3 +6,4 @@ pub mod init;
 pub mod list;
 pub mod server;
 pub mod update;
+pub mod user;

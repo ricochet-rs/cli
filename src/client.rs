@@ -2,7 +2,10 @@ use crate::config::{ServerConfig, parse_server_url};
 use anyhow::{Context, Result};
 use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
-use ricochet_core::content::ContentItem;
+use ricochet_core::{
+    config::git::{GitCredential, GitProtocol},
+    content::ContentItem,
+};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::{
@@ -527,6 +530,35 @@ impl RicochetClient {
             .json(encrypted)
             .send()
             .await?;
+        Self::handle_response(response).await
+    }
+
+    /// List Git credentials owned by the current user, or by `user_id` if the caller is an admin.
+    /// Credential values are never returned.
+    pub async fn list_credentials(
+        &self,
+        user_id: Option<&str>,
+        protocol: Option<GitProtocol>,
+    ) -> Result<Vec<GitCredential>> {
+        let mut url = self.base_url.clone();
+        url.set_path("/api/v0/user/credentials");
+        {
+            let mut pairs = url.query_pairs_mut();
+            if let Some(uid) = user_id {
+                pairs.append_pair("user_id", uid);
+            }
+            if let Some(p) = protocol {
+                pairs.append_pair("type", &p.to_string());
+            }
+        }
+
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
         Self::handle_response(response).await
     }
 

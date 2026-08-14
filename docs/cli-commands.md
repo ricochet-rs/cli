@@ -46,6 +46,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet server add`↴](#ricochet-server-add)
 * [`ricochet server remove`↴](#ricochet-server-remove)
 * [`ricochet server set-default`↴](#ricochet-server-set-default)
+* [`ricochet user`↴](#ricochet-user)
+* [`ricochet user credentials`↴](#ricochet-user-credentials)
 * [`ricochet self`↴](#ricochet-self)
 * [`ricochet self update`↴](#ricochet-self-update)
 
@@ -66,6 +68,7 @@ Ricochet CLI
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
 * `server` — Manage configured Ricochet servers
+* `user` — Manage the current user's account
 * `self` — Manage the ricochet CLI itself
 
 ###### **Options:**
@@ -696,6 +699,34 @@ Set the default server
 ###### **Arguments:**
 
 * `<NAME>` — Server name to set as default
+
+
+
+## `ricochet user`
+
+Manage the current user's account
+
+**Usage:** `ricochet user <COMMAND>`
+
+###### **Subcommands:**
+
+* `credentials` — List Git credentials
+
+
+
+## `ricochet user credentials`
+
+List Git credentials
+
+**Usage:** `ricochet user credentials [OPTIONS]`
+
+###### **Options:**
+
+* `--user-id <USER_ID>` — Filter by user ID (admins only)
+* `--type <TYPE>` — Filter by credential type
+
+  Possible values: `ssh`, `https`
+
 
 
 
