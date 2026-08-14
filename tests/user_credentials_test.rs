@@ -3,11 +3,11 @@ use ricochet_cli::OutputFormat;
 use serde_json::json;
 use url::Url;
 
-fn test_config(server: &Server) -> ricochet_cli::config::Config {
-    ricochet_cli::config::Config::for_test(
-        Url::parse(&server.url()).unwrap(),
+fn test_config(server: &Server) -> anyhow::Result<ricochet_cli::config::Config> {
+    Ok(ricochet_cli::config::Config::for_test(
+        Url::parse(&server.url())?,
         Some("test_api_key".to_string()),
-    )
+    ))
 }
 
 // Every command runs a preflight check against this endpoint before doing
@@ -20,7 +20,7 @@ fn mock_valid_key(server: &mut Server) -> mockito::Mock {
 }
 
 #[tokio::test]
-async fn test_list_credentials_success() {
+async fn test_list_credentials_success() -> anyhow::Result<()> {
     let mut server = Server::new_async().await;
     let _key_mock = mock_valid_key(&mut server);
 
@@ -48,7 +48,7 @@ async fn test_list_credentials_success() {
         )
         .create();
 
-    let config = test_config(&server);
+    let config = test_config(&server)?;
     let result = ricochet_cli::commands::user::list_credentials(
         &config,
         None,
@@ -59,10 +59,11 @@ async fn test_list_credentials_success() {
     .await;
 
     assert!(result.is_ok(), "expected success, got {result:?}");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_list_credentials_json_format() {
+async fn test_list_credentials_json_format() -> anyhow::Result<()> {
     let mut server = Server::new_async().await;
     let _key_mock = mock_valid_key(&mut server);
 
@@ -83,7 +84,7 @@ async fn test_list_credentials_json_format() {
         )
         .create();
 
-    let config = test_config(&server);
+    let config = test_config(&server)?;
     let result = ricochet_cli::commands::user::list_credentials(
         &config,
         None,
@@ -94,10 +95,11 @@ async fn test_list_credentials_json_format() {
     .await;
 
     assert!(result.is_ok(), "expected success, got {result:?}");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_list_credentials_with_filters() {
+async fn test_list_credentials_with_filters() -> anyhow::Result<()> {
     let mut server = Server::new_async().await;
     let _key_mock = mock_valid_key(&mut server);
 
@@ -121,7 +123,7 @@ async fn test_list_credentials_with_filters() {
         )
         .create();
 
-    let config = test_config(&server);
+    let config = test_config(&server)?;
     let result = ricochet_cli::commands::user::list_credentials(
         &config,
         None,
@@ -133,10 +135,11 @@ async fn test_list_credentials_with_filters() {
 
     assert!(result.is_ok(), "expected success, got {result:?}");
     _m.assert_async().await;
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_list_credentials_empty_response() {
+async fn test_list_credentials_empty_response() -> anyhow::Result<()> {
     let mut server = Server::new_async().await;
     let _key_mock = mock_valid_key(&mut server);
 
@@ -147,7 +150,7 @@ async fn test_list_credentials_empty_response() {
         .with_body(json!([]).to_string())
         .create();
 
-    let config = test_config(&server);
+    let config = test_config(&server)?;
     let result = ricochet_cli::commands::user::list_credentials(
         &config,
         None,
@@ -158,10 +161,11 @@ async fn test_list_credentials_empty_response() {
     .await;
 
     assert!(result.is_ok(), "expected success, got {result:?}");
+    Ok(())
 }
 
 #[tokio::test]
-async fn test_list_credentials_forbidden() {
+async fn test_list_credentials_forbidden() -> anyhow::Result<()> {
     let mut server = Server::new_async().await;
     let _key_mock = mock_valid_key(&mut server);
 
@@ -172,7 +176,7 @@ async fn test_list_credentials_forbidden() {
         .with_body(json!({"error": "Insufficient privileges"}).to_string())
         .create();
 
-    let config = test_config(&server);
+    let config = test_config(&server)?;
     let result = ricochet_cli::commands::user::list_credentials(
         &config,
         None,
@@ -184,4 +188,5 @@ async fn test_list_credentials_forbidden() {
 
     assert!(result.is_err());
     _m.assert_async().await;
+    Ok(())
 }
