@@ -71,6 +71,21 @@ enum Commands {
         /// .env, .Renviron, or the calling environment. Repeatable.
         #[arg(short = 'e', long = "env", value_name = "KEY[=VALUE]")]
         env: Vec<String>,
+        /// Deploy from a Git repository instead of a local bundle
+        #[arg(long)]
+        git: Option<String>,
+        /// Git branch to deploy (only with --git)
+        #[arg(long, requires = "git")]
+        branch: Option<String>,
+        /// Subdirectory within the Git repo containing _ricochet.toml (only with --git)
+        #[arg(long = "path", requires = "git")]
+        repo_path: Option<String>,
+        /// Path to a local _ricochet.toml to use instead of the one in the repo (only with --git)
+        #[arg(long = "config", requires = "git")]
+        config_path: Option<std::path::PathBuf>,
+        /// Git credential ID to use for private repos (only with --git)
+        #[arg(long, requires = "git")]
+        credential: Option<String>,
     },
     /// Delete a content item
     Delete {
@@ -446,17 +461,35 @@ async fn main() -> Result<()> {
             name,
             description,
             env,
+            git,
+            branch,
+            repo_path,
+            config_path,
+            credential,
         }) => {
-            commands::deploy::deploy(
-                &config,
-                cli.server.as_deref(),
-                path,
-                name,
-                description,
-                env,
-                cli.debug,
-            )
-            .await?;
+            if let Some(git) = git {
+                commands::deploy::deploy_git(
+                    &config,
+                    cli.server.as_deref(),
+                    git,
+                    branch,
+                    repo_path,
+                    config_path,
+                    credential,
+                )
+                .await?;
+            } else {
+                commands::deploy::deploy(
+                    &config,
+                    cli.server.as_deref(),
+                    path,
+                    name,
+                    description,
+                    env,
+                    cli.debug,
+                )
+                .await?;
+            }
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
