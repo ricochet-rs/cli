@@ -119,6 +119,11 @@ enum Commands {
         #[command(subcommand)]
         command: ServerCommands,
     },
+    /// Manage the current user's account
+    User {
+        #[command(subcommand)]
+        command: UserCommands,
+    },
     /// Update the ricochet CLI to the latest version
     #[command(hide = true)]
     SelfUpdate {
@@ -372,6 +377,34 @@ enum ServerCommands {
         /// Server name to set as default
         name: String,
     },
+}
+
+#[derive(Subcommand)]
+enum UserCommands {
+    /// List Git credentials
+    Credentials {
+        /// Filter by user ID (admins only)
+        #[arg(long)]
+        user_id: Option<String>,
+        /// Filter by credential type
+        #[arg(long, value_enum)]
+        r#type: Option<CredentialType>,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum CredentialType {
+    Ssh,
+    Https,
+}
+
+impl From<CredentialType> for ricochet_core::config::git::GitProtocol {
+    fn from(value: CredentialType) -> Self {
+        match value {
+            CredentialType::Ssh => ricochet_core::config::git::GitProtocol::Ssh,
+            CredentialType::Https => ricochet_core::config::git::GitProtocol::Https,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -741,6 +774,18 @@ async fn main() -> Result<()> {
             }
             ServerCommands::SetDefault { name } => {
                 commands::server::set_default(&mut config, name)?;
+            }
+        },
+        Some(Commands::User { command }) => match command {
+            UserCommands::Credentials { user_id, r#type } => {
+                commands::user::list_credentials(
+                    &config,
+                    cli.server.as_deref(),
+                    user_id.as_deref(),
+                    r#type.map(Into::into),
+                    cli.format,
+                )
+                .await?;
             }
         },
         Some(Commands::SelfUpdate { force, dry_run }) => {
