@@ -57,10 +57,10 @@ pub async fn login(
         println!("Profile: {}", name.bright_cyan());
     }
     if server_source == LoginServerSource::HostedTrialFallback {
+        println!("{}", "Using the hosted trial default.".dimmed());
         println!(
             "{}",
-            "Using the hosted trial default. Pass --server <name-or-url> to use another server."
-                .dimmed()
+            "Register your own server with `ricochet server add <NAME> <URL>`.".dimmed()
         );
     }
     println!();
