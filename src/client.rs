@@ -533,8 +533,8 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
-    /// List Git credentials owned by the current user, or by `user_id` if
-    /// the caller is an admin. Credential values are never returned.
+    /// List Git credentials owned by the current user, or by `user_id` if the caller is an admin.
+    /// Credential values are never returned.
     pub async fn list_credentials(
         &self,
         user_id: Option<&str>,
