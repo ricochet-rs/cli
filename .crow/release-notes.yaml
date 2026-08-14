@@ -58,17 +58,27 @@ steps:
           exit 1
         fi
 
+        # Load the canonical Ricochet prose rules instead of duplicating them here
+        INSTRUCTIONS=$(gh api \
+          repos/ricochet-rs/agent-instructions/contents/instructions/global.md \
+          -H "Accept: application/vnd.github.raw+json")
+        if [ -z "$INSTRUCTIONS" ]; then
+          echo "Error: shared agent instructions are empty" >&2
+          exit 1
+        fi
+
         # Build the Anthropic API request payload (jq handles JSON escaping)
         PAYLOAD=$(jq -n \
           --arg notes "$NOTES" \
           --arg version "$VERSION" \
           --arg date "$RELEASE_DATE" \
+          --arg instructions "$INSTRUCTIONS" \
           '{
             model: "claude-sonnet-4-5",
             max_tokens: 4096,
             messages: [{
               role: "user",
-              content: ("Rewrite the following release notes for the Ricochet CLI v" + $version + " in a clear and user-focused way. Omit any maintenance, CI, and dependency update sections. Only focus on user-visible changes. Use subgroups for scoped conventional commits (if they match).\n\nFormat rules:\n- Use ### headings for sections (e.g., ### Security, ### Fixes, ### Improvements)\n- Each item should be a bullet point starting with **Bold Title**: followed by a description\n- Do NOT include any frontmatter, title, or code fences\n- Start the output with: **Released: " + $date + "**\n\nRelease notes to rewrite:\n\n" + $notes)
+              content: ("Follow the release-note prose rules in the shared Ricochet instructions below. Rewrite the following release notes for the Ricochet CLI v" + $version + ". Use subgroups for scoped conventional commits when they match. Do not include frontmatter, a document title, or code fences. Start the output with **Released: " + $date + "**.\n\nShared Ricochet instructions:\n\n" + $instructions + "\n\nRelease notes to rewrite:\n\n" + $notes)
             }]
           }')
 
