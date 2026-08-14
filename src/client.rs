@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::{
-    config::git::{GitCredential, GitProtocol},
+    config::git::{GitCredential, GitProtocol, GitRepo},
     content::ContentItem,
 };
 use serde::de::DeserializeOwned;
@@ -279,6 +279,38 @@ impl RicochetClient {
                 }
             }
         }
+    }
+
+    /// Create a Git-backed content item and start its first deployment.
+    /// `config` is the raw `_ricochet.toml` contents; omit to have the server
+    /// read it from the repository itself.
+    pub async fn deploy_git(
+        &self,
+        repo: &GitRepo,
+        config: Option<String>,
+        credential_id: Option<String>,
+    ) -> Result<serde_json::Value> {
+        let mut url = self.base_url.clone();
+        url.set_path("/api/v0/deploy/git");
+
+        let mut form = reqwest::multipart::Form::new().text("repo", serde_json::to_string(repo)?);
+
+        if let Some(cfg) = config {
+            form = form.text("config", cfg);
+        }
+        if let Some(cred) = credential_id {
+            form = form.text("credential_id", cred);
+        }
+
+        let response = self
+            .client
+            .post(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .multipart(form)
+            .send()
+            .await?;
+
+        Self::handle_response(response).await
     }
 
     pub async fn get_status(&self, id: &str) -> Result<serde_json::Value> {

@@ -3,7 +3,7 @@ use anyhow::{Result, bail};
 use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
-use ricochet_core::{content::ContentItem, language::Package};
+use ricochet_core::{config::git::GitRepo, content::ContentItem, language::Package};
 use std::path::PathBuf;
 
 pub async fn deploy(
@@ -258,6 +258,65 @@ pub async fn deploy(
                 );
                 anyhow::bail!("")
             }
+            anyhow::bail!("Deployment failed: {}", e)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn deploy_git(
+    config: &Config,
+    server_ref: Option<&str>,
+    git: String,
+    branch: Option<String>,
+    repo_path: Option<String>,
+    config_path: Option<PathBuf>,
+    credential: Option<String>,
+) -> Result<()> {
+    let server_config = config.resolve_server(server_ref)?;
+    let client = RicochetClient::new(&server_config)?;
+    client.preflight_key_check().await?;
+
+    let repo = GitRepo {
+        url: git,
+        branch,
+        path: repo_path,
+    };
+
+    let toml_content = config_path.map(std::fs::read_to_string).transpose()?;
+
+    println!(
+        "📦 Deploying Git-backed content item from {}\n",
+        repo.url.bright_cyan()
+    );
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    pb.enable_steady_tick(std::time::Duration::from_millis(80));
+    pb.set_message("Creating content item and starting deployment");
+
+    match client.deploy_git(&repo, toml_content, credential).await {
+        Ok(response) => {
+            pb.finish_and_clear();
+
+            println!("{} Deployment successful!", "✓".green().bold());
+
+            if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
+                let base_url = server_config.url.as_str().trim_end_matches('/');
+                println!("\n{}", "Links:".bold());
+                println!("  App Overview: {}/apps/{}/overview", base_url, id);
+            } else {
+                println!("\n{}", serde_json::to_string_pretty(&response)?);
+            }
+
+            Ok(())
+        }
+        Err(e) => {
+            pb.finish_and_clear();
             anyhow::bail!("Deployment failed: {}", e)
         }
     }
