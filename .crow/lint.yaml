@@ -42,7 +42,7 @@ steps:
           key: applicationKey
 
   rust-lint:
-    image: reg.ricochet.rs/docker.io/library/rust:1.97
+    image: reg.ricochet.rs/docker.io/library/rust:1.98
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
@@ -61,7 +61,7 @@ steps:
       - sccache --show-stats
 
   check-docs:
-    image: reg.ricochet.rs/docker.io/library/rust:1.97
+    image: reg.ricochet.rs/docker.io/library/rust:1.98
     depends_on: cache
     environment:
       GITHUB_TOKEN:
