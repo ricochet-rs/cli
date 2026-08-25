@@ -121,3 +121,4 @@ On a tagged release, the `binaries.yaml` pipeline:
 - HTTP client uses reqwest with 5-minute timeout
 - File uploads support both individual files and directory bundling (creates tar.gz)
 - Uses ULID for unique identifiers
+- The CLI ships independently of the server; a new API query parameter is silently ignored by servers that predate it, so detect support from a field in the response rather than assuming the request was honored

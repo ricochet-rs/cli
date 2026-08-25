@@ -221,6 +221,7 @@ List deployed app content items
 
 * `-t`, `--content-type <CONTENT_TYPE>` — Filter by content type
 * `-a`, `--active-only` — Show only active deployments (status: deployed, running, or success)
+* `--all` — List every item on the instance, not just your own (requires an instance admin API key)
 * `-s`, `--sort <SORT>` — Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name") Prefix with '-' for descending order (e.g., "-updated,name")
 
 
@@ -440,6 +441,7 @@ List deployed task content items
 
 * `-t`, `--content-type <CONTENT_TYPE>` — Filter by content type
 * `-a`, `--active-only` — Show only active deployments (status: deployed, running, or success)
+* `--all` — List every item on the instance, not just your own (requires an instance admin API key)
 * `-s`, `--sort <SORT>` — Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name") Prefix with '-' for descending order (e.g., "-updated,name")
 
 
