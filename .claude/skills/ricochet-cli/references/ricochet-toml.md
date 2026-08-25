@@ -124,7 +124,6 @@ An item can only tighten the server-wide policy, never relax it, because the res
 | `max_deployments` | integer   | `20`    | Deployments kept per item.             |
 | `max_bundle_size` | byte size | `100MB` | Largest bundle the server will accept. |
 
-
 ## Content types
 
 `task` types are invokable, schedulable, and can be served as static output.
