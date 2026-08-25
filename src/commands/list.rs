@@ -33,19 +33,11 @@ pub fn classify_item(item: &serde_json::Value) -> Option<ListKind> {
     }
 }
 
-/// Render an item's owner, which only the instance-wide listing returns.
+/// Render an item's owner, whom the server names by display name, email or id.
 fn owner_label(item: &serde_json::Value) -> Option<String> {
-    let owner = item
-        .get("owner")
-        .or_else(|| item.get("owner_name"))
-        .or_else(|| item.get("owner_email"))
-        .or_else(|| item.get("owner_id"))?;
+    let owner = item.get("owner")?;
 
-    if let Some(text) = owner.as_str() {
-        return Some(text.to_string());
-    }
-
-    ["email", "username", "name", "id"]
+    ["display_name", "email", "id"]
         .iter()
         .find_map(|field| owner.get(field).and_then(|v| v.as_str()))
         .map(str::to_string)

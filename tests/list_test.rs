@@ -244,7 +244,11 @@ mod list_tests {
                         "visibility": "private",
                         "status": "deployed",
                         "updated_at": "2024-01-15T10:30:00Z",
-                        "owner": {"id": "01K66JV2QOWNER", "email": "someone@example.com"}
+                        "owner": {
+                            "id": "01K66JV2QOWNER",
+                            "display_name": "Ada Lovelace",
+                            "email": "ada@example.com"
+                        }
                     }
                 ])
                 .to_string(),
