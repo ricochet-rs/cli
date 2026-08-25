@@ -124,11 +124,6 @@ An item can only tighten the server-wide policy, never relax it, because the res
 | `max_deployments` | integer   | `20`    | Deployments kept per item.             |
 | `max_bundle_size` | byte size | `100MB` | Largest bundle the server will accept. |
 
-## `[env_vars]`
-
-Written by the CLI, never by hand.
-It holds the AES-encrypted payload produced by `ricochet deploy -e` as `nonce` and `vars`, both base64.
-Manage variables with `ricochet app env-vars` or `ricochet task env-vars` instead of editing this table.
 
 ## Content types
 

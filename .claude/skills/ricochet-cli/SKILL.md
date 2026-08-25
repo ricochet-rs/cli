@@ -30,7 +30,8 @@ ricochet server set-default production
 ```
 
 The URL must carry an `http://` or `https://` scheme.
-`ricochet login` opens a browser callback flow, falls back to pasting a key when no display server is present, and accepts a key directly with `-k`:
+`ricochet login` opens a browser callback flow, falls back to pasting a key when no display server is present, and accepts a key directly with `-k`.
+It is recommended to login via the web UI first before running this command.
 
 ```sh
 ricochet login -S production
