@@ -311,8 +311,19 @@ fn attaches(head: &str, package: &str) -> bool {
     head.contains(&format!("library({package})")) || head.contains(&format!("{package}::"))
 }
 
+/// Match the whole module name, so `flask_login` does not read as `flask`.
 fn imports(head: &str, module: &str) -> bool {
-    head.contains(&format!("import {module}")) || head.contains(&format!("from {module}"))
+    [format!("import {module}"), format!("from {module}")]
+        .iter()
+        .any(|statement| {
+            head.match_indices(statement.as_str())
+                .any(|(start, matched)| {
+                    head[start + matched.len()..]
+                        .chars()
+                        .next()
+                        .is_none_or(|next| !next.is_alphanumeric() && next != '_')
+                })
+        })
 }
 
 fn classify_r_script(path: &Path) -> ContentType {
@@ -584,6 +595,36 @@ mod tests {
         let package_file = detection.package_file.expect("package file");
         assert!(!package_file.found);
         assert_eq!(package_file.path, PathBuf::from("uv.lock"));
+    }
+
+    #[test]
+    fn a_module_prefix_is_not_the_framework() {
+        let dir = TempDir::new().expect("tempdir");
+        write(dir.path(), "report.py", "import dashboard_utils\n");
+        write(
+            dir.path(),
+            "helper.py",
+            "from flask_admin_stub import thing\n",
+        );
+        write(dir.path(), "tools.py", "import fastapi_stub\n");
+
+        let detection = scan(&dir);
+
+        assert_eq!(detection.content_types, vec![ContentType::Python]);
+    }
+
+    #[test]
+    fn a_submodule_still_names_its_framework() {
+        let dir = TempDir::new().expect("tempdir");
+        write(
+            dir.path(),
+            "api.py",
+            "from fastapi.responses import JSONResponse\n",
+        );
+
+        let detection = scan(&dir);
+
+        assert_eq!(detection.content_types, vec![ContentType::FastApi]);
     }
 
     #[test]
