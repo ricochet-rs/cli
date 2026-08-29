@@ -1,4 +1,5 @@
 use mockito::Server;
+use ricochet_cli::OutputFormat;
 use serde_json::json;
 use url::Url;
 
@@ -26,7 +27,14 @@ mod delete_tests {
         );
 
         // Test delete with force flag (no confirmation)
-        let result = ricochet_cli::commands::delete::delete(&config, None, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
 
         assert!(result.is_ok());
     }
@@ -52,7 +60,14 @@ mod delete_tests {
         );
 
         // Test delete with non-existent content
-        let result = ricochet_cli::commands::delete::delete(&config, None, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
 
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
@@ -80,7 +95,14 @@ mod delete_tests {
         );
 
         // Test delete with invalid API key
-        let result = ricochet_cli::commands::delete::delete(&config, None, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
 
         assert!(result.is_err());
     }
@@ -106,7 +128,14 @@ mod delete_tests {
         );
 
         // Test delete with server error
-        let result = ricochet_cli::commands::delete::delete(&config, None, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
 
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
@@ -132,7 +161,14 @@ mod delete_tests {
             Some("test_api_key".to_string()),
         );
 
-        let result = ricochet_cli::commands::delete::delete(&config, None, content_id, true).await;
+        let result = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
 
         assert!(result.is_ok());
     }
@@ -169,13 +205,25 @@ mod delete_tests {
         );
 
         // Delete first item
-        let result1 =
-            ricochet_cli::commands::delete::delete(&config, None, content_id1, true).await;
+        let result1 = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id1,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
         assert!(result1.is_ok());
 
         // Delete second item
-        let result2 =
-            ricochet_cli::commands::delete::delete(&config, None, content_id2, true).await;
+        let result2 = ricochet_cli::commands::delete::delete(
+            &config,
+            None,
+            content_id2,
+            true,
+            OutputFormat::Table,
+        )
+        .await;
         assert!(result2.is_ok());
     }
 }

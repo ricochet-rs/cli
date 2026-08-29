@@ -25,7 +25,7 @@ struct Cli {
     )]
     server: Option<String>,
 
-    /// Output format
+    /// Output format. `json` and `yaml` write the payload to stdout and everything else to stderr
     #[arg(
         global = true,
         short = 'F',
@@ -451,10 +451,10 @@ async fn main() -> Result<()> {
     // Execute command
     match cli.command {
         Some(Commands::Login { api_key }) => {
-            commands::auth::login(&mut config, cli.server.as_deref(), api_key).await?;
+            commands::auth::login(&mut config, cli.server.as_deref(), api_key, cli.format).await?;
         }
         Some(Commands::Logout) => {
-            commands::auth::logout(&mut config, cli.server.as_deref())?;
+            commands::auth::logout(&mut config, cli.server.as_deref(), cli.format)?;
         }
         Some(Commands::Deploy {
             path,
@@ -476,6 +476,7 @@ async fn main() -> Result<()> {
                     repo_path,
                     config_path,
                     credential,
+                    cli.format,
                 )
                 .await?;
             } else {
@@ -486,13 +487,15 @@ async fn main() -> Result<()> {
                     name,
                     description,
                     env,
+                    cli.format,
                     cli.debug,
                 )
                 .await?;
             }
         }
         Some(Commands::Delete { id, force }) => {
-            commands::delete::delete(&config, cli.server.as_deref(), &id, force).await?;
+            commands::delete::delete(&config, cli.server.as_deref(), &id, force, cli.format)
+                .await?;
         }
         Some(Commands::Invoke { id }) => {
             eprintln!(
@@ -502,7 +505,7 @@ async fn main() -> Result<()> {
             item::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
         }
         Some(Commands::Config { show_all }) => {
-            commands::config::show(&config, show_all)?;
+            commands::config::show(&config, show_all, cli.format)?;
         }
         Some(Commands::Init {
             path,
@@ -514,7 +517,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::App { command }) => match command {
             ItemCommands::Toml { id, path } => {
-                item::toml::get_toml(&config, id, path).await?;
+                item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
             }
             ItemCommands::List {
                 content_type,
@@ -550,6 +553,7 @@ async fn main() -> Result<()> {
                     id.as_deref(),
                     pid.as_deref(),
                     path.as_deref(),
+                    cli.format,
                 )
                 .await?;
             }
@@ -676,7 +680,7 @@ async fn main() -> Result<()> {
                 .await?;
             }
             TaskCommands::Toml { id, path } => {
-                item::toml::get_toml(&config, id, path).await?;
+                item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
             }
             TaskCommands::Invoke { id } => {
                 item::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
@@ -797,16 +801,16 @@ async fn main() -> Result<()> {
         },
         Some(Commands::Server { command }) => match command {
             ServerCommands::List => {
-                commands::server::list(&config)?;
+                commands::server::list(&config, cli.format)?;
             }
             ServerCommands::Add { name, url, default } => {
-                commands::server::add(&mut config, name, url, default)?;
+                commands::server::add(&mut config, name, url, default, cli.format)?;
             }
             ServerCommands::Remove { name, force } => {
-                commands::server::remove(&mut config, name, force)?;
+                commands::server::remove(&mut config, name, force, cli.format)?;
             }
             ServerCommands::SetDefault { name } => {
-                commands::server::set_default(&mut config, name)?;
+                commands::server::set_default(&mut config, name, cli.format)?;
             }
         },
         Some(Commands::User { command }) => match command {

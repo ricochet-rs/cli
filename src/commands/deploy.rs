@@ -1,4 +1,4 @@
-use crate::{client::RicochetClient, config::Config};
+use crate::{OutputFormat, client::RicochetClient, config::Config};
 use anyhow::{Result, bail};
 use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
@@ -6,6 +6,27 @@ use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::{config::git::GitRepo, content::ContentItem, language::Package};
 use std::path::PathBuf;
 
+/// Record the ID the server assigned to a new content item in its `_ricochet.toml`.
+fn write_content_id(toml_path: &std::path::Path, id: &str) -> Result<()> {
+    use regex::Regex;
+
+    let original = std::fs::read_to_string(toml_path)?;
+    let updated = if original.contains("id =") {
+        Regex::new(r#"(?m)^(\s*)id\s*=\s*.*$"#)?
+            .replace(&original, format!("${{1}}id = \"{id}\""))
+            .to_string()
+    } else {
+        // FIXME: use toml-edit here
+        Regex::new(r#"(?m)^\[content\]$"#)?
+            .replace(&original, format!("[content]\nid = \"{id}\""))
+            .to_string()
+    };
+
+    std::fs::write(toml_path, updated)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn deploy(
     config: &Config,
     server_ref: Option<&str>,
@@ -13,6 +34,7 @@ pub async fn deploy(
     _name: Option<String>,
     _description: Option<String>,
     env: Vec<String>,
+    format: OutputFormat,
     debug: bool,
 ) -> Result<()> {
     if !path.exists() {
@@ -75,7 +97,7 @@ pub async fn deploy(
         if let Package::UvLock = pkgs {
             // uv workspaces keep uv.lock at the workspace root — search parent dirs
             if let Some(found) = crate::utils::find_in_parent_dirs(&path, "uv.lock") {
-                println!(
+                eprintln!(
                     "  {} Using {} from workspace root",
                     "→".bright_cyan(),
                     found.display().to_string().bright_cyan()
@@ -107,7 +129,7 @@ pub async fn deploy(
         && !path.join(".python-version").exists()
     {
         if let Some(found) = crate::utils::find_in_parent_dirs(&path, ".python-version") {
-            println!(
+            eprintln!(
                 "  {} Using {} from workspace root",
                 "→".bright_cyan(),
                 found.display().to_string().bright_cyan()
@@ -119,12 +141,12 @@ pub async fn deploy(
     }
 
     if let Some(ref id) = content_id {
-        println!(
+        eprintln!(
             "📦 Creating new deployment for content item: {}\n",
             id.bright_cyan()
         );
     } else {
-        println!(
+        eprintln!(
             "📦 Deploying new {} content item\n",
             content_type.to_string().bright_cyan()
         );
@@ -163,55 +185,39 @@ pub async fn deploy(
         Ok(response) => {
             pb.finish_and_clear();
 
-            if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
-                println!("{} Deployment successful!", "✓".green().bold());
+            let id = response.get("id").and_then(|v| v.as_str());
 
-                // Update _ricochet.toml with the content ID if it's a new deployment
-                if content_id.is_none() {
-                    // Read the original file content
-                    let original_content = std::fs::read_to_string(&toml_path)?;
+            // A new content item only learns its ID here, so write it back.
+            if let Some(id) = id
+                && content_id.is_none()
+            {
+                write_content_id(&toml_path, id)?;
+            }
 
-                    // Find the [content] section and add/update the id field
-                    let updated_content = if original_content.contains("id =") {
-                        // Replace existing id field
-                        use regex::Regex;
-                        let re = Regex::new(r#"(?m)^(\s*)id\s*=\s*.*$"#)?;
-                        re.replace(&original_content, format!("${{1}}id = \"{}\"", id))
-                            .to_string()
-                    } else {
-                        // FIXME: use toml-edit here
-                        // Add id field after [content] section
-                        use regex::Regex;
-                        let re = Regex::new(r#"(?m)^\[content\]$"#)?;
-                        re.replace(&original_content, format!("[content]\nid = \"{}\"", id))
-                            .to_string()
-                    };
+            format.print(&response, || {
+                let mut output = format!("{} Deployment successful!", "✓".green().bold());
 
-                    std::fs::write(&toml_path, updated_content)?;
-                }
+                let Some(id) = id else {
+                    output.push_str(&format!("\n\n{}", serde_json::to_string_pretty(&response)?));
+                    return Ok(output);
+                };
 
-                // Get server URL and construct links
                 let base_url = server_config.url.as_str().trim_end_matches('/');
+                output.push_str(&format!("\n\n{}", "Links:".bold()));
 
-                println!("\n{}", "Links:".bold());
-
-                // Show deployment link if deployment_id is available
                 if let Some(deployment_id) = response
                     .get("deployment_id")
                     .or_else(|| response.get("deploymentId"))
                     .and_then(|v| v.as_str())
                 {
-                    println!("  Deployment: {}/deployments/{}", base_url, deployment_id);
+                    output.push_str(&format!(
+                        "\n  Deployment: {base_url}/deployments/{deployment_id}"
+                    ));
                 }
 
-                // Show app overview link
-                println!("  App Overview: {}/apps/{}/overview", base_url, id);
-            } else {
-                println!("{} Deployment successful!", "✓".green().bold());
-                println!("\n{}", serde_json::to_string_pretty(&response)?);
-            }
-
-            Ok(())
+                output.push_str(&format!("\n  App Overview: {base_url}/apps/{id}/overview"));
+                Ok(output)
+            })
         }
         Err(e) => {
             pb.finish_and_clear();
@@ -272,6 +278,7 @@ pub async fn deploy_git(
     repo_path: Option<String>,
     config_path: Option<PathBuf>,
     credential: Option<String>,
+    format: OutputFormat,
 ) -> Result<()> {
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
@@ -288,7 +295,7 @@ pub async fn deploy_git(
         None => None,
     };
 
-    println!(
+    eprintln!(
         "📦 Deploying Git-backed content item from {}\n",
         repo.url.bright_cyan()
     );
@@ -302,17 +309,24 @@ pub async fn deploy_git(
         Ok(response) => {
             pb.finish_and_clear();
 
-            println!("{} Deployment successful!", "✓".green().bold());
+            format.print(&response, || {
+                let mut output = format!("{} Deployment successful!", "✓".green().bold());
 
-            if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
-                let base_url = server_config.url.as_str().trim_end_matches('/');
-                println!("\n{}", "Links:".bold());
-                println!("  App Overview: {}/apps/{}/overview", base_url, id);
-            } else {
-                println!("\n{}", serde_json::to_string_pretty(&response)?);
-            }
-
-            Ok(())
+                match response.get("id").and_then(|v| v.as_str()) {
+                    Some(id) => {
+                        let base_url = server_config.url.as_str().trim_end_matches('/');
+                        output.push_str(&format!(
+                            "\n\n{}\n  App Overview: {base_url}/apps/{id}/overview",
+                            "Links:".bold()
+                        ));
+                    }
+                    None => {
+                        output
+                            .push_str(&format!("\n\n{}", serde_json::to_string_pretty(&response)?));
+                    }
+                }
+                Ok(output)
+            })
         }
         Err(e) => {
             pb.finish_and_clear();

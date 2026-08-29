@@ -9,33 +9,29 @@ fn format_credentials(
     credentials: &[GitCredential],
     format: OutputFormat,
 ) -> Result<String> {
-    match format {
-        OutputFormat::Json => Ok(serde_json::to_string_pretty(credentials)?),
-        OutputFormat::Yaml => Ok(serde_yaml::to_string(credentials)?),
-        OutputFormat::Table => {
-            let mut output = server_url.italic().dimmed().to_string();
+    format.render(&credentials, || {
+        let mut output = server_url.italic().dimmed().to_string();
 
-            if credentials.is_empty() {
-                output.push_str(&format!("\n{}", "No credentials found.".yellow()));
-                return Ok(output);
-            }
-
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-            table.set_header(vec!["ID", "Name", "Type", "User ID"]);
-            for credential in credentials {
-                table.add_row(vec![
-                    credential.id.as_str(),
-                    credential.name.as_str(),
-                    &credential.protocol.to_string(),
-                    credential.user_id.as_str(),
-                ]);
-            }
-
-            output.push_str(&format!("\n{table}\n\n{} credential(s)", credentials.len()));
-            Ok(output)
+        if credentials.is_empty() {
+            output.push_str(&format!("\n{}", "No credentials found.".yellow()));
+            return Ok(output);
         }
-    }
+
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+        table.set_header(vec!["ID", "Name", "Type", "User ID"]);
+        for credential in credentials {
+            table.add_row(vec![
+                credential.id.as_str(),
+                credential.name.as_str(),
+                &credential.protocol.to_string(),
+                credential.user_id.as_str(),
+            ]);
+        }
+
+        output.push_str(&format!("\n{table}\n\n{} credential(s)", credentials.len()));
+        Ok(output)
+    })
 }
 
 pub async fn list_credentials(

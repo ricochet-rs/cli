@@ -16,6 +16,7 @@ Write `_ricochet.toml` by hand instead of calling `ricochet init` from an agent 
 Under the same conditions `ricochet deploy` fails with `No _ricochet.toml found` rather than offering to create one.
 
 Pass `-F json` to any command whose output must be parsed.
+Under `-F json` and `-F yaml` stdout carries the serialised payload and nothing else, while status lines, hints and links go to stderr.
 Pass `--debug` to surface the underlying request and response when a command fails.
 
 ## Connect to a server

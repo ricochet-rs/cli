@@ -1,4 +1,5 @@
 use mockito::{Matcher, Server};
+use ricochet_cli::OutputFormat;
 use ricochet_cli::config::{Config, ServerConfig};
 use serde_json::json;
 use std::collections::HashMap;
@@ -154,6 +155,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -212,6 +214,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -249,6 +252,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -295,6 +299,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -335,6 +340,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -393,6 +399,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -453,6 +460,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -503,6 +511,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -558,6 +567,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -609,6 +619,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -662,6 +673,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -729,6 +741,7 @@ packages = "uv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -776,6 +789,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -809,6 +823,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -843,6 +858,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -891,6 +907,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -949,6 +966,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -994,6 +1012,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -1020,6 +1039,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -1059,6 +1079,7 @@ packages = "renv.lock"
             None,
             None,
             vec!["SECRET=shh".to_string()],
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -1100,6 +1121,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            OutputFormat::Table,
             false,
         )
         .await;
@@ -1138,6 +1160,7 @@ packages = "renv.lock"
             None,
             None,
             vec!["SECRET=shh".to_string()],
+            OutputFormat::Table,
             false,
         )
         .await;

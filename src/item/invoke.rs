@@ -18,50 +18,35 @@ pub async fn invoke(
 
     match client.invoke(id, None).await {
         Ok(result) => {
-            eprintln!("{} Task invoked successfully!\n", "✓".green().bold());
+            eprintln!("{} Task invoked successfully!", "✓".green().bold());
 
-            match format {
-                OutputFormat::Json => {
-                    println!("{}", serde_json::to_string_pretty(&result)?);
+            format.print(&result, || {
+                let mut table = Table::new();
+                table.load_style(UTF8_FULL);
+
+                if let Some(invocation_id) = result.get("invocation_id").and_then(|v| v.as_str()) {
+                    table.add_row(vec![Cell::new("Invocation ID"), Cell::new(invocation_id)]);
                 }
-                OutputFormat::Yaml => {
-                    println!("{}", serde_yaml::to_string(&result)?);
+
+                if let Some(content_id) = result.get("content_id").and_then(|v| v.as_str()) {
+                    table.add_row(vec![Cell::new("Content ID"), Cell::new(content_id)]);
                 }
-                OutputFormat::Table => {
-                    // Display server URL above the table
-                    println!("{}", server_config.url.as_str().italic().dimmed());
 
-                    let mut table = Table::new();
-                    table.load_style(UTF8_FULL);
-
-                    if let Some(invocation_id) =
-                        result.get("invocation_id").and_then(|v| v.as_str())
-                    {
-                        table.add_row(vec![Cell::new("Invocation ID"), Cell::new(invocation_id)]);
-                    }
-
-                    if let Some(content_id) = result.get("content_id").and_then(|v| v.as_str()) {
-                        table.add_row(vec![Cell::new("Content ID"), Cell::new(content_id)]);
-                    }
-
-                    // Add status with color coding
-                    if let Some(status) = result.get("status").and_then(|v| v.as_str()) {
-                        let status_cell = match status {
-                            "running" | "success" | "completed" => {
-                                Cell::new(status).fg(Color::Green)
-                            }
-                            "failed" | "error" => Cell::new(status).fg(Color::Red),
-                            "pending" | "queued" => Cell::new(status).fg(Color::Yellow),
-                            _ => Cell::new(status),
-                        };
-                        table.add_row(vec![Cell::new("Status"), status_cell]);
-                    }
-
-                    println!("{}", table);
+                if let Some(status) = result.get("status").and_then(|v| v.as_str()) {
+                    let status_cell = match status {
+                        "running" | "success" | "completed" => Cell::new(status).fg(Color::Green),
+                        "failed" | "error" => Cell::new(status).fg(Color::Red),
+                        "pending" | "queued" => Cell::new(status).fg(Color::Yellow),
+                        _ => Cell::new(status),
+                    };
+                    table.add_row(vec![Cell::new("Status"), status_cell]);
                 }
-            }
 
-            Ok(())
+                Ok(format!(
+                    "{}\n{table}",
+                    server_config.url.as_str().italic().dimmed()
+                ))
+            })
         }
         Err(e) => {
             anyhow::bail!("Failed to invoke task: {e}")

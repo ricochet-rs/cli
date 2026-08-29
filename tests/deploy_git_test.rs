@@ -1,4 +1,5 @@
 use mockito::{Matcher, Server};
+use ricochet_cli::OutputFormat;
 use serde_json::json;
 use url::Url;
 
@@ -40,6 +41,7 @@ async fn test_deploy_git_success_minimal() {
         None,
         None,
         None,
+        OutputFormat::Table,
     )
     .await;
 
@@ -78,6 +80,7 @@ async fn test_deploy_git_success_with_all_fields() {
         Some("apps/dashboard".to_string()),
         Some(toml_path),
         Some("cred_123".to_string()),
+        OutputFormat::Table,
     )
     .await;
 
@@ -106,6 +109,7 @@ async fn test_deploy_git_bad_request() {
         None,
         None,
         None,
+        OutputFormat::Table,
     )
     .await;
 
@@ -134,6 +138,7 @@ async fn test_deploy_git_forbidden() {
         None,
         None,
         None,
+        OutputFormat::Table,
     )
     .await;
 

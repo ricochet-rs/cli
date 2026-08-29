@@ -2,6 +2,7 @@ use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use jiff::Timestamp;
+use serde::Serialize;
 use std::path::Path;
 
 use crate::{OutputFormat, client::RicochetClient, config::Config, item::resolve_id, utils};
@@ -35,75 +36,67 @@ pub async fn list_instances(
         }
     }
 
-    match format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&instances)?);
-        }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&instances)?);
-        }
-        OutputFormat::Table => {
-            println!("{}", server_config.url.as_str().italic().dimmed());
+    format.print(&instances, || {
+        let mut output = server_config.url.as_str().italic().dimmed().to_string();
 
-            let Some(arr) = instances.as_array() else {
-                println!("{}", "No instances found".yellow());
-                return Ok(());
+        let Some(arr) = instances.as_array().filter(|arr| !arr.is_empty()) else {
+            output.push_str(&format!("\n{}", "No instances found".yellow()));
+            return Ok(output);
+        };
+
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+        table.set_header(vec![
+            "Instance ID",
+            "Connections",
+            "Started",
+            "Last Connection",
+        ]);
+
+        for instance in arr {
+            let pid = instance
+                .get("instance_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("-");
+            let connections = instance
+                .get("connections")
+                .and_then(|v| v.as_u64())
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| "-".to_string());
+            let started = instance
+                .get("created_at")
+                .and_then(|v| v.as_str())
+                .map(utils::format_timestamp)
+                .unwrap_or_else(|| "-".to_string());
+            let last_conn = instance
+                .get("last_connection")
+                .and_then(|v| v.as_str())
+                .unwrap_or("-");
+
+            let conn_cell = if connections == "0" {
+                Cell::new(&connections).fg(Color::DarkGrey)
+            } else {
+                Cell::new(&connections).fg(Color::Green)
             };
 
-            if arr.is_empty() {
-                println!("{}", "No instances found".yellow());
-                return Ok(());
-            }
-
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-            table.set_header(vec![
-                "Instance ID",
-                "Connections",
-                "Started",
-                "Last Connection",
+            table.add_row(vec![
+                Cell::new(pid),
+                conn_cell,
+                Cell::new(started),
+                Cell::new(last_conn),
             ]);
-
-            for instance in arr {
-                let pid = instance
-                    .get("instance_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
-                let connections = instance
-                    .get("connections")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n.to_string())
-                    .unwrap_or_else(|| "-".to_string());
-                let started = instance
-                    .get("created_at")
-                    .and_then(|v| v.as_str())
-                    .map(utils::format_timestamp)
-                    .unwrap_or_else(|| "-".to_string());
-                let last_conn = instance
-                    .get("last_connection")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
-
-                let conn_cell = if connections == "0" {
-                    Cell::new(&connections).fg(Color::DarkGrey)
-                } else {
-                    Cell::new(&connections).fg(Color::Green)
-                };
-
-                table.add_row(vec![
-                    Cell::new(pid),
-                    conn_cell,
-                    Cell::new(started),
-                    Cell::new(last_conn),
-                ]);
-            }
-
-            println!("{}", table);
-            println!("\n{} instance(s)", arr.len());
         }
-    }
 
-    Ok(())
+        output.push_str(&format!("\n{table}\n\n{} instance(s)", arr.len()));
+        Ok(output)
+    })
+}
+
+/// The instances a `stop` call brought down.
+#[derive(Serialize)]
+struct StoppedInstances {
+    content_id: String,
+    stopped: Vec<String>,
 }
 
 pub async fn stop_instance(
@@ -112,42 +105,51 @@ pub async fn stop_instance(
     id: Option<&str>,
     pid: Option<&str>,
     path: Option<&Path>,
+    format: OutputFormat,
 ) -> Result<()> {
     let id = resolve_id(id, path)?;
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
     client.preflight_key_check().await?;
 
-    match pid {
-        Some(pid) => {
-            client.stop_instance(&id, pid).await?;
-            println!(
-                "{} Instance {} stopped",
-                "✓".green().bold(),
-                pid.bright_cyan()
-            );
-        }
+    let targets = match pid {
+        Some(pid) => vec![pid.to_string()],
         None => {
             let instances = client.list_instances(&id).await?;
             let arr = instances
                 .as_array()
                 .ok_or_else(|| anyhow::anyhow!("Unexpected response format"))?;
-            if arr.is_empty() {
-                println!("{}", "No instances to stop".yellow());
-                return Ok(());
-            }
-            for instance in arr.clone() {
-                if let Some(iid) = instance.get("instance_id").and_then(|v| v.as_str()) {
-                    client.stop_instance(&id, iid).await?;
-                    println!(
-                        "{} Instance {} stopped",
-                        "✓".green().bold(),
-                        iid.bright_cyan()
-                    );
-                }
-            }
+            arr.iter()
+                .filter_map(|instance| instance.get("instance_id").and_then(|v| v.as_str()))
+                .map(str::to_string)
+                .collect()
         }
+    };
+
+    for target in &targets {
+        client.stop_instance(&id, target).await?;
     }
 
-    Ok(())
+    let stopped = StoppedInstances {
+        content_id: id,
+        stopped: targets,
+    };
+
+    format.print(&stopped, || {
+        if stopped.stopped.is_empty() {
+            return Ok("No instances to stop".yellow().to_string());
+        }
+        Ok(stopped
+            .stopped
+            .iter()
+            .map(|pid| {
+                format!(
+                    "{} Instance {} stopped",
+                    "✓".green().bold(),
+                    pid.bright_cyan()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"))
+    })
 }

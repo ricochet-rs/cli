@@ -74,7 +74,7 @@ Ricochet CLI
 ###### **Options:**
 
 * `-S`, `--server <SERVER>` — Server URL (can also be set with RICOCHET_SERVER environment variable)
-* `-F`, `--format <FORMAT>` — Output format
+* `-F`, `--format <FORMAT>` — Output format. `json` and `yaml` write the payload to stdout and everything else to stderr
 
   Default value: `table`
 
