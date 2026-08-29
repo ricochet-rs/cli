@@ -12,6 +12,11 @@ const CONTENT_ID: &str = "01K66JV2Q123456789ABCDEF";
 const DEPLOYMENT_ID: &str = "01KQZPF4Y5SRHES967VZEYY765";
 const INSTANCE_ID: &str = "01KQZMZXE17RV7TCNF3GGG24P4";
 
+/// A second item whose second instance refuses to stop.
+const PARTIAL_STOP_ID: &str = "01KR0000000000000000000000";
+const STOPPABLE_INSTANCE: &str = "01KR1111111111111111111111";
+const STUCK_INSTANCE: &str = "01KR2222222222222222222222";
+
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
@@ -134,6 +139,49 @@ fn mock_api(server: &mut Server) {
             format!("/api/v0/content/{CONTENT_ID}/instances/{INSTANCE_ID}/stop").as_str(),
         )
         .with_status(200)
+        .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{PARTIAL_STOP_ID}/instances").as_str(),
+        )
+        .with_status(200)
+        .with_body(
+            json!([
+                {
+                    "instance_id": STOPPABLE_INSTANCE,
+                    "connections": 1,
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "last_connection": 0
+                },
+                {
+                    "instance_id": STUCK_INSTANCE,
+                    "connections": 1,
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "last_connection": 0
+                }
+            ])
+            .to_string(),
+        )
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{PARTIAL_STOP_ID}/instances/{STOPPABLE_INSTANCE}/stop")
+                .as_str(),
+        )
+        .with_status(200)
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{PARTIAL_STOP_ID}/instances/{STUCK_INSTANCE}/stop").as_str(),
+        )
+        .with_status(500)
+        .with_body("instance is wedged")
         .create();
 
     server
@@ -388,6 +436,31 @@ async fn app_stop_writes_json_alone() {
     let cli = Cli::new().await;
     let payload = cli.json(&["app", "stop", CONTENT_ID, INSTANCE_ID]).await;
     assert_eq!(payload["stopped"][0], INSTANCE_ID);
+}
+
+/// A stop that fails partway still has to report what it brought down.
+#[tokio::test]
+async fn app_stop_reports_the_instances_it_stopped_before_failing() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&["app", "stop", PARTIAL_STOP_ID, "-F", "json"])
+        .await;
+
+    assert!(
+        !output.status.success(),
+        "a failed stop must exit non-zero, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let payload: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout is not JSON ({e}):\n{stdout}"));
+
+    assert_eq!(payload["stopped"], json!([STOPPABLE_INSTANCE]));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(STUCK_INSTANCE),
+        "the error should name the instance that refused to stop"
+    );
 }
 
 #[tokio::test]

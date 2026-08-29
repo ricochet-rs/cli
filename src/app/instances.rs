@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use jiff::Timestamp;
@@ -126,18 +126,30 @@ pub async fn stop_instance(
         }
     };
 
-    for target in &targets {
-        client.stop_instance(&id, target).await?;
+    // Report what came down before surfacing a failure, so a partial stop
+    // leaves a record of which instances the caller no longer has to stop.
+    let mut succeeded = Vec::new();
+    let mut failure = None;
+    for target in targets {
+        if let Err(e) = client.stop_instance(&id, &target).await {
+            failure = Some((target, e));
+            break;
+        }
+        succeeded.push(target);
     }
 
     let stopped = StoppedInstances {
         content_id: id,
-        stopped: targets,
+        stopped: succeeded,
     };
 
     format.print(&stopped, || {
         if stopped.stopped.is_empty() {
-            return Ok("No instances to stop".yellow().to_string());
+            let message = match failure {
+                Some(_) => "No instances stopped",
+                None => "No instances to stop",
+            };
+            return Ok(message.yellow().to_string());
         }
         Ok(stopped
             .stopped
@@ -151,5 +163,10 @@ pub async fn stop_instance(
             })
             .collect::<Vec<_>>()
             .join("\n"))
-    })
+    })?;
+
+    match failure {
+        Some((target, e)) => Err(e).with_context(|| format!("stopping instance {target}")),
+        None => Ok(()),
+    }
 }
