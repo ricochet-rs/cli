@@ -14,9 +14,10 @@ Windows (PowerShell/CMD):
 curl.exe -fsSL https://raw.githubusercontent.com/ricochet-rs/cli/main/install.ps1 -o install.ps1; .\install.ps1; Remove-Item install.ps1
 ```
 
-> [!WARNING]
-> The default install dir is `$HOME/bin` for your current user, which is not in `$PATH` by default.
-> You need to add this directory to your `$PATH` environment variable or otherwise always use the full path to the binary.
+> [!NOTE]
+> The default install dir is `$HOME/bin` for your current user, which is not on `PATH` by default.
+> `install.ps1` adds it to your user `PATH`, so open a new terminal before running `ricochet`.
+> `install.sh` does not modify your shell profile, so add the directory yourself or use the full path to the binary.
 
 Or using Git Bash/WSL:
 
