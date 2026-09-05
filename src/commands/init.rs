@@ -3,12 +3,16 @@ use colored::Colorize;
 use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
     content::{AccessType, Content, ContentItem, ContentType},
-    kinds::QuartoYml,
     language::{Language, LanguageConfig, Package},
     settings::{ScheduleSettings, ServeSettings, StaticSettings},
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+use crate::commands::detect::{
+    EntrypointCandidate, StaticOutput, find_files_by_extension, find_quarto_projects,
+    find_shiny_dirs,
+};
 
 pub fn choose_language() -> Language {
     let languages = [Language::R, Language::Python, Language::Julia];
@@ -88,40 +92,7 @@ fn choose_item_name() -> String {
         .unwrap_or_default()
 }
 
-// Not case sensitive
-fn find_files_by_extension(extension: &str, search_dir: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
-    let extension_lower = extension.to_lowercase();
-
-    let res = WalkDir::new(search_dir)
-        .sort_by_file_name()
-        .into_iter()
-        .filter_entry(|entry| {
-            let name = entry.file_name();
-            !name.eq("renv") && !name.eq(".venv") && !name.eq("venv") && !name.eq("env")
-        })
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().is_file()
-                && entry
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext.to_lowercase() == extension_lower)
-                    .unwrap_or(false)
-        })
-        .filter_map(|entry| {
-            entry
-                .path()
-                .strip_prefix(search_dir)
-                .ok()
-                .map(|inner| inner.to_path_buf())
-        })
-        .collect::<Vec<_>>();
-
-    Ok(res)
-}
-
-fn find_candidate_entrypoints(extension: &str, search_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+fn find_candidate_entrypoints(extension: &str, search_dir: &Path) -> anyhow::Result<PathBuf> {
     let candidates = find_files_by_extension(extension, search_dir)?;
 
     if candidates.is_empty() {
@@ -141,38 +112,21 @@ fn find_candidate_entrypoints(extension: &str, search_dir: &PathBuf) -> anyhow::
     Ok(candidates[selection].clone())
 }
 
-fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
-    let mut candidates = Vec::new();
+fn choose_shiny_entrypoint(dir: &Path) -> anyhow::Result<PathBuf> {
     let all_r_files = find_files_by_extension("R", dir)?;
 
-    // Find all app.R files first (conventional entrypoint)
-    let app_files = all_r_files.iter().filter(|p| {
-        p.file_name()
-            .and_then(|name| name.to_str())
-            .map(|name| name.eq_ignore_ascii_case("app.R"))
-            .unwrap_or(false)
-    });
-    candidates.extend(app_files.cloned());
+    // app.R is the conventional entrypoint, so offer it first
+    let mut candidates = all_r_files
+        .iter()
+        .filter(|p| {
+            p.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("app.R"))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
 
-    // Find directories with both ui.R and server.R
-    for entry in WalkDir::new(dir)
-        .min_depth(0)
-        .max_depth(2)
-        .into_iter()
-        .filter_entry(|entry| !entry.file_name().eq("renv"))
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_dir())
-    {
-        let ui_path = entry.path().join("ui.R");
-        let server_path = entry.path().join("server.R");
-
-        if ui_path.exists()
-            && server_path.exists()
-            && let Ok(relative) = entry.path().strip_prefix(dir)
-        {
-            candidates.push(relative.to_path_buf());
-        }
-    }
+    candidates.extend(find_shiny_dirs(dir));
 
     // Add remaining .R files that aren't already in the list
     for r_file in &all_r_files {
@@ -188,10 +142,8 @@ fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
     let display_candidates: Vec<String> = candidates
         .iter()
         .map(|p| {
-            if p.to_str() == Some("") || p == &PathBuf::from(".") {
+            if p == &PathBuf::from(".") {
                 "./ (ui.R + server.R)".to_string()
-            } else if p.file_name().and_then(|n| n.to_str()) == Some("app.R") {
-                format!("{}", p.display())
             } else if p.extension().is_none() {
                 format!("{}/ (ui.R + server.R)", p.display())
             } else {
@@ -209,7 +161,7 @@ fn choose_shiny_entrypoint(dir: &PathBuf) -> anyhow::Result<PathBuf> {
     Ok(candidates[selection].clone())
 }
 
-fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Result<PathBuf> {
+fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<PathBuf> {
     match content_type {
         ContentType::R
         | ContentType::Plumber
@@ -225,11 +177,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &PathBuf) -> anyhow::Resul
         | ContentType::QuartoPy => {
             let mut candidates = find_files_by_extension("qmd", dir)?;
             // Include _quarto.yml files for quarto website/book projects
-            let quarto_ymls = find_files_by_extension("yml", dir)?
-                .into_iter()
-                .filter(|p| p.file_name().is_some_and(|n| n == "_quarto.yml"))
-                .collect::<Vec<_>>();
-            candidates.extend(quarto_ymls);
+            candidates.extend(find_quarto_projects(dir)?);
 
             if candidates.is_empty() {
                 bail!("No .qmd files or _quarto.yml found in {}", dir.display());
@@ -272,9 +220,9 @@ fn choose_access_type() -> AccessType {
 }
 
 fn static_settings(
-    path: &PathBuf,
+    path: &Path,
     content_type: &ContentType,
-    entrypoint: &std::path::Path,
+    entrypoint: &Path,
 ) -> anyhow::Result<Option<StaticSettings>> {
     if !content_type.maybe_static() {
         return Ok(None);
@@ -282,53 +230,22 @@ fn static_settings(
 
     let theme = ColorfulTheme::default();
 
-    // Auto-detect quarto website projects
-    let is_quarto = matches!(
-        content_type,
-        ContentType::QuartoR | ContentType::QuartoJl | ContentType::QuartoPy
-    );
-    if is_quarto {
-        // Determine _quarto.yml path relative to entrypoint
-        let quarto_yml_path = {
-            let entry_path = path.join(entrypoint);
-            if entrypoint.extension().is_some_and(|ext| ext == "yml") {
-                entry_path
-            } else {
-                entry_path
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| path.to_path_buf())
-                    .join("_quarto.yml")
-            }
-        };
+    let candidate = EntrypointCandidate {
+        path: entrypoint.to_path_buf(),
+        content_type: *content_type,
+    };
+    if let Some(static_output) = StaticOutput::from_quarto(path, &candidate) {
+        println!(
+            "  {} Detected quarto website project (output: {})",
+            "→".bright_cyan(),
+            static_output.output_dir.bright_cyan()
+        );
 
-        if let Ok(quarto) = QuartoYml::from_file(&quarto_yml_path)
-            && let Some(output_dir) = quarto.project.as_ref().and_then(|p| p.get_output_dir())
-        {
-            // Build full path relative to entrypoint parent
-            let entrypoint_parent = entrypoint
-                .parent()
-                .map(|p| p.to_path_buf())
-                .unwrap_or_default();
-
-            let full_output_dir = if entrypoint_parent.as_os_str().is_empty() {
-                output_dir
-            } else {
-                entrypoint_parent.join(output_dir)
-            };
-
-            println!(
-                "  {} Detected quarto website project (output: {})",
-                "→".bright_cyan(),
-                full_output_dir.display().to_string().bright_cyan()
-            );
-
-            return Ok(Some(StaticSettings {
-                index: Some("index.html".to_string()),
-                output_dir: Some(full_output_dir.display().to_string()),
-                render_fn: None,
-            }));
-        }
+        return Ok(Some(StaticSettings {
+            index: Some(static_output.index),
+            output_dir: Some(static_output.output_dir),
+            render_fn: None,
+        }));
     }
 
     // if they skip non static html
@@ -433,11 +350,7 @@ fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSetting
     Ok(Some(sched))
 }
 
-pub fn init_rico_toml(
-    dir: &PathBuf,
-    overwrite: bool,
-    dry_run: bool,
-) -> anyhow::Result<ContentItem> {
+pub fn init_rico_toml(dir: &Path, overwrite: bool, dry_run: bool) -> anyhow::Result<ContentItem> {
     // Check for non-interactive mode (tests, CI, etc.)
     if crate::utils::is_non_interactive() {
         bail!(

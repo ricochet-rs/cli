@@ -15,6 +15,15 @@ Run `ricochet <COMMAND> --help` for exhaustive flags, or read `docs/cli-commands
 Write `_ricochet.toml` by hand instead of calling `ricochet init` from an agent session or a CI job.
 Under the same conditions `ricochet deploy` fails with `No _ricochet.toml found` rather than offering to create one.
 
+`ricochet detect` runs everywhere and never writes a file, so use it to gather the facts `init` would have prompted for:
+
+```sh
+ricochet detect . -F json
+```
+
+It reports the language, every plausible entrypoint with the content type it implies, whether the package lockfile exists, and the output directory of a Quarto project.
+It reports candidates rather than choosing one, so a directory holding both `app.R` and `report.qmd` lists both.
+
 Pass `-F json` to any command whose output must be parsed.
 Under `-F json` and `-F yaml` stdout carries the serialised payload and nothing else, while status lines, hints and links go to stderr.
 Pass `--debug` to surface the underlying request and response when a command fails.
@@ -165,7 +174,7 @@ The same four subcommands exist under `ricochet task`.
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `No API key configured`                                                      | The resolved server profile has no key. Run `ricochet login -S <profile>`, or set `RICOCHET_API_KEY`.                                                                                            |
 | `Credentials are invalid or expired for server <url>`                        | The stored key is missing, wrong, or past its 8 hour lifetime. Run `ricochet login -S <url>`.                                                                                                    |
-| `Cannot run init in non-interactive mode`                                    | `ricochet init` needs a TTY. Write `_ricochet.toml` by hand using the schema reference.                                                                                                          |
+| `Cannot run init in non-interactive mode`                                    | `ricochet init` needs a TTY. Run `ricochet detect -F json`, then write `_ricochet.toml` by hand using the schema reference.                                                                      |
 | `No _ricochet.toml found in <dir>`                                           | Non-interactive deploy without a config file. Create the file, or point the path argument at the directory that holds it.                                                                        |
 | `Path must be a directory containing _ricochet.toml`                         | The path argument pointed at a file. Pass the containing directory.                                                                                                                              |
 | ``Required package file `renv.lock` not found``                              | Run `renv::snapshot()` in R, `uv init` for `uv.lock`, or `Pkg.instantiate()` in Julia.                                                                                                           |

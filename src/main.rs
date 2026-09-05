@@ -107,6 +107,12 @@ enum Commands {
         #[arg(short = 'A', long)]
         show_all: bool,
     },
+    /// Report deployable content in a directory without writing anything
+    Detect {
+        /// Directory to inspect (defaults to current directory)
+        #[arg(default_value = ".")]
+        path: std::path::PathBuf,
+    },
     /// Initialize a new Ricochet deployment
     Init {
         /// Directory to initialize (defaults to current directory)
@@ -506,6 +512,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all, cli.format)?;
+        }
+        Some(Commands::Detect { path }) => {
+            commands::detect::detect(&path, cli.format)?;
         }
         Some(Commands::Init {
             path,
