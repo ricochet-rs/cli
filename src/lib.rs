@@ -5,13 +5,9 @@ pub mod config;
 pub mod crypto;
 pub mod env_vars;
 pub mod item;
+pub mod output;
 pub mod task;
 pub mod update;
 pub mod utils;
 
-#[derive(clap::ValueEnum, Clone, Debug, Copy)]
-pub enum OutputFormat {
-    Table,
-    Json,
-    Yaml,
-}
+pub use output::OutputFormat;

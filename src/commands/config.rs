@@ -1,87 +1,119 @@
-use crate::config::Config;
+use crate::{
+    OutputFormat,
+    commands::server::{ConfiguredServer, configured_servers, mask_api_key},
+    config::Config,
+};
 use anyhow::Result;
 use colored::Colorize;
+use serde::Serialize;
 
-pub fn show(config: &Config, show_all: bool) -> Result<()> {
-    println!("⚙️  {}\n", "Ricochet CLI Configuration".bold());
+/// The environment variables that override the stored configuration.
+#[derive(Serialize)]
+struct EnvironmentOverrides {
+    ricochet_server: Option<String>,
+    ricochet_api_key: Option<String>,
+}
 
-    println!("Config file: {}", Config::config_path()?.display());
-    println!();
+/// The effective CLI configuration.
+#[derive(Serialize)]
+struct ConfigView {
+    config_file: String,
+    default_server: Option<String>,
+    default_format: Option<String>,
+    servers: Vec<ConfiguredServer>,
+    environment: EnvironmentOverrides,
+}
 
-    // Show default server
-    if let Some(default_name) = config.default_server() {
-        println!("Default server: {}", default_name.bright_cyan());
+/// Reveal the key in full when the caller asked for it, otherwise mask it.
+fn shown_api_key(api_key: String, show_all: bool) -> String {
+    if show_all {
+        api_key
     } else {
-        println!("Default server: {}", "Not set".yellow());
+        mask_api_key(&api_key)
     }
+}
 
-    if let Some(format) = &config.default_format {
-        println!("Default format: {}", format);
-    }
-
-    // Show configured servers
-    println!("\n{}", "Configured Servers:".bold());
-
-    let servers = config.list_servers();
-    if servers.is_empty() {
-        println!("  {}", "None".dimmed());
-    } else {
-        let default_name = config.default_server();
-        let mut sorted_servers: Vec<_> = servers.into_iter().collect();
-        sorted_servers.sort_by(|a, b| a.0.cmp(b.0));
-
-        for (name, server_config) in sorted_servers {
-            let is_default = default_name == Some(name.as_str());
-            let marker = if is_default { " (default)" } else { "" };
-
-            println!("\n  {}{}", name.bright_cyan(), marker.dimmed());
-            println!("    URL: {}", server_config.url.as_str());
-
-            if let Some(api_key) = &server_config.api_key {
-                if show_all {
-                    println!("    API Key: {}", api_key.bright_cyan());
-                } else {
-                    let masked = if api_key.starts_with("rico_") && api_key.len() > 10 {
-                        format!("{}...{}", &api_key[..8], &api_key[api_key.len() - 4..])
-                    } else {
-                        "***hidden***".to_string()
-                    };
-                    println!("    API Key: {}", masked);
-                }
-            } else {
-                println!("    API Key: {}", "Not configured".yellow());
+pub fn show(config: &Config, show_all: bool, format: OutputFormat) -> Result<()> {
+    let mut servers = configured_servers(config);
+    if show_all {
+        for server in &mut servers {
+            if let Some(api_key) = config
+                .servers
+                .get(&server.name)
+                .and_then(|c| c.api_key.clone())
+            {
+                server.api_key = Some(api_key);
             }
         }
     }
 
-    println!("\n{}", "Environment Variables:".bold());
+    let view = ConfigView {
+        config_file: Config::config_path()?.display().to_string(),
+        default_server: config.default_server().map(str::to_string),
+        default_format: config.default_format.clone(),
+        servers,
+        environment: EnvironmentOverrides {
+            ricochet_server: std::env::var("RICOCHET_SERVER").ok(),
+            ricochet_api_key: std::env::var("RICOCHET_API_KEY")
+                .ok()
+                .map(|key| shown_api_key(key, show_all)),
+        },
+    };
 
-    if let Ok(server_env) = std::env::var("RICOCHET_SERVER") {
-        println!(
-            "  RICOCHET_SERVER: {} {}",
-            server_env.bright_cyan(),
-            "(overrides default)".dimmed()
-        );
-    } else {
-        println!("  RICOCHET_SERVER: {}", "Not set".dimmed());
-    }
+    format.print(&view, || {
+        let mut output = format!("⚙️  {}\n", "Ricochet CLI Configuration".bold());
+        output.push_str(&format!("\nConfig file: {}\n", view.config_file));
 
-    if std::env::var("RICOCHET_API_KEY").is_ok() {
-        if show_all {
-            println!(
-                "  RICOCHET_API_KEY: {}",
-                std::env::var("RICOCHET_API_KEY").unwrap().bright_cyan()
-            );
+        match &view.default_server {
+            Some(name) => output.push_str(&format!("\nDefault server: {}", name.bright_cyan())),
+            None => output.push_str(&format!("\nDefault server: {}", "Not set".yellow())),
+        }
+
+        if let Some(format) = &view.default_format {
+            output.push_str(&format!("\nDefault format: {format}"));
+        }
+
+        output.push_str(&format!("\n\n{}", "Configured Servers:".bold()));
+
+        if view.servers.is_empty() {
+            output.push_str(&format!("\n  {}", "None".dimmed()));
         } else {
-            println!(
-                "  RICOCHET_API_KEY: {} {}",
+            for server in &view.servers {
+                let marker = if server.default { " (default)" } else { "" };
+                output.push_str(&format!(
+                    "\n\n  {}{}\n    URL: {}\n    API Key: {}",
+                    server.name.bright_cyan(),
+                    marker.dimmed(),
+                    server.url,
+                    match &server.api_key {
+                        Some(api_key) => api_key.bright_cyan().to_string(),
+                        None => "Not configured".yellow().to_string(),
+                    }
+                ));
+            }
+        }
+
+        output.push_str(&format!("\n\n{}", "Environment Variables:".bold()));
+        match &view.environment.ricochet_server {
+            Some(server) => output.push_str(&format!(
+                "\n  RICOCHET_SERVER: {} {}",
+                server.bright_cyan(),
+                "(overrides default)".dimmed()
+            )),
+            None => output.push_str(&format!("\n  RICOCHET_SERVER: {}", "Not set".dimmed())),
+        }
+        match &view.environment.ricochet_api_key {
+            Some(api_key) if show_all => {
+                output.push_str(&format!("\n  RICOCHET_API_KEY: {}", api_key.bright_cyan()))
+            }
+            Some(_) => output.push_str(&format!(
+                "\n  RICOCHET_API_KEY: {} {}",
                 "***set***".green(),
                 "(overrides all server keys)".dimmed()
-            );
+            )),
+            None => output.push_str(&format!("\n  RICOCHET_API_KEY: {}", "Not set".dimmed())),
         }
-    } else {
-        println!("  RICOCHET_API_KEY: {}", "Not set".dimmed());
-    }
 
-    Ok(())
+        Ok(output)
+    })
 }

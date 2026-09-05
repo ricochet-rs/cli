@@ -27,25 +27,16 @@ pub async fn schedule_task(
         .await
         .context("sending API request")?;
 
-    match format {
-        OutputFormat::Table => {
-            println!("{} Schedule updated successfully", "✓".green().bold());
-            println!();
-            println!("  {:<12} {}", "Schedule:".dimmed(), schedule);
-            println!("  {:<12} {}", "Runs:".dimmed(), cron.describe());
-            println!(
-                "  {:<12} {} UTC",
-                "Next run:".dimmed(),
-                next.format("%Y-%m-%d %H:%M:%S")
-            );
-        }
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&res)?);
-        }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&res)?);
-        }
-    }
-
-    Ok(())
+    format.print(&res, || {
+        Ok(format!(
+            "{} Schedule updated successfully\n\n  {:<12} {}\n  {:<12} {}\n  {:<12} {} UTC",
+            "✓".green().bold(),
+            "Schedule:".dimmed(),
+            schedule,
+            "Runs:".dimmed(),
+            cron.describe(),
+            "Next run:".dimmed(),
+            next.format("%Y-%m-%d %H:%M:%S")
+        ))
+    })
 }
