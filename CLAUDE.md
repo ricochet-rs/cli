@@ -65,6 +65,8 @@ This is a Rust CLI application called `ricochet` that provides a client interfac
 The CLI follows a subcommand pattern with these main operations:
 
 - `login/logout` - Authentication management (supports `--server` flag)
+- `detect` - Report deployable entrypoints in a directory without writing anything
+- `init` - Write a `_ricochet.toml` interactively
 - `deploy` - Upload content to a ricochet server (supports `--server` flag)
 - `list` - List deployed content items with filtering
 - `delete` - Remove content items
