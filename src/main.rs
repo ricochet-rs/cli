@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ricochet_cli::{OutputFormat, app, commands, config::Config, item, update};
+use ricochet_cli::{OutputFormat, app, client::ItemScope, commands, config::Config, item, update};
 
 // App specific methods go in `src/app/`
 // Task specific methods go in `src/task`
@@ -184,6 +184,9 @@ enum ItemCommands {
         /// Show only active deployments (status: deployed, running, or success)
         #[arg(short = 'a', long)]
         active_only: bool,
+        /// List every item on the instance, not just your own (requires an instance admin API key)
+        #[arg(long)]
+        all: bool,
         /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
         /// Prefix with '-' for descending order (e.g., "-updated,name")
         #[arg(short = 's', long)]
@@ -238,6 +241,9 @@ enum TaskCommands {
         /// Show only active deployments (status: deployed, running, or success)
         #[arg(short = 'a', long)]
         active_only: bool,
+        /// List every item on the instance, not just your own (requires an instance admin API key)
+        #[arg(long)]
+        all: bool,
         /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
         /// Prefix with '-' for descending order (e.g., "-updated,name")
         #[arg(short = 's', long)]
@@ -528,12 +534,18 @@ async fn main() -> Result<()> {
             ItemCommands::List {
                 content_type,
                 active_only,
+                all,
                 sort,
             } => {
                 commands::list::list(
                     &config,
                     cli.server.as_deref(),
                     commands::list::ListKind::App,
+                    if all {
+                        ItemScope::All
+                    } else {
+                        ItemScope::Owned
+                    },
                     content_type,
                     active_only,
                     sort,
@@ -670,12 +682,18 @@ async fn main() -> Result<()> {
             TaskCommands::List {
                 content_type,
                 active_only,
+                all,
                 sort,
             } => {
                 commands::list::list(
                     &config,
                     cli.server.as_deref(),
                     commands::list::ListKind::Task,
+                    if all {
+                        ItemScope::All
+                    } else {
+                        ItemScope::Owned
+                    },
                     content_type,
                     active_only,
                     sort,

@@ -1,4 +1,9 @@
-use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
+use crate::{
+    OutputFormat,
+    client::{ItemScope, RicochetClient},
+    config::Config,
+    utils,
+};
 use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
@@ -28,8 +33,27 @@ pub fn classify_item(item: &serde_json::Value) -> Option<ListKind> {
     }
 }
 
+/// Render an item's owner, whom the server names by display name, email or id.
+fn owner_label(item: &serde_json::Value) -> Option<String> {
+    let owner = item.get("owner")?;
+
+    ["display_name", "email", "id"]
+        .iter()
+        .find_map(|field| owner.get(field).and_then(|v| v.as_str()))
+        .map(str::to_string)
+}
+
 // Helper function to compare items by a specific field
 fn compare_by_field(a: &serde_json::Value, b: &serde_json::Value, field: &str) -> Ordering {
+    if field == "owner" {
+        return match (owner_label(a), owner_label(b)) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(a), Some(b)) => a.to_lowercase().cmp(&b.to_lowercase()),
+        };
+    }
+
     let a_val = match field {
         "status" => a
             .get("status")
@@ -70,6 +94,7 @@ pub async fn list(
     config: &Config,
     server_ref: Option<&str>,
     kind: ListKind,
+    scope: ItemScope,
     content_type: Option<String>,
     active_only: bool,
     sort_fields: Option<String>,
@@ -80,7 +105,18 @@ pub async fn list(
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
 
-    let items = client.list_items().await?;
+    let items = client.list_items(scope).await?;
+
+    // A server without the instance-wide listing ignores the unknown query
+    // parameter and answers with the ACL-scoped list, which carries no owner.
+    if scope == ItemScope::All
+        && !items.is_empty()
+        && !items.iter().any(|item| owner_label(item).is_some())
+    {
+        anyhow::bail!(
+            "This server does not support --all and returned only the items your API key has access to.\nUpgrade the server, or drop --all to list those items explicitly."
+        );
+    }
 
     // Filter items if needed
     let filtered_items: Vec<_> = items
@@ -169,7 +205,7 @@ pub async fn list(
 
             let mut table = Table::new();
             table.load_style(UTF8_FULL);
-            table.set_header(vec![
+            let mut header = vec![
                 "ID",
                 "Name",
                 "Type",
@@ -177,7 +213,11 @@ pub async fn list(
                 "Visibility",
                 "Status",
                 "Updated",
-            ]);
+            ];
+            if scope == ItemScope::All {
+                header.insert(2, "Owner");
+            }
+            table.set_header(header);
 
             for item in &filtered_items {
                 let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
@@ -218,7 +258,7 @@ pub async fn list(
                     _ => Cell::new(visibility),
                 };
 
-                table.add_row(vec![
+                let mut cells = vec![
                     Cell::new(id),
                     Cell::new(name),
                     Cell::new(content_type),
@@ -226,7 +266,15 @@ pub async fn list(
                     visibility_cell,
                     status_cell,
                     Cell::new(updated),
-                ]);
+                ];
+                if scope == ItemScope::All {
+                    cells.insert(
+                        2,
+                        Cell::new(owner_label(item).unwrap_or_else(|| "-".to_string())),
+                    );
+                }
+
+                table.add_row(cells);
             }
 
             println!("{}", table);

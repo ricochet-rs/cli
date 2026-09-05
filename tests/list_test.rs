@@ -5,6 +5,7 @@ use url::Url;
 #[cfg(test)]
 mod list_tests {
     use super::*;
+    use ricochet_cli::client::ItemScope;
     use ricochet_cli::commands::list::ListKind;
 
     #[tokio::test]
@@ -53,6 +54,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
+            ItemScope::Owned,
             None,
             false,
             None, // no sorting
@@ -100,6 +102,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
+            ItemScope::Owned,
             None,
             false,
             None, // no sorting
@@ -159,6 +162,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
+            ItemScope::Owned,
             Some("shiny".to_string()),
             false,
             None, // no sorting
@@ -174,6 +178,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
+            ItemScope::Owned,
             None,
             true,
             None, // no sorting
@@ -209,6 +214,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
+            ItemScope::Owned,
             None,
             false,
             None, // no sorting
@@ -218,6 +224,146 @@ mod list_tests {
         .await;
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_all_requests_the_instance_wide_scope() {
+        let mut server = Server::new_async().await;
+
+        let _m = server
+            .mock("GET", "/api/v0/user/items?scope=all")
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .with_body(
+                json!([
+                    {
+                        "id": "01K66JV2Q123",
+                        "name": "Shiny App",
+                        "content_type": "shiny",
+                        "language": "R",
+                        "visibility": "private",
+                        "status": "deployed",
+                        "updated_at": "2024-01-15T10:30:00Z",
+                        "owner": {
+                            "id": "01K66JV2QOWNER",
+                            "display_name": "Ada Lovelace",
+                            "email": "ada@example.com"
+                        }
+                    }
+                ])
+                .to_string(),
+            )
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::list::list(
+            &config,
+            None,
+            ListKind::App,
+            ItemScope::All,
+            None,
+            false,
+            None, // no sorting
+            ricochet_cli::OutputFormat::Table,
+            false,
+        )
+        .await;
+
+        assert!(result.is_ok());
+        _m.assert();
+    }
+
+    #[tokio::test]
+    async fn test_list_all_reports_a_server_without_the_scope() {
+        let mut server = Server::new_async().await;
+
+        // A server predating the instance-wide listing ignores `scope` and
+        // answers with the ACL-scoped items, which carry no owner.
+        let _m = server
+            .mock("GET", "/api/v0/user/items?scope=all")
+            .match_header("authorization", "Key test_api_key")
+            .with_status(200)
+            .with_body(
+                json!([
+                    {
+                        "id": "01K66JV2Q123",
+                        "name": "Shiny App",
+                        "content_type": "shiny",
+                        "language": "R",
+                        "visibility": "private",
+                        "status": "deployed",
+                        "updated_at": "2024-01-15T10:30:00Z"
+                    }
+                ])
+                .to_string(),
+            )
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::list::list(
+            &config,
+            None,
+            ListKind::App,
+            ItemScope::All,
+            None,
+            false,
+            None, // no sorting
+            ricochet_cli::OutputFormat::Table,
+            false,
+        )
+        .await;
+
+        let error = result
+            .expect_err("an unsupported --all must fail")
+            .to_string();
+        assert!(
+            error.contains("does not support --all"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_all_reports_a_non_admin_caller() {
+        let mut server = Server::new_async().await;
+
+        let _m = server
+            .mock("GET", "/api/v0/user/items?scope=all")
+            .match_header("authorization", "Key test_api_key")
+            .with_status(403)
+            .with_body(json!({"error": "admin privileges required"}).to_string())
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+
+        let result = ricochet_cli::commands::list::list(
+            &config,
+            None,
+            ListKind::App,
+            ItemScope::All,
+            None,
+            false,
+            None, // no sorting
+            ricochet_cli::OutputFormat::Table,
+            false,
+        )
+        .await;
+
+        let error = result.expect_err("a non-admin --all must fail").to_string();
+        assert!(
+            error.contains("requires an instance admin API key"),
+            "unexpected error: {error}"
+        );
     }
 }
 
