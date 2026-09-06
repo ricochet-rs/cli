@@ -24,7 +24,7 @@ colored = "3.0"
 comfy-table = "8.0"
 croner = "3.0"
 dialoguer = { version = "0.12", features = ["fuzzy-select"] }
-dirs = "6.0"
+dirs = "7.0"
 flate2 = "1.0"
 globset = "0.4"
 html-escape = "0.2"
