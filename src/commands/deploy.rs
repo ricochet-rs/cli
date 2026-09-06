@@ -11,20 +11,23 @@ use ricochet_core::{
 };
 use std::path::{Path, PathBuf};
 
-/// The one file name the server.yml standard accepts, at the bundle root.
+/// The one file name the server.yml standard accepts, in any directory of the bundle.
 const SERVER_YML: &str = "_server.yml";
 
 /// Apply the server.yml rules the server enforces, failing here rather than after a pointless upload.
 fn verify_server_yml(dir: &Path, entrypoint: &Path) -> Result<()> {
-    if entrypoint != Path::new(SERVER_YML) {
+    if entrypoint.file_name() != Some(SERVER_YML.as_ref()) {
         bail!(
-            "An r-server item must declare `entrypoint = \"{SERVER_YML}\"`, not `{}`",
+            "An r-server item must declare an entrypoint named `{SERVER_YML}`, not `{}`",
             entrypoint.display()
         );
     }
 
-    let raw = std::fs::read_to_string(dir.join(SERVER_YML)).with_context(|| {
-        format!("An r-server item needs a `{SERVER_YML}` at the root of the deployed directory")
+    let raw = std::fs::read_to_string(dir.join(entrypoint)).with_context(|| {
+        format!(
+            "An r-server item needs its `{SERVER_YML}` at {}",
+            entrypoint.display()
+        )
     })?;
     let engine = ServerYml::from_yaml(&raw)?.engine;
 
@@ -378,7 +381,7 @@ mod tests {
         let dir = bundle("engine: plumber2\n");
 
         let err = verify_server_yml(dir.path(), Path::new("api.R")).expect_err("wrong entrypoint");
-        assert!(err.to_string().contains("must declare"));
+        assert!(err.to_string().contains("must declare an entrypoint named"));
     }
 
     #[test]
@@ -386,7 +389,21 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
 
         let err = verify_server_yml(dir.path(), Path::new(SERVER_YML)).expect_err("no _server.yml");
-        assert!(err.to_string().contains("needs a `_server.yml`"));
+        assert!(err.to_string().contains("needs its `_server.yml`"));
+    }
+
+    /// The standard fixes the file name, not the directory it sits in.
+    #[test]
+    fn a_nested_server_yml_passes() {
+        let dir = TempDir::new().expect("tempdir");
+        std::fs::create_dir(dir.path().join("api")).expect("create api");
+        std::fs::write(
+            dir.path().join("api").join(SERVER_YML),
+            "engine: plumber2\n",
+        )
+        .expect("write _server.yml");
+
+        assert!(verify_server_yml(dir.path(), Path::new("api/_server.yml")).is_ok());
     }
 
     #[test]

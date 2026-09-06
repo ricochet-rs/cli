@@ -93,6 +93,17 @@ fn choose_item_name() -> String {
         .unwrap_or_default()
 }
 
+fn select_entrypoint(candidates: &[PathBuf], prompt: &str) -> anyhow::Result<PathBuf> {
+    let display_candidates = candidates.iter().map(|i| i.display()).collect::<Vec<_>>();
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(prompt)
+        .highlight_matches(true)
+        .items(display_candidates)
+        .interact()?;
+
+    Ok(candidates[selection].clone())
+}
+
 fn find_candidate_entrypoints(extension: &str, search_dir: &Path) -> anyhow::Result<PathBuf> {
     let candidates = find_files_by_extension(extension, search_dir)?;
 
@@ -103,14 +114,7 @@ fn find_candidate_entrypoints(extension: &str, search_dir: &Path) -> anyhow::Res
         );
     }
 
-    let display_candidates = candidates.iter().map(|i| i.display()).collect::<Vec<_>>();
-    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select entrypoint file")
-        .highlight_matches(true)
-        .items(display_candidates)
-        .interact()?;
-
-    Ok(candidates[selection].clone())
+    select_entrypoint(&candidates, "Select entrypoint file")
 }
 
 fn choose_shiny_entrypoint(dir: &Path) -> anyhow::Result<PathBuf> {
@@ -169,9 +173,14 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         | ContentType::RService
         | ContentType::ServerlessR
         | ContentType::Ambiorix => find_candidate_entrypoints("R", dir),
-        // The standard fixes the name and the location, so there is nothing to choose
-        ContentType::RServer => find_server_yml(dir)
-            .ok_or_else(|| anyhow::anyhow!("No _server.yml found in {}", dir.display())),
+        // The standard fixes the file name but not the directory, so there may be several
+        ContentType::RServer => {
+            let candidates = find_server_yml(dir)?;
+            if candidates.is_empty() {
+                bail!("No _server.yml found in {}", dir.display());
+            }
+            select_entrypoint(&candidates, "Select _server.yml")
+        }
         ContentType::Shiny => choose_shiny_entrypoint(dir),
         ContentType::Rmd | ContentType::RmdShiny => find_candidate_entrypoints("Rmd", dir),
         ContentType::Julia | ContentType::JuliaService => find_candidate_entrypoints("jl", dir),

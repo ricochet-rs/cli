@@ -73,7 +73,7 @@ impl Detection {
             });
         }
 
-        if let Some(path) = find_server_yml(&dir) {
+        for path in find_server_yml(&dir)? {
             entrypoints.push(EntrypointCandidate {
                 path,
                 content_type: ContentType::RServer,
@@ -273,10 +273,12 @@ pub fn find_quarto_projects(dir: &Path) -> Result<Vec<PathBuf>> {
         .collect())
 }
 
-/// The `_server.yml` a server.yml engine reads, which Ricochet only accepts at the bundle root.
-pub fn find_server_yml(dir: &Path) -> Option<PathBuf> {
-    let name = PathBuf::from("_server.yml");
-    dir.join(&name).is_file().then_some(name)
+/// `_server.yml` files, whose engine Ricochet launches. The standard fixes the name, not the directory.
+pub fn find_server_yml(dir: &Path) -> Result<Vec<PathBuf>> {
+    Ok(find_files_by_extension("yml", dir)?
+        .into_iter()
+        .filter(|path| file_name_eq(path, "_server.yml"))
+        .collect())
 }
 
 fn file_name_eq(path: &Path, name: &str) -> bool {
@@ -590,16 +592,43 @@ mod tests {
         );
     }
 
-    /// Ricochet only launches the engine named by a bundle-root `_server.yml`.
+    /// The standard fixes the file name, not the directory it sits in.
     #[test]
-    fn a_nested_server_yml_is_not_an_entrypoint() {
+    fn a_nested_server_yml_is_an_entrypoint() {
         let dir = TempDir::new().expect("tempdir");
         write(dir.path(), "api/_server.yml", "engine: plumber2\n");
-        write(dir.path(), "main.py", "print('hello')\n");
 
         let detection = scan(&dir);
 
-        assert_eq!(detection.content_types, vec![ContentType::Python]);
+        assert_eq!(
+            detection.entrypoints,
+            vec![EntrypointCandidate {
+                path: PathBuf::from("api/_server.yml"),
+                content_type: ContentType::RServer,
+            }]
+        );
+    }
+
+    #[test]
+    fn every_server_yml_in_a_monorepo_is_reported() {
+        let dir = TempDir::new().expect("tempdir");
+        write(dir.path(), "api/_server.yml", "engine: plumber2\n");
+        write(dir.path(), "events/_server.yml", "engine: fiery\n");
+
+        let detection = scan(&dir);
+
+        assert_eq!(
+            detection
+                .entrypoints
+                .iter()
+                .map(|candidate| candidate.path.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                PathBuf::from("api/_server.yml"),
+                PathBuf::from("events/_server.yml"),
+            ]
+        );
+        assert_eq!(detection.content_types, vec![ContentType::RServer]);
     }
 
     #[test]
