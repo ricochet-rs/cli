@@ -73,6 +73,13 @@ impl Detection {
             });
         }
 
+        if let Some(path) = find_server_yml(&dir) {
+            entrypoints.push(EntrypointCandidate {
+                path,
+                content_type: ContentType::RServer,
+            });
+        }
+
         for path in find_files_by_extension("R", &dir)? {
             let content_type = if file_name_eq(&path, "app.R") {
                 ContentType::Shiny
@@ -266,6 +273,12 @@ pub fn find_quarto_projects(dir: &Path) -> Result<Vec<PathBuf>> {
         .collect())
 }
 
+/// The `_server.yml` a server.yml engine reads, which Ricochet only accepts at the bundle root.
+pub fn find_server_yml(dir: &Path) -> Option<PathBuf> {
+    let name = PathBuf::from("_server.yml");
+    dir.join(&name).is_file().then_some(name)
+}
+
 fn file_name_eq(path: &Path, name: &str) -> bool {
     path.file_name()
         .and_then(|inner| inner.to_str())
@@ -286,8 +299,8 @@ fn rank(candidate: &EntrypointCandidate) -> u8 {
         .to_lowercase();
 
     match name.as_str() {
-        "app.r" | "app.py" | "plumber.r" | "_quarto.yml" | "index.qmd" | "index.rmd"
-        | "main.py" | "main.jl" => 0,
+        "app.r" | "app.py" | "plumber.r" | "_quarto.yml" | "_server.yml" | "index.qmd"
+        | "index.rmd" | "main.py" | "main.jl" => 0,
         _ => 1,
     }
 }
@@ -540,6 +553,53 @@ mod tests {
                 content_type: ContentType::Shiny,
             }
         );
+    }
+
+    #[test]
+    fn a_server_yml_is_an_r_server_entrypoint() {
+        let dir = TempDir::new().expect("tempdir");
+        write(dir.path(), "_server.yml", "engine: plumber2\n");
+        write(dir.path(), "renv.lock", "{}");
+
+        let detection = scan(&dir);
+
+        assert_eq!(detection.language, Some(Language::R));
+        assert_eq!(
+            detection.entrypoints,
+            vec![EntrypointCandidate {
+                path: PathBuf::from("_server.yml"),
+                content_type: ContentType::RServer,
+            }]
+        );
+    }
+
+    #[test]
+    fn a_server_yml_outranks_the_r_files_beside_it() {
+        let dir = TempDir::new().expect("tempdir");
+        write(dir.path(), "_server.yml", "engine: fiery\n");
+        write(dir.path(), "routes.R", "handler <- function() {}\n");
+
+        let detection = scan(&dir);
+
+        assert_eq!(
+            detection.entrypoints.first().expect("candidate"),
+            &EntrypointCandidate {
+                path: PathBuf::from("_server.yml"),
+                content_type: ContentType::RServer,
+            }
+        );
+    }
+
+    /// Ricochet only launches the engine named by a bundle-root `_server.yml`.
+    #[test]
+    fn a_nested_server_yml_is_not_an_entrypoint() {
+        let dir = TempDir::new().expect("tempdir");
+        write(dir.path(), "api/_server.yml", "engine: plumber2\n");
+        write(dir.path(), "main.py", "print('hello')\n");
+
+        let detection = scan(&dir);
+
+        assert_eq!(detection.content_types, vec![ContentType::Python]);
     }
 
     #[test]

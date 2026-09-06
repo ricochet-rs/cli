@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 
 use crate::commands::detect::{
     EntrypointCandidate, StaticOutput, find_files_by_extension, find_quarto_projects,
-    find_shiny_dirs,
+    find_server_yml, find_shiny_dirs,
 };
 
 pub fn choose_language() -> Language {
@@ -35,6 +35,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
                 ContentType::R,
                 ContentType::RService,
                 ContentType::Plumber,
+                ContentType::RServer,
                 ContentType::Ambiorix,
                 ContentType::Shiny,
                 ContentType::Rmd,
@@ -168,6 +169,9 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         | ContentType::RService
         | ContentType::ServerlessR
         | ContentType::Ambiorix => find_candidate_entrypoints("R", dir),
+        // The standard fixes the name and the location, so there is nothing to choose
+        ContentType::RServer => find_server_yml(dir)
+            .ok_or_else(|| anyhow::anyhow!("No _server.yml found in {}", dir.display())),
         ContentType::Shiny => choose_shiny_entrypoint(dir),
         ContentType::Rmd | ContentType::RmdShiny => find_candidate_entrypoints("Rmd", dir),
         ContentType::Julia | ContentType::JuliaService => find_candidate_entrypoints("jl", dir),
@@ -211,12 +215,12 @@ fn choose_access_type() -> AccessType {
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Item visibility")
-        .items(&opts)
+        .items(opts)
         .default(0)
         .interact()
         .unwrap_or(0);
 
-    opts[selection].clone()
+    opts[selection]
 }
 
 fn static_settings(

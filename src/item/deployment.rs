@@ -43,9 +43,9 @@ fn status_cell(status: &DeploymentStatus) -> Cell {
     match status {
         DeploymentStatus::Success => Cell::new(label).fg(Color::Green),
         DeploymentStatus::Failure | DeploymentStatus::Timeout => Cell::new(label).fg(Color::Red),
-        DeploymentStatus::Cancelled | DeploymentStatus::Invalidated => {
-            Cell::new(label).fg(Color::Yellow)
-        }
+        DeploymentStatus::Cancelled
+        | DeploymentStatus::Invalidated
+        | DeploymentStatus::DependencyMismatch => Cell::new(label).fg(Color::Yellow),
         DeploymentStatus::Pending => Cell::new(label).fg(Color::Cyan),
     }
 }
