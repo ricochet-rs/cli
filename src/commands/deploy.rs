@@ -1,10 +1,43 @@
 use crate::{client::RicochetClient, config::Config};
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
-use ricochet_core::{config::git::GitRepo, content::ContentItem, language::Package};
-use std::path::PathBuf;
+use ricochet_core::{
+    config::git::GitRepo,
+    content::{ContentItem, ContentType},
+    kinds::ServerYml,
+    language::Package,
+};
+use std::path::{Path, PathBuf};
+
+/// The one file name the server.yml standard accepts, in any directory of the bundle.
+const SERVER_YML: &str = "_server.yml";
+
+/// Apply the server.yml rules the server enforces, failing here rather than after a pointless upload.
+fn verify_server_yml(dir: &Path, entrypoint: &Path) -> Result<()> {
+    if entrypoint.file_name() != Some(SERVER_YML.as_ref()) {
+        bail!(
+            "An r-server item must declare an entrypoint named `{SERVER_YML}`, not `{}`",
+            entrypoint.display()
+        );
+    }
+
+    let raw = std::fs::read_to_string(dir.join(entrypoint)).with_context(|| {
+        format!(
+            "An r-server item needs its `{SERVER_YML}` at {}",
+            entrypoint.display()
+        )
+    })?;
+    let engine = ServerYml::from_yaml(&raw)?.engine;
+
+    println!(
+        "  {} Using the {} engine, which must be in renv.lock",
+        "→".bright_cyan(),
+        engine.to_string().bright_cyan()
+    );
+    Ok(())
+}
 
 pub async fn deploy(
     config: &Config,
@@ -116,6 +149,10 @@ pub async fn deploy(
         } else {
             bail!("Please create a `.python-version` via `uv python pin`")
         }
+    }
+
+    if content_type == ContentType::RServer {
+        verify_server_yml(&path, &ricochet_toml.content.entrypoint)?;
     }
 
     if let Some(ref id) = content_id {
@@ -318,5 +355,61 @@ pub async fn deploy_git(
             pb.finish_and_clear();
             anyhow::bail!("Deployment failed: {}", e)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn bundle(contents: &str) -> TempDir {
+        let dir = TempDir::new().expect("tempdir");
+        std::fs::write(dir.path().join(SERVER_YML), contents).expect("write _server.yml");
+        dir
+    }
+
+    #[test]
+    fn a_root_server_yml_naming_an_engine_passes() {
+        let dir = bundle("engine: plumber2\nroutes:\n  - api.R\n");
+
+        assert!(verify_server_yml(dir.path(), Path::new(SERVER_YML)).is_ok());
+    }
+
+    #[test]
+    fn another_entrypoint_is_rejected_before_the_upload() {
+        let dir = bundle("engine: plumber2\n");
+
+        let err = verify_server_yml(dir.path(), Path::new("api.R")).expect_err("wrong entrypoint");
+        assert!(err.to_string().contains("must declare an entrypoint named"));
+    }
+
+    #[test]
+    fn a_missing_server_yml_is_rejected_before_the_upload() {
+        let dir = TempDir::new().expect("tempdir");
+
+        let err = verify_server_yml(dir.path(), Path::new(SERVER_YML)).expect_err("no _server.yml");
+        assert!(err.to_string().contains("needs its `_server.yml`"));
+    }
+
+    /// The standard fixes the file name, not the directory it sits in.
+    #[test]
+    fn a_nested_server_yml_passes() {
+        let dir = TempDir::new().expect("tempdir");
+        std::fs::create_dir(dir.path().join("api")).expect("create api");
+        std::fs::write(
+            dir.path().join("api").join(SERVER_YML),
+            "engine: plumber2\n",
+        )
+        .expect("write _server.yml");
+
+        assert!(verify_server_yml(dir.path(), Path::new("api/_server.yml")).is_ok());
+    }
+
+    #[test]
+    fn an_engine_that_is_not_a_package_name_is_rejected_before_the_upload() {
+        let dir = bundle("engine: \"../evil\"\n");
+
+        assert!(verify_server_yml(dir.path(), Path::new(SERVER_YML)).is_err());
     }
 }

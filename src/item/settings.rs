@@ -151,8 +151,8 @@ pub fn compute_patch(
     b.field(
         "content",
         "access_type",
-        serde_json::to_value(&remote.content.access_type)?,
-        serde_json::to_value(&local.content.access_type)?,
+        serde_json::to_value(remote.content.access_type)?,
+        serde_json::to_value(local.content.access_type)?,
     );
     b.field(
         "content",
