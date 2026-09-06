@@ -123,3 +123,5 @@ On a tagged release, the `binaries.yaml` pipeline:
 - HTTP client uses reqwest with 5-minute timeout
 - File uploads support both individual files and directory bundling (creates tar.gz)
 - Uses ULID for unique identifiers
+- Exercise `install.ps1` in the `mcr.microsoft.com/powershell` container with `PROCESSOR_ARCHITECTURE` and `RICOCHET_INSTALL_DIR` set; the registry and PATH writes are unavailable on Linux, so that run covers only the fallback branch
+- Exercise the `install.sh` Windows branch by putting a `uname` stub that reports `MINGW64_NT-10.0` ahead of the real one on `PATH`
