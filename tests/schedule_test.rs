@@ -172,7 +172,7 @@ mod schedule_tests {
     // These tests validate the cron parsing logic that runs before the API call.
     // They don't need a mock server since they fail locally.
     mod cron_validation {
-        use std::str::FromStr;
+        use ricochet_cli::item::schedule::parse_schedule;
 
         #[test]
         fn test_valid_cron_expressions() {
@@ -185,10 +185,20 @@ mod schedule_tests {
             ];
 
             for expr in valid {
-                assert!(
-                    croner::Cron::from_str(expr).is_ok(),
-                    "Expected valid cron: {expr}"
-                );
+                assert!(parse_schedule(expr).is_ok(), "Expected valid cron: {expr}");
+            }
+        }
+
+        #[test]
+        fn test_shortcut_step_expressions_stay_valid() {
+            let shortcut = [
+                "5/5 * * * *",  // every 5 minutes starting at minute 5
+                "0/10 * * * *", // every 10 minutes starting at minute 0
+                "/10 * * * *",  // same as */10
+            ];
+
+            for expr in shortcut {
+                assert!(parse_schedule(expr).is_ok(), "Expected valid cron: {expr}");
             }
         }
 
@@ -202,7 +212,7 @@ mod schedule_tests {
 
             for expr in invalid {
                 assert!(
-                    croner::Cron::from_str(expr).is_err(),
+                    parse_schedule(expr).is_err(),
                     "Expected invalid cron: {expr}"
                 );
             }
@@ -212,7 +222,7 @@ mod schedule_tests {
         fn test_next_occurrence_is_in_the_future() {
             use chrono::Utc;
 
-            let cron = croner::Cron::from_str("0 9 * * 1-5").unwrap();
+            let cron = parse_schedule("0 9 * * 1-5").unwrap();
             let next = cron.find_next_occurrence(&Utc::now(), false).unwrap();
             assert!(next > Utc::now());
         }

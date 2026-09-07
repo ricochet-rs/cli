@@ -1,9 +1,18 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use colored::Colorize;
-use std::str::FromStr;
+use croner::{Cron, parser::CronParser};
 
 use crate::{OutputFormat, client::RicochetClient, config::Config};
+
+/// Parses a cron schedule with the shortcut step syntax the server accepts, such as `5/5`.
+pub fn parse_schedule(schedule: &str) -> Result<Cron> {
+    CronParser::builder()
+        .sloppy_ranges(true)
+        .build()
+        .parse(schedule)
+        .context("parsing cron schedule")
+}
 
 pub async fn schedule_task(
     config: &Config,
@@ -13,7 +22,7 @@ pub async fn schedule_task(
     format: OutputFormat,
 ) -> Result<()> {
     // validate the cron schedule locally before hitting the API
-    let cron = croner::Cron::from_str(schedule).context("parsing cron schedule")?;
+    let cron = parse_schedule(schedule)?;
     let next = cron
         .find_next_occurrence(&Utc::now(), false)
         .context("computing next occurrence")?;
