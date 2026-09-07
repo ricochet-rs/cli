@@ -516,6 +516,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "croner"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a59ed87528b2ee2b6d2b14d6767f6dbe41867dfc581433fc23a7c0fae847467a"
+dependencies = [
+ "chrono",
+ "derive_builder",
+ "strum",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2285,7 +2296,7 @@ dependencies = [
  "clap-markdown",
  "colored",
  "comfy-table",
- "croner",
+ "croner 4.0.0",
  "dialoguer",
  "dirs",
  "flate2",
@@ -2325,7 +2336,7 @@ source = "git+https://github.com/ricochet-rs/ricochet?tag=v0.17.0#9e168f013c50e8
 dependencies = [
  "anyhow",
  "bytesize",
- "croner",
+ "croner 3.0.1",
  "git-url-parse",
  "indexmap",
  "jiff 0.1.29",
