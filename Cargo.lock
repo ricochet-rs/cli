@@ -2332,6 +2332,7 @@ dependencies = [
 [[package]]
 name = "ricochet-core"
 version = "0.19.1"
+source = "git+https://github.com/ricochet-rs/ricochet?tag=v0.20.0#0e9fb2ca88f7ef291b4cbde7a62cceb83240124f"
 dependencies = [
  "anyhow",
  "bytesize",
