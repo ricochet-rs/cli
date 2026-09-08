@@ -17,6 +17,9 @@ const PARTIAL_STOP_ID: &str = "01KR0000000000000000000000";
 const STOPPABLE_INSTANCE: &str = "01KR1111111111111111111111";
 const STUCK_INSTANCE: &str = "01KR2222222222222222222222";
 
+/// An item running nothing, so the empty rendering is exercised.
+const NO_INSTANCES_ID: &str = "01KR3333333333333333333333";
+
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
@@ -139,6 +142,15 @@ fn mock_api(server: &mut Server) {
             format!("/api/v0/content/{CONTENT_ID}/instances/{INSTANCE_ID}/stop").as_str(),
         )
         .with_status(200)
+        .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{NO_INSTANCES_ID}/instances").as_str(),
+        )
+        .with_status(200)
+        .with_body(json!([]).to_string())
         .create();
 
     server
@@ -429,6 +441,25 @@ async fn app_instances_writes_json_alone() {
     let cli = Cli::new().await;
     let payload = cli.json(&["app", "instances", CONTENT_ID]).await;
     assert_eq!(payload[0]["instance_id"], INSTANCE_ID);
+}
+
+/// The empty rendering is built inside the table closure, which `-F json` must skip.
+#[tokio::test]
+async fn app_instances_writes_json_alone_when_none_are_running() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&["app", "instances", NO_INSTANCES_ID, "-F", "json"])
+        .await;
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let payload: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout is not JSON ({e}):\n{stdout}"));
+
+    assert_eq!(payload, json!([]));
+    assert!(
+        !stdout.contains("No instances found"),
+        "the human rendering must not reach stdout:\n{stdout}"
+    );
 }
 
 #[tokio::test]
