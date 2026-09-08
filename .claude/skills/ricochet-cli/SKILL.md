@@ -25,6 +25,7 @@ It reports the language, every plausible entrypoint with the content type it imp
 It reports candidates rather than choosing one, so a directory holding both `app.R` and `report.qmd` lists both.
 
 Pass `-F json` to any command whose output must be parsed.
+Under `-F json` and `-F yaml` stdout carries the serialised payload and nothing else, while status lines, hints and links go to stderr.
 Pass `--debug` to surface the underlying request and response when a command fails.
 
 ## Connect to a server

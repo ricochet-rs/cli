@@ -96,6 +96,9 @@ Legacy single-server configs are automatically migrated to multi-server format.
 ### Output Formats
 
 The CLI supports multiple output formats: `table` (default), `json`, and `yaml`.
+Under `json` and `yaml`, stdout carries the serialised payload and nothing else, so status lines, hints, prompts and links go to stderr.
+Print command output through `OutputFormat::print` in `src/output.rs`, which serialises the payload for a machine reader and defers the human rendering to a closure that returns a `String`.
+Give every new command a `format` argument and a case in `tests/json_output_test.rs`, which spawns the built binary and asserts that stdout parses as JSON.
 
 ### CI/CD
 

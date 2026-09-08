@@ -351,24 +351,19 @@ pub async fn preview(
 
     let (changes, patch) = diff_against_remote(&client, &id, &local).await?;
 
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&patch)?),
-        OutputFormat::Yaml => println!("{}", serde_yaml::to_string(&patch)?),
-        OutputFormat::Table => {
-            if changes.is_empty() {
-                println!("{} Settings already up to date", "✓".green().bold());
-            } else {
-                println!("{}", format_changes(&id, &local.content.name, &changes));
-                println!();
-                println!(
-                    "Run {} to apply these changes.",
-                    "settings update".bright_cyan()
-                );
-            }
+    format.print(&patch, || {
+        if changes.is_empty() {
+            return Ok(format!(
+                "{} Settings already up to date",
+                "✓".green().bold()
+            ));
         }
-    }
-
-    Ok(())
+        Ok(format!(
+            "{}\n\nRun {} to apply these changes.",
+            format_changes(&id, &local.content.name, &changes),
+            "settings update".bright_cyan()
+        ))
+    })
 }
 
 /// Apply the local `_ricochet.toml` settings to the deployed item.
@@ -387,8 +382,12 @@ pub async fn update(
     let (changes, patch) = diff_against_remote(&client, &id, &local).await?;
 
     if changes.is_empty() {
-        eprintln!("{} Settings already up to date", "✓".green().bold());
-        return Ok(());
+        return format.print(&patch, || {
+            Ok(format!(
+                "{} Settings already up to date",
+                "✓".green().bold()
+            ))
+        });
     }
 
     eprintln!("{}", format_changes(&id, &local.content.name, &changes));
@@ -404,19 +403,13 @@ pub async fn update(
         .await
         .context("sending settings update")?;
 
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&patch)?),
-        OutputFormat::Yaml => println!("{}", serde_yaml::to_string(&patch)?),
-        OutputFormat::Table => {
-            println!(
-                "{} Settings updated for {}",
-                "✓".green().bold(),
-                id.bright_cyan()
-            )
-        }
-    }
-
-    Ok(())
+    format.print(&patch, || {
+        Ok(format!(
+            "{} Settings updated for {}",
+            "✓".green().bold(),
+            id.bright_cyan()
+        ))
+    })
 }
 
 #[cfg(test)]

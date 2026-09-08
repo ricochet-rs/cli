@@ -1,4 +1,5 @@
 use mockito::Server;
+use ricochet_cli::OutputFormat;
 use serde_json::json;
 use url::Url;
 
@@ -218,6 +219,7 @@ mod instances_tests {
             Some(content_id),
             None,
             None,
+            OutputFormat::Table,
         )
         .await;
 
@@ -258,6 +260,7 @@ mod instances_tests {
             Some(content_id),
             None,
             None,
+            OutputFormat::Table,
         )
         .await;
 

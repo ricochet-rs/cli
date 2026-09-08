@@ -15,34 +15,27 @@ fn env_dir(path: Option<&Path>) -> PathBuf {
 }
 
 fn print_names(server_url: &str, names: &[String], format: OutputFormat) -> Result<()> {
-    match format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&names)?);
+    format.print(&names, || {
+        let mut output = server_url.italic().dimmed().to_string();
+
+        if names.is_empty() {
+            output.push_str(&format!("\n{}", "No environment variables found.".yellow()));
+            return Ok(output);
         }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&names)?);
+
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+        table.set_header(vec!["Name"]);
+        for name in names {
+            table.add_row(vec![name]);
         }
-        OutputFormat::Table => {
-            println!("{}", server_url.italic().dimmed());
 
-            if names.is_empty() {
-                println!("{}", "No environment variables found.".yellow());
-                return Ok(());
-            }
-
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-            table.set_header(vec!["Name"]);
-            for name in names {
-                table.add_row(vec![name]);
-            }
-
-            println!("{}", table);
-            println!("\n{} environment variable(s)", names.len());
-        }
-    }
-
-    Ok(())
+        output.push_str(&format!(
+            "\n{table}\n\n{} environment variable(s)",
+            names.len()
+        ));
+        Ok(output)
+    })
 }
 
 pub async fn get_env_vars(

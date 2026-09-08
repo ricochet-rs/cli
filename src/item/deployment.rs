@@ -103,37 +103,27 @@ pub async fn list_deployments(
 
     let deployments = client.list_deployments(content_ulid).await?;
 
-    match format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&deployments)?);
+    format.print(&deployments, || {
+        let mut output = server_config.url.as_str().italic().dimmed().to_string();
+
+        if deployments.is_empty() {
+            output.push_str(&format!("\n{}", "No deployments found.".yellow()));
+            return Ok(output);
         }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&deployments)?);
+
+        let cols = resolve_fields(fields);
+
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+        table.set_header(cols.iter().map(|c| field_header(c)));
+
+        for d in &deployments {
+            table.add_row(cols.iter().map(|c| field_cell(c, d)));
         }
-        OutputFormat::Table => {
-            println!("{}", server_config.url.as_str().italic().dimmed());
 
-            if deployments.is_empty() {
-                println!("{}", "No deployments found.".yellow());
-                return Ok(());
-            }
-
-            let cols = resolve_fields(fields);
-
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-            table.set_header(cols.iter().map(|c| field_header(c)));
-
-            for d in &deployments {
-                table.add_row(cols.iter().map(|c| field_cell(c, d)));
-            }
-
-            println!("{}", table);
-            println!("\n{} deployments", deployments.len());
-        }
-    }
-
-    Ok(())
+        output.push_str(&format!("\n{table}\n\n{} deployments", deployments.len()));
+        Ok(output)
+    })
 }
 
 pub async fn get_deployment(
@@ -148,26 +138,17 @@ pub async fn get_deployment(
 
     let d = client.get_deployment(deployment_ulid).await?;
 
-    match format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&d)?);
+    format.print(&d, || {
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+
+        for col in ALL_FIELDS {
+            table.add_row(vec![Cell::new(field_header(col)), field_cell(col, &d)]);
         }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&d)?);
-        }
-        OutputFormat::Table => {
-            println!("{}", server_config.url.as_str().italic().dimmed());
 
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-
-            for col in ALL_FIELDS {
-                table.add_row(vec![Cell::new(field_header(col)), field_cell(col, &d)]);
-            }
-
-            println!("{}", table);
-        }
-    }
-
-    Ok(())
+        Ok(format!(
+            "{}\n{table}",
+            server_config.url.as_str().italic().dimmed()
+        ))
+    })
 }

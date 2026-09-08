@@ -151,92 +151,82 @@ pub async fn list(
 
     let filtered_items = sorted_items;
 
-    match format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&filtered_items)?);
-        }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&filtered_items)?);
-        }
-        OutputFormat::Table => {
-            // Display server URL above the table
-            println!("{}", server_config.url.as_str().italic().dimmed());
+    format.print(&filtered_items, || {
+        // The server URL heads the human table.
+        let mut output = server_config.url.as_str().italic().dimmed().to_string();
 
-            if filtered_items.is_empty() {
-                println!("{}", "No content items found".yellow());
-                return Ok(());
-            }
+        if filtered_items.is_empty() {
+            output.push_str(&format!("\n{}", "No content items found".yellow()));
+            return Ok(output);
+        }
 
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-            table.set_header(vec![
-                "ID",
-                "Name",
-                "Type",
-                "Language",
-                "Visibility",
-                "Status",
-                "Updated",
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+        table.set_header(vec![
+            "ID",
+            "Name",
+            "Type",
+            "Language",
+            "Visibility",
+            "Status",
+            "Updated",
+        ]);
+
+        for item in &filtered_items {
+            let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
+            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+            let content_type = item
+                .get("content_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("-");
+            let language = item.get("language").and_then(|v| v.as_str()).unwrap_or("-");
+            let visibility = item
+                .get("visibility")
+                .and_then(|v| v.as_str())
+                .unwrap_or("private");
+            // Try multiple possible status field names
+            let status = item
+                .get("status")
+                .or_else(|| item.get("deployment_status"))
+                .or_else(|| item.get("last_deployment_status"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("-");
+            let updated = item
+                .get("updated_at")
+                .and_then(|v| v.as_str())
+                .map(utils::format_timestamp)
+                .unwrap_or("-".to_string());
+
+            // Create cells with proper coloring using comfy-table's Cell type
+            let status_cell = match status {
+                "deployed" | "running" | "success" => Cell::new(status).fg(Color::Green),
+                "failed" | "failure" | "error" => Cell::new(status).fg(Color::Red),
+                "stopped" | "stopping" => Cell::new(status).fg(Color::Yellow),
+                _ => Cell::new(status),
+            };
+
+            let visibility_cell = match visibility {
+                "public" => Cell::new(visibility).fg(Color::Green),
+                "private" => Cell::new(visibility).fg(Color::Blue),
+                _ => Cell::new(visibility),
+            };
+
+            table.add_row(vec![
+                Cell::new(id),
+                Cell::new(name),
+                Cell::new(content_type),
+                Cell::new(language),
+                visibility_cell,
+                status_cell,
+                Cell::new(updated),
             ]);
-
-            for item in &filtered_items {
-                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
-                let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("-");
-                let content_type = item
-                    .get("content_type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
-                let language = item.get("language").and_then(|v| v.as_str()).unwrap_or("-");
-                let visibility = item
-                    .get("visibility")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("private");
-                // Try multiple possible status field names
-                let status = item
-                    .get("status")
-                    .or_else(|| item.get("deployment_status"))
-                    .or_else(|| item.get("last_deployment_status"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
-                let updated = item
-                    .get("updated_at")
-                    .and_then(|v| v.as_str())
-                    .map(utils::format_timestamp)
-                    .unwrap_or("-".to_string());
-
-                // Create cells with proper coloring using comfy-table's Cell type
-                let status_cell = match status {
-                    "deployed" | "running" | "success" => Cell::new(status).fg(Color::Green),
-                    "failed" | "failure" | "error" => Cell::new(status).fg(Color::Red),
-                    "stopped" | "stopping" => Cell::new(status).fg(Color::Yellow),
-                    _ => Cell::new(status),
-                };
-
-                let visibility_cell = match visibility {
-                    "public" => Cell::new(visibility).fg(Color::Green),
-                    "private" => Cell::new(visibility).fg(Color::Blue),
-                    _ => Cell::new(visibility),
-                };
-
-                table.add_row(vec![
-                    Cell::new(id),
-                    Cell::new(name),
-                    Cell::new(content_type),
-                    Cell::new(language),
-                    visibility_cell,
-                    status_cell,
-                    Cell::new(updated),
-                ]);
-            }
-
-            println!("{}", table);
-            println!(
-                "\n{} {} items",
-                filtered_items.len(),
-                if active_only { "active" } else { "total" }
-            );
         }
-    }
 
-    Ok(())
+        output.push_str(&format!(
+            "\n{table}\n\n{} {} items",
+            filtered_items.len(),
+            if active_only { "active" } else { "total" }
+        ));
+        Ok(output)
+    })
 }

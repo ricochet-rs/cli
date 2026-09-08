@@ -111,19 +111,19 @@ pub fn create_bundle(
     let files_to_bundle = prepare_bundle(dir, include, exclude)?;
 
     if debug {
-        println!("\nDebug: Files being bundled:");
+        eprintln!("\nDebug: Files being bundled:");
         for path in &files_to_bundle {
             if path.is_file()
                 && let Ok(metadata) = std::fs::metadata(path)
             {
                 let size = metadata.len();
                 let relative_path = path.strip_prefix(dir).unwrap_or(path);
-                println!("  {} - {}", relative_path.display(), format_size(size));
+                eprintln!("  {} - {}", relative_path.display(), format_size(size));
             }
         }
         for (source, name) in extra_root_files {
             if let Ok(metadata) = std::fs::metadata(source) {
-                println!(
+                eprintln!(
                     "  {} (from {}) - {}",
                     name,
                     source.display(),
@@ -131,7 +131,7 @@ pub fn create_bundle(
                 );
             }
         }
-        println!();
+        eprintln!();
     }
 
     // Add files to tar (directories will be created automatically)
