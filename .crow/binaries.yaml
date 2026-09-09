@@ -157,7 +157,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:3.0.1
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:3.0.2
     depends_on:
       - 'Push bump and tag'
     commands:

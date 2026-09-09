@@ -112,8 +112,12 @@ fi
 echo "Extracting..."
 tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
 
-# Determine final binary name
-FINAL_NAME="ricochet"
+# Windows only executes a file with an executable extension, so keep .exe.
+if [ "${IS_WINDOWS}" = "1" ]; then
+    FINAL_NAME="ricochet.exe"
+else
+    FINAL_NAME="ricochet"
+fi
 
 # Ensure install directory exists
 mkdir -p "${INSTALL_DIR}" 2>/dev/null || true

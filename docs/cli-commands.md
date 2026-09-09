@@ -10,6 +10,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet deploy`↴](#ricochet-deploy)
 * [`ricochet delete`↴](#ricochet-delete)
 * [`ricochet config`↴](#ricochet-config)
+* [`ricochet detect`↴](#ricochet-detect)
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
@@ -64,6 +65,7 @@ Ricochet CLI
 * `deploy` — Deploy content to a Ricochet server
 * `delete` — Delete a content item
 * `config` — Show configuration
+* `detect` — Report deployable content in a directory without writing anything
 * `init` — Initialize a new Ricochet deployment
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
@@ -155,6 +157,20 @@ Show configuration
 ###### **Options:**
 
 * `-A`, `--show-all` — Show full configuration including sensitive values
+
+
+
+## `ricochet detect`
+
+Report deployable content in a directory without writing anything
+
+**Usage:** `ricochet detect [PATH]`
+
+###### **Arguments:**
+
+* `<PATH>` — Directory to inspect (defaults to current directory)
+
+  Default value: `.`
 
 
 
