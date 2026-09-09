@@ -401,6 +401,51 @@ fn write_project(dir: &Path, toml: &str) {
 }
 
 #[tokio::test]
+async fn list_all_preserves_owner_in_each_output_format() {
+    let mut cli = Cli::new().await;
+    let listing = cli
+        ._server
+        .mock("GET", "/api/v0/user/items")
+        .match_query(Matcher::UrlEncoded("scope".into(), "all".into()))
+        .with_status(200)
+        .with_body(
+            json!([
+                {
+                    "id": CONTENT_ID,
+                    "name": "Dashboard",
+                    "content_type": "shiny",
+                    "owner": {"display_name": "Ada"}
+                },
+                {
+                    "id": "task-id",
+                    "name": "Report",
+                    "content_type": "quarto-r",
+                    "owner": {"display_name": "Ada"}
+                }
+            ])
+            .to_string(),
+        )
+        .expect(6)
+        .create();
+
+    for kind in ["app", "task"] {
+        let args = [kind, "list", "--all"];
+        let payload = cli.json(&args).await;
+        assert_eq!(payload.as_array().expect("item list").len(), 1);
+        assert_eq!(payload[0]["owner"]["display_name"], "Ada");
+        let payload = cli.yaml(&args).await;
+        assert_eq!(payload.as_sequence().expect("item list").len(), 1);
+        assert_eq!(payload[0]["owner"]["display_name"].as_str(), Some("Ada"));
+        let output = cli.run(&args).await;
+        assert!(output.status.success());
+        let table = String::from_utf8(output.stdout).expect("valid UTF-8");
+        assert!(table.contains("Owner"));
+        assert!(table.contains("Ada"));
+    }
+    listing.assert();
+}
+
+#[tokio::test]
 async fn app_list_writes_json_alone() {
     let cli = Cli::new().await;
     let payload = cli.json(&["app", "list"]).await;

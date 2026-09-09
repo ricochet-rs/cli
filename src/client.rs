@@ -4,7 +4,7 @@ use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::{
     config::git::{GitCredential, GitProtocol, GitRepo},
-    content::ContentItem,
+    content::{ContentItem, OwnershipScope},
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -158,9 +158,16 @@ impl RicochetClient {
         }
     }
 
-    pub async fn list_items(&self) -> Result<Vec<serde_json::Value>> {
+    pub async fn list_items(&self, scope: OwnershipScope) -> Result<Vec<serde_json::Value>> {
         let mut url = self.base_url.clone();
         url.set_path("/api/v0/user/items");
+        match scope {
+            // Omitting the parameter keeps the request identical to the one
+            // servers without the instance-wide listing already answer.
+            OwnershipScope::Owned => {}
+            OwnershipScope::All => url.set_query(Some("scope=all")),
+        }
+
         let response = self
             .client
             .get(url)
@@ -168,16 +175,29 @@ impl RicochetClient {
             .send()
             .await?;
 
-        match Self::handle_response(response).await {
-            Ok(result) => Ok(result),
-            Err(e) => {
-                // Check if this is an authentication error
-                if e.to_string().contains("403") && e.to_string().contains("Invalid API key") {
-                    let masked_key = Self::mask_api_key(&self.api_key);
-                    anyhow::bail!("Authentication failed. API key used: {}", masked_key)
-                } else {
-                    Err(e)
-                }
+        if response.status() == StatusCode::FORBIDDEN {
+            let body = response.text().await.unwrap_or_default();
+            return Err(self.forbidden_listing_error(scope, &body));
+        }
+
+        Self::handle_response(response).await
+    }
+
+    /// Explain a 403 from the item listing in terms of what the caller asked for.
+    fn forbidden_listing_error(&self, scope: OwnershipScope, body: &str) -> anyhow::Error {
+        if body.contains("Invalid API key") {
+            return anyhow::anyhow!(
+                "Authentication failed. API key used: {}",
+                Self::mask_api_key(&self.api_key)
+            );
+        }
+
+        match scope {
+            OwnershipScope::All => anyhow::anyhow!(
+                "Listing every item on the instance requires an instance admin API key.\nServer response: {body}"
+            ),
+            OwnershipScope::Owned => {
+                anyhow::anyhow!("Request failed with status 403 Forbidden: {body}")
             }
         }
     }
