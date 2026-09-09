@@ -178,7 +178,7 @@ enum ItemCommands {
         /// Show only active deployments (status: deployed, running, or success)
         #[arg(short = 'a', long)]
         active_only: bool,
-        /// List every item on the instance, not just your own (requires an instance admin API key)
+        /// List every item on the instance (requires "Administrator" role)
         #[arg(long)]
         all: bool,
         /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
@@ -235,7 +235,7 @@ enum TaskCommands {
         /// Show only active deployments (status: deployed, running, or success)
         #[arg(short = 'a', long)]
         active_only: bool,
-        /// List every item on the instance, not just your own (requires an instance admin API key)
+        /// List every item on the instance (requires "Administrator" role)
         #[arg(long)]
         all: bool,
         /// Sort by field(s) - comma-separated for multiple (e.g., "name,updated" or "status,name")
