@@ -4,7 +4,7 @@ use colored::Colorize;
 use reqwest::{Client, Response, StatusCode};
 use ricochet_core::{
     config::git::{GitCredential, GitProtocol, GitRepo},
-    content::ContentItem,
+    content::{ContentItem, OwnershipScope},
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -40,15 +40,6 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
 
         result
     }
-}
-
-/// Which content items the server should return from the item listing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ItemScope {
-    /// Only the items the caller has an ACL entry for.
-    Owned,
-    /// Every item on the instance, which the server allows for admins only.
-    All,
 }
 
 pub struct RicochetClient {
@@ -167,14 +158,14 @@ impl RicochetClient {
         }
     }
 
-    pub async fn list_items(&self, scope: ItemScope) -> Result<Vec<serde_json::Value>> {
+    pub async fn list_items(&self, scope: OwnershipScope) -> Result<Vec<serde_json::Value>> {
         let mut url = self.base_url.clone();
         url.set_path("/api/v0/user/items");
         match scope {
             // Omitting the parameter keeps the request identical to the one
             // servers without the instance-wide listing already answer.
-            ItemScope::Owned => {}
-            ItemScope::All => url.set_query(Some("scope=all")),
+            OwnershipScope::Owned => {}
+            OwnershipScope::All => url.set_query(Some("scope=all")),
         }
 
         let response = self
@@ -193,7 +184,7 @@ impl RicochetClient {
     }
 
     /// Explain a 403 from the item listing in terms of what the caller asked for.
-    fn forbidden_listing_error(&self, scope: ItemScope, body: &str) -> anyhow::Error {
+    fn forbidden_listing_error(&self, scope: OwnershipScope, body: &str) -> anyhow::Error {
         if body.contains("Invalid API key") {
             return anyhow::anyhow!(
                 "Authentication failed. API key used: {}",
@@ -202,10 +193,10 @@ impl RicochetClient {
         }
 
         match scope {
-            ItemScope::All => anyhow::anyhow!(
+            OwnershipScope::All => anyhow::anyhow!(
                 "Listing every item on the instance requires an instance admin API key.\nServer response: {body}"
             ),
-            ItemScope::Owned => {
+            OwnershipScope::Owned => {
                 anyhow::anyhow!("Request failed with status 403 Forbidden: {body}")
             }
         }

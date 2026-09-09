@@ -5,8 +5,8 @@ use url::Url;
 #[cfg(test)]
 mod list_tests {
     use super::*;
-    use ricochet_cli::client::ItemScope;
     use ricochet_cli::commands::list::ListKind;
+    use ricochet_core::content::OwnershipScope;
 
     #[tokio::test]
     async fn test_list_json_format() {
@@ -54,7 +54,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::Owned,
+            OwnershipScope::Owned,
             None,
             false,
             None, // no sorting
@@ -102,7 +102,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::Owned,
+            OwnershipScope::Owned,
             None,
             false,
             None, // no sorting
@@ -162,7 +162,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::Owned,
+            OwnershipScope::Owned,
             Some("shiny".to_string()),
             false,
             None, // no sorting
@@ -178,7 +178,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::Owned,
+            OwnershipScope::Owned,
             None,
             true,
             None, // no sorting
@@ -214,7 +214,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::Owned,
+            OwnershipScope::Owned,
             None,
             false,
             None, // no sorting
@@ -264,7 +264,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::All,
+            OwnershipScope::All,
             None,
             false,
             None, // no sorting
@@ -312,7 +312,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::All,
+            OwnershipScope::All,
             None,
             false,
             None, // no sorting
@@ -350,7 +350,7 @@ mod list_tests {
             &config,
             None,
             ListKind::App,
-            ItemScope::All,
+            OwnershipScope::All,
             None,
             false,
             None, // no sorting

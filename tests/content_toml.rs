@@ -1,5 +1,5 @@
 use mockito::Server;
-use ricochet_cli::{config::Config, item::toml::get_toml};
+use ricochet_cli::{OutputFormat, config::Config, item::toml::get_toml};
 use std::{env, fs};
 use tempfile::TempDir;
 
@@ -85,8 +85,10 @@ async fn test_get_toml_with_provided_id() {
     // Test with provided ID
     let result = get_toml(
         &config,
+        None,
         Some("01KE52BY41EQ7NE89K7Z5MMZ84".to_string()),
         None,
+        OutputFormat::Table,
     )
     .await;
 
@@ -116,7 +118,7 @@ async fn test_get_toml_with_default_path() {
     env::set_current_dir(temp_dir.path()).unwrap();
 
     // Test without ID or path (should read from ./_ricochet.toml)
-    let result = get_toml(&config, None, None).await;
+    let result = get_toml(&config, None, None, None, OutputFormat::Table).await;
 
     // Restore original directory
     env::set_current_dir(original_dir).unwrap();
@@ -148,7 +150,7 @@ async fn test_get_toml_with_specified_path() {
     fs::write(&toml_path, LOCAL_TOML_CONTENT).unwrap();
 
     // Test with specified path
-    let result = get_toml(&config, None, Some(toml_path)).await;
+    let result = get_toml(&config, None, None, Some(toml_path), OutputFormat::Table).await;
 
     assert!(
         result.is_ok(),
@@ -174,7 +176,7 @@ async fn test_get_toml_missing_id_and_file() {
     env::set_current_dir(temp_dir.path()).unwrap();
 
     // Test without ID or path and no _ricochet.toml should fail
-    let result = get_toml(&config, None, None).await;
+    let result = get_toml(&config, None, None, None, OutputFormat::Table).await;
 
     env::set_current_dir(original_dir).unwrap();
 
@@ -215,7 +217,7 @@ packages = "renv.lock"
     env::set_current_dir(temp_dir.path()).unwrap();
 
     // Test should fail because _ricochet.toml has no id
-    let result = get_toml(&config, None, None).await;
+    let result = get_toml(&config, None, None, None, OutputFormat::Table).await;
 
     env::set_current_dir(original_dir).unwrap();
 

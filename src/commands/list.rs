@@ -1,12 +1,8 @@
-use crate::{
-    OutputFormat,
-    client::{ItemScope, RicochetClient},
-    config::Config,
-    utils,
-};
+use crate::{OutputFormat, client::RicochetClient, config::Config, utils};
 use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
+use ricochet_core::content::OwnershipScope;
 use std::cmp::Ordering;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,7 +90,7 @@ pub async fn list(
     config: &Config,
     server_ref: Option<&str>,
     kind: ListKind,
-    scope: ItemScope,
+    scope: OwnershipScope,
     content_type: Option<String>,
     active_only: bool,
     sort_fields: Option<String>,
@@ -109,7 +105,7 @@ pub async fn list(
 
     // A server without the instance-wide listing ignores the unknown query
     // parameter and answers with the ACL-scoped list, which carries no owner.
-    if scope == ItemScope::All
+    if scope == OwnershipScope::All
         && !items.is_empty()
         && !items.iter().any(|item| owner_label(item).is_some())
     {
@@ -187,104 +183,93 @@ pub async fn list(
 
     let filtered_items = sorted_items;
 
-    match format {
-        OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(&filtered_items)?);
-        }
-        OutputFormat::Yaml => {
-            println!("{}", serde_yaml::to_string(&filtered_items)?);
-        }
-        OutputFormat::Table => {
-            // Display server URL above the table
-            println!("{}", server_config.url.as_str().italic().dimmed());
+    format.print(&filtered_items, || {
+        // The server URL heads the human table.
+        let mut output = server_config.url.as_str().italic().dimmed().to_string();
 
-            if filtered_items.is_empty() {
-                println!("{}", "No content items found".yellow());
-                return Ok(());
-            }
+        if filtered_items.is_empty() {
+            output.push_str(&format!("\n{}", "No content items found".yellow()));
+            return Ok(output);
+        }
 
-            let mut table = Table::new();
-            table.load_style(UTF8_FULL);
-            let mut header = vec![
-                "ID",
-                "Name",
-                "Type",
-                "Language",
-                "Visibility",
-                "Status",
-                "Updated",
+        let mut table = Table::new();
+        table.load_style(UTF8_FULL);
+        let mut header = vec![
+            "ID",
+            "Name",
+            "Type",
+            "Language",
+            "Visibility",
+            "Status",
+            "Updated",
+        ];
+        if scope == OwnershipScope::All {
+            header.insert(2, "Owner");
+        }
+        table.set_header(header);
+
+        for item in &filtered_items {
+            let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
+            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+            let content_type = item
+                .get("content_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("-");
+            let language = item.get("language").and_then(|v| v.as_str()).unwrap_or("-");
+            let visibility = item
+                .get("visibility")
+                .and_then(|v| v.as_str())
+                .unwrap_or("private");
+            // Try multiple possible status field names
+            let status = item
+                .get("status")
+                .or_else(|| item.get("deployment_status"))
+                .or_else(|| item.get("last_deployment_status"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("-");
+            let updated = item
+                .get("updated_at")
+                .and_then(|v| v.as_str())
+                .map(utils::format_timestamp)
+                .unwrap_or("-".to_string());
+
+            // Create cells with proper coloring using comfy-table's Cell type
+            let status_cell = match status {
+                "deployed" | "running" | "success" => Cell::new(status).fg(Color::Green),
+                "failed" | "failure" | "error" => Cell::new(status).fg(Color::Red),
+                "stopped" | "stopping" => Cell::new(status).fg(Color::Yellow),
+                _ => Cell::new(status),
+            };
+
+            let visibility_cell = match visibility {
+                "public" => Cell::new(visibility).fg(Color::Green),
+                "private" => Cell::new(visibility).fg(Color::Blue),
+                _ => Cell::new(visibility),
+            };
+
+            let mut cells = vec![
+                Cell::new(id),
+                Cell::new(name),
+                Cell::new(content_type),
+                Cell::new(language),
+                visibility_cell,
+                status_cell,
+                Cell::new(updated),
             ];
-            if scope == ItemScope::All {
-                header.insert(2, "Owner");
+            if scope == OwnershipScope::All {
+                cells.insert(
+                    2,
+                    Cell::new(owner_label(item).unwrap_or_else(|| "-".to_string())),
+                );
             }
-            table.set_header(header);
-
-            for item in &filtered_items {
-                let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("-");
-                let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("-");
-                let content_type = item
-                    .get("content_type")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
-                let language = item.get("language").and_then(|v| v.as_str()).unwrap_or("-");
-                let visibility = item
-                    .get("visibility")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("private");
-                // Try multiple possible status field names
-                let status = item
-                    .get("status")
-                    .or_else(|| item.get("deployment_status"))
-                    .or_else(|| item.get("last_deployment_status"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("-");
-                let updated = item
-                    .get("updated_at")
-                    .and_then(|v| v.as_str())
-                    .map(utils::format_timestamp)
-                    .unwrap_or("-".to_string());
-
-                // Create cells with proper coloring using comfy-table's Cell type
-                let status_cell = match status {
-                    "deployed" | "running" | "success" => Cell::new(status).fg(Color::Green),
-                    "failed" | "failure" | "error" => Cell::new(status).fg(Color::Red),
-                    "stopped" | "stopping" => Cell::new(status).fg(Color::Yellow),
-                    _ => Cell::new(status),
-                };
-
-                let visibility_cell = match visibility {
-                    "public" => Cell::new(visibility).fg(Color::Green),
-                    "private" => Cell::new(visibility).fg(Color::Blue),
-                    _ => Cell::new(visibility),
-                };
-
-                let mut cells = vec![
-                    Cell::new(id),
-                    Cell::new(name),
-                    Cell::new(content_type),
-                    Cell::new(language),
-                    visibility_cell,
-                    status_cell,
-                    Cell::new(updated),
-                ];
-                if scope == ItemScope::All {
-                    cells.insert(
-                        2,
-                        Cell::new(owner_label(item).unwrap_or_else(|| "-".to_string())),
-                    );
-                }
-
-                table.add_row(cells);
-            }
-
-            println!("{}", table);
-            println!(
-                "\n{} {} items",
-                filtered_items.len(),
-                if active_only { "active" } else { "total" }
-            );
+            table.add_row(cells);
         }
-    }
 
-    Ok(())
+        output.push_str(&format!(
+            "\n{table}\n\n{} {} items",
+            filtered_items.len(),
+            if active_only { "active" } else { "total" }
+        ));
+        Ok(output)
+    })
 }

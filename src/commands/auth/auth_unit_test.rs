@@ -28,7 +28,7 @@ mod tests {
         }
 
         // Call logout with no server specified (uses default)
-        let result = super::super::logout(&mut config, None);
+        let result = super::super::logout(&mut config, None, crate::OutputFormat::Table);
 
         assert!(result.is_ok(), "Logout should succeed");
         // Check that the default server's API key is cleared
@@ -55,7 +55,7 @@ mod tests {
         }
 
         // Call logout when already logged out
-        let result = super::super::logout(&mut config, None);
+        let result = super::super::logout(&mut config, None, crate::OutputFormat::Table);
 
         assert!(
             result.is_ok(),
@@ -291,7 +291,7 @@ mod tests {
         assert!(config.servers.get("staging").unwrap().api_key.is_some());
 
         // Logout from staging (not the default)
-        let result = super::super::logout(&mut config, Some("staging"));
+        let result = super::super::logout(&mut config, Some("staging"), crate::OutputFormat::Table);
 
         assert!(result.is_ok());
 
@@ -312,7 +312,11 @@ mod tests {
         let mut config = create_multi_server_config();
 
         // Logout using URL
-        let result = super::super::logout(&mut config, Some("https://staging.ricochet.com"));
+        let result = super::super::logout(
+            &mut config,
+            Some("https://staging.ricochet.com"),
+            crate::OutputFormat::Table,
+        );
 
         assert!(result.is_ok());
 
@@ -328,7 +332,8 @@ mod tests {
         let _temp_dir = setup_test_env();
         let mut config = create_multi_server_config();
 
-        let result = super::super::logout(&mut config, Some("nonexistent"));
+        let result =
+            super::super::logout(&mut config, Some("nonexistent"), crate::OutputFormat::Table);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
@@ -341,7 +346,11 @@ mod tests {
         let _temp_dir = setup_test_env();
         let mut config = create_multi_server_config();
 
-        let result = super::super::logout(&mut config, Some("https://unknown.server.com"));
+        let result = super::super::logout(
+            &mut config,
+            Some("https://unknown.server.com"),
+            crate::OutputFormat::Table,
+        );
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No server found"));
@@ -358,7 +367,7 @@ mod tests {
         assert!(config.servers.get("prod").unwrap().api_key.is_some());
 
         // Logout without specifying server
-        let result = super::super::logout(&mut config, None);
+        let result = super::super::logout(&mut config, None, crate::OutputFormat::Table);
 
         assert!(result.is_ok());
 
@@ -379,7 +388,7 @@ mod tests {
         let mut config = create_multi_server_config();
 
         // local has no API key
-        let result = super::super::logout(&mut config, Some("local"));
+        let result = super::super::logout(&mut config, Some("local"), crate::OutputFormat::Table);
 
         // Should succeed without error (just a warning)
         assert!(result.is_ok());
