@@ -31,7 +31,7 @@ fn verify_server_yml(dir: &Path, entrypoint: &Path) -> Result<()> {
     })?;
     let engine = ServerYml::from_yaml(&raw)?.engine;
 
-    println!(
+    eprintln!(
         "  {} Using the {} engine, which must be in renv.lock",
         "→".bright_cyan(),
         engine.to_string().bright_cyan()
@@ -120,6 +120,29 @@ pub async fn deploy(
 
     let content_id = ricochet_toml.content.id.clone();
     let content_type = ricochet_toml.content.content_type;
+    let (kind, label, route) = if content_type.is_task() {
+        ("task", "Task:", "tasks")
+    } else {
+        ("app", "App:", "apps")
+    };
+    let change = if content_id.is_some() {
+        "updated"
+    } else {
+        "new"
+    };
+    let name = ricochet_toml.content.name.trim();
+    let name = if name.is_empty() {
+        path.file_name()
+            .unwrap_or(path.as_os_str())
+            .to_string_lossy()
+    } else {
+        name.into()
+    };
+    eprintln!(
+        "\n{} ({change} {kind})\n  Path:       {}\n  Type:       {content_type}",
+        name.bold(),
+        path.display()
+    );
 
     // check for existence of packages file, searching parent dirs for uv workspaces
     let pkgs = ricochet_toml.language.packages;
@@ -177,18 +200,6 @@ pub async fn deploy(
         verify_server_yml(&path, &ricochet_toml.content.entrypoint)?;
     }
 
-    if let Some(ref id) = content_id {
-        eprintln!(
-            "📦 Creating new deployment for content item: {}\n",
-            id.bright_cyan()
-        );
-    } else {
-        eprintln!(
-            "📦 Deploying new {} content item\n",
-            content_type.to_string().bright_cyan()
-        );
-    }
-
     // Resolve and encrypt environment variables, if any were provided.
     // Only named keys are sent; whole dotfiles are never auto-loaded.
     let env_vars = if env.is_empty() {
@@ -200,11 +211,7 @@ pub async fn deploy(
     };
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
+    pb.set_style(ProgressStyle::default_spinner().template("  {spinner:.green} {msg}")?);
     pb.enable_steady_tick(std::time::Duration::from_millis(80));
 
     match client
@@ -232,15 +239,12 @@ pub async fn deploy(
             }
 
             format.print(&response, || {
-                let mut output = format!("{} Deployment successful!", "✓".green().bold());
-
                 let Some(id) = id else {
-                    output.push_str(&format!("\n\n{}", serde_json::to_string_pretty(&response)?));
-                    return Ok(output);
+                    return Ok(serde_json::to_string_pretty(&response)?);
                 };
 
                 let base_url = server_config.url.as_str().trim_end_matches('/');
-                output.push_str(&format!("\n\n{}", "Links:".bold()));
+                let mut output = format!("  {label:<12}{base_url}/{route}/{id}/overview");
 
                 if let Some(deployment_id) = response
                     .get("deployment_id")
@@ -252,7 +256,6 @@ pub async fn deploy(
                     ));
                 }
 
-                output.push_str(&format!("\n  App Overview: {base_url}/apps/{id}/overview"));
                 Ok(output)
             })
         }

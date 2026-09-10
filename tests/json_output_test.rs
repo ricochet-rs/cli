@@ -673,6 +673,152 @@ async fn deploy_writes_json_alone() {
 }
 
 #[tokio::test]
+async fn deploy_names_new_and_updated_apps_and_tasks() {
+    let cli = Cli::new().await;
+    for (content_type, kind, label, route) in [
+        ("shiny", "app", "App:", "apps"),
+        ("r", "task", "Task:", "tasks"),
+    ] {
+        for change in ["new", "updated"] {
+            let project = TempDir::new().expect("creating project");
+            let mut toml = LOCAL_TOML.replace(
+                "content_type = \"shiny\"",
+                &format!("content_type = \"{content_type}\""),
+            );
+            if change == "new" {
+                toml = toml.replace(&format!("id = \"{CONTENT_ID}\"\n"), "");
+            }
+            write_project(project.path(), &toml);
+            let output = cli
+                .run(&["deploy", project.path().to_str().expect("project path")])
+                .await;
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.starts_with(&format!(
+                    "\nlocal-app ({change} {kind})\n  Path:       {}\n  Type:       ",
+                    project.path().display()
+                )),
+                "{stderr}"
+            );
+            let base_url = cli._server.url();
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                format!(
+                    "  {label:<12}{base_url}/{route}/{CONTENT_ID}/overview\n  Deployment: {base_url}/deployments/{DEPLOYMENT_ID}\n"
+                )
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn deploy_identifies_the_project_before_package_validation_fails() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+    std::fs::remove_file(project.path().join("renv.lock")).expect("removing package file");
+    let output = cli
+        .run(&["deploy", project.path().to_str().expect("project path")])
+        .await;
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let heading = stderr
+        .find("local-app (updated app)")
+        .expect("named heading");
+    let error = stderr
+        .find("Required package file `renv.lock` not found")
+        .expect("validation error");
+    assert!(heading < error, "{stderr}");
+}
+
+#[tokio::test]
+async fn deploy_uses_directory_name_when_configured_name_is_empty() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), &LOCAL_TOML.replace("local-app", ""));
+    let output = cli
+        .run(&["deploy", project.path().to_str().expect("project path")])
+        .await;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let name = project
+        .path()
+        .file_name()
+        .expect("directory name")
+        .to_string_lossy();
+    assert!(
+        String::from_utf8_lossy(&output.stderr).starts_with(&format!("\n{name} (updated app)\n"))
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn deploy_uses_symlink_name_when_configured_name_is_empty() {
+    let cli = Cli::new().await;
+    let workspace = TempDir::new().expect("creating workspace");
+    let target = workspace.path().join("app");
+    let link = workspace.path().join("sales");
+    std::fs::create_dir(&target).expect("creating project");
+    write_project(&target, &LOCAL_TOML.replace("local-app", ""));
+    std::os::unix::fs::symlink(&target, &link).expect("creating project symlink");
+
+    let output = cli
+        .run(&["deploy", link.to_str().expect("symlink path")])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.starts_with(&format!(
+            "\nsales (updated app)\n  Path:       {}\n",
+            link.display()
+        )),
+        "{stderr}"
+    );
+}
+
+#[tokio::test]
+async fn deploy_task_writes_yaml_alone() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    write_project(
+        project.path(),
+        &LOCAL_TOML.replace("content_type = \"shiny\"", "content_type = \"r\""),
+    );
+    let payload = cli
+        .yaml(&["deploy", project.path().to_str().expect("project path")])
+        .await;
+    assert_eq!(payload["id"], CONTENT_ID);
+    assert_eq!(payload["deployment_id"], DEPLOYMENT_ID);
+}
+
+#[tokio::test]
+async fn deploy_server_engine_hint_keeps_json_stdout_clean() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    write_project(
+        project.path(),
+        &LOCAL_TOML
+            .replace("content_type = \"shiny\"", "content_type = \"r-server\"")
+            .replace("entrypoint = \"app.R\"", "entrypoint = \"_server.yml\""),
+    );
+    std::fs::write(project.path().join("_server.yml"), "engine: plumber2\n")
+        .expect("writing server config");
+    let payload = cli
+        .json(&["deploy", project.path().to_str().expect("project path")])
+        .await;
+    assert_eq!(payload["id"], CONTENT_ID);
+}
+
+#[tokio::test]
 async fn deploy_git_writes_json_alone() {
     let cli = Cli::new().await;
     let payload = cli
