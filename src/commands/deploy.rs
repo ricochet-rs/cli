@@ -131,13 +131,9 @@ pub async fn deploy(
         "new"
     };
     let name = ricochet_toml.content.name.trim();
-    let fallback = tokio::fs::canonicalize(&path)
-        .await
-        .unwrap_or_else(|_| path.clone());
     let name = if name.is_empty() {
-        fallback
-            .file_name()
-            .unwrap_or(fallback.as_os_str())
+        path.file_name()
+            .unwrap_or(path.as_os_str())
             .to_string_lossy()
     } else {
         name.into()

@@ -760,6 +760,31 @@ async fn deploy_uses_directory_name_when_configured_name_is_empty() {
     );
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn deploy_uses_symlink_name_when_configured_name_is_empty() {
+    let cli = Cli::new().await;
+    let workspace = TempDir::new().expect("creating workspace");
+    let target = workspace.path().join("app");
+    let link = workspace.path().join("sales");
+    std::fs::create_dir(&target).expect("creating project");
+    write_project(&target, &LOCAL_TOML.replace("local-app", ""));
+    std::os::unix::fs::symlink(&target, &link).expect("creating project symlink");
+
+    let output = cli
+        .run(&["deploy", link.to_str().expect("symlink path")])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.starts_with(&format!(
+            "\nsales (updated app)\n  Path:       {}\n",
+            link.display()
+        )),
+        "{stderr}"
+    );
+}
+
 #[tokio::test]
 async fn deploy_task_writes_yaml_alone() {
     let cli = Cli::new().await;
