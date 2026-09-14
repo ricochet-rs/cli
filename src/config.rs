@@ -195,8 +195,8 @@ impl Config {
                     return Ok(self.apply_env_key_override(server_config.clone()));
                 }
             }
-            // No match, return URL with no API key (user will need to login)
-            return Ok(ServerConfig { url, api_key: None });
+            // No match, use the URL with an API key from the environment if set
+            return Ok(self.apply_env_key_override(ServerConfig { url, api_key: None }));
         }
 
         // Not found
