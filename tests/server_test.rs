@@ -410,6 +410,45 @@ mod servers_tests {
         cleanup_env();
     }
 
+    #[test]
+    #[serial(env_tests)]
+    fn test_resolve_server_unconfigured_env_url_with_api_key() -> anyhow::Result<()> {
+        cleanup_env();
+        let config = Config::default();
+
+        unsafe {
+            env::set_var("RICOCHET_SERVER", "https://ci.ricochet.com");
+            env::set_var("RICOCHET_API_KEY", "rico_ci_key");
+        }
+
+        let result = config.resolve_server(None);
+        cleanup_env();
+        let server = result?;
+
+        assert_eq!(server.url.as_str(), "https://ci.ricochet.com/");
+        assert_eq!(server.api_key.as_deref(), Some("rico_ci_key"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial(env_tests)]
+    fn test_resolve_server_unconfigured_url_arg_with_api_key() -> anyhow::Result<()> {
+        cleanup_env();
+        let config = create_multi_server_config();
+
+        unsafe {
+            env::set_var("RICOCHET_API_KEY", "rico_ci_key");
+        }
+
+        let result = config.resolve_server(Some("https://ci.ricochet.com"));
+        cleanup_env();
+        let server = result?;
+
+        assert_eq!(server.url.as_str(), "https://ci.ricochet.com/");
+        assert_eq!(server.api_key.as_deref(), Some("rico_ci_key"));
+        Ok(())
+    }
+
     // ==================== Config persistence tests ====================
 
     #[test]
