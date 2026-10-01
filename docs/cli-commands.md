@@ -96,6 +96,7 @@ Authenticate with a Ricochet server
 ###### **Options:**
 
 * `-k`, `--api-key <API_KEY>` — API key (can also be provided interactively)
+* `--no-browser` — Print the server's credentials page instead of opening a browser, then read the key from stdin
 
 
 

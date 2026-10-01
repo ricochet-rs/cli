@@ -53,6 +53,9 @@ enum Commands {
         /// API key (can also be provided interactively)
         #[arg(short = 'k', long)]
         api_key: Option<String>,
+        /// Print the server's credentials page instead of opening a browser, then read the key from stdin
+        #[arg(long, conflicts_with = "api_key")]
+        no_browser: bool,
     },
     /// Remove stored credentials
     Logout,
@@ -463,8 +466,23 @@ async fn main() -> Result<()> {
 
     // Execute command
     match cli.command {
-        Some(Commands::Login { api_key }) => {
-            commands::auth::login(&mut config, cli.server.as_deref(), api_key, cli.format).await?;
+        Some(Commands::Login {
+            api_key,
+            no_browser,
+        }) => {
+            let flow = if no_browser {
+                commands::auth::LoginFlow::PastedKey
+            } else {
+                commands::auth::LoginFlow::Browser
+            };
+            commands::auth::login(
+                &mut config,
+                cli.server.as_deref(),
+                api_key,
+                flow,
+                cli.format,
+            )
+            .await?;
         }
         Some(Commands::Logout) => {
             commands::auth::logout(&mut config, cli.server.as_deref(), cli.format)?;

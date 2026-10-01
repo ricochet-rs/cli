@@ -4,6 +4,7 @@ use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Password;
 use serde::{Deserialize, Serialize};
+use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use unicode_icons::icons::symbols;
@@ -11,6 +12,15 @@ use url::Url;
 
 const HOSTED_TRIAL_SERVER: &str = "https://try.ricochet.rs";
 const HOSTED_TRIAL_PROFILE: &str = "try";
+
+/// How `login` obtains a key when none is passed with `--api-key`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginFlow {
+    /// Open a browser and receive the key on a local callback.
+    Browser,
+    /// Print the server's credentials page and read a pasted key.
+    PastedKey,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LoginServerSource {
@@ -62,6 +72,7 @@ pub async fn login(
     config: &mut Config,
     server_ref: Option<&str>,
     api_key: Option<String>,
+    flow: LoginFlow,
     format: OutputFormat,
 ) -> Result<()> {
     eprintln!("🔐 Authenticating against Ricochet server\n");
@@ -126,18 +137,22 @@ pub async fn login(
         .await;
     }
 
-    // In headless environments, prompt for manual API key entry instead of OAuth
-    if is_headless() {
+    if flow == LoginFlow::Browser && is_headless() {
         eprintln!(
             "{} Headless environment detected (no display server). Using manual key entry.",
             "ℹ".bright_cyan()
         );
-        eprintln!("Create an API key in your server's web UI and paste it below.\n");
+    }
 
-        let key = Password::new()
-            .with_prompt("Enter API key (starts with 'rico_')")
-            .interact()?;
-
+    if flow == LoginFlow::PastedKey || is_headless() {
+        eprintln!(
+            "Create an API key at {} and paste it below.\n",
+            credentials_url(&server_url)
+                .as_str()
+                .bright_cyan()
+                .underline()
+        );
+        let key = read_pasted_key()?;
         return validate_and_save_key(config, server_url, key, server_name, server_source, format)
             .await;
     }
@@ -368,15 +383,12 @@ async fn oauth_login_with_callback(
         );
         eprintln!("Please create an API key manually in the browser");
 
-        let mut keys_url = server.clone();
-        keys_url.set_path("/credentials");
+        let keys_url = credentials_url(&server);
         if webbrowser::open(keys_url.as_str()).is_err() {
             eprintln!("Open: {}", keys_url.as_str().bright_cyan().underline());
         }
 
-        let key = Password::new()
-            .with_prompt("Enter API key (starts with 'rico_')")
-            .interact()?;
+        let key = read_pasted_key()?;
 
         validate_and_save_key(config, server, key, server_name, server_source, format).await?;
     }
@@ -524,6 +536,30 @@ fn store_login_credentials(
         config.set_default_server(&name)?;
     }
     Ok(name)
+}
+
+/// The web UI page where a user creates API keys.
+fn credentials_url(server: &Url) -> Url {
+    let mut url = server.clone();
+    url.set_path("/credentials");
+    url
+}
+
+/// Prompt for an API key on a terminal, or read one line from piped stdin.
+fn read_pasted_key() -> Result<String> {
+    if std::io::stdin().is_terminal() {
+        return Ok(Password::new()
+            .with_prompt("Enter API key (starts with 'rico_')")
+            .interact()?);
+    }
+
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    let key = line.trim();
+    if key.is_empty() {
+        anyhow::bail!("No API key was provided on stdin");
+    }
+    Ok(key.to_string())
 }
 
 /// Detect whether we're running in a headless environment where a browser cannot be opened.
