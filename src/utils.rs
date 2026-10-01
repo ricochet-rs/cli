@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use globset::{Glob, GlobSetBuilder};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::fs::File;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -20,80 +20,119 @@ pub fn is_non_interactive() -> bool {
         || std::env::var("RICOCHET_NON_INTERACTIVE").is_ok()
 }
 
-/// Prepare a list of files to bundle based on include/exclude patterns
+/// Why a file stays out of the bundle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Exclusion {
+    /// Under `.venv`, `.renv` or `__pycache__`, which are never bundled.
+    AlwaysExcluded,
+    /// Not matched by a `content.include` pattern.
+    NotIncluded,
+    /// Captured by a `content.exclude` pattern.
+    Pattern(String),
+}
+
+impl std::fmt::Display for Exclusion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AlwaysExcluded => f.write_str("always-excluded"),
+            Self::NotIncluded => f.write_str("not-included"),
+            Self::Pattern(pattern) => write!(f, "exclude:{pattern}"),
+        }
+    }
+}
+
+impl serde::Serialize for Exclusion {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+/// A file under the bundled directory and the reason it is left out, if it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleCandidate {
+    /// Path relative to the bundled directory.
+    pub path: PathBuf,
+    pub exclusion: Option<Exclusion>,
+}
+
+fn glob_set<'a>(patterns: impl IntoIterator<Item = &'a str>) -> Result<GlobSet> {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        builder.add(Glob::new(pattern)?);
+    }
+    Ok(builder.build()?)
+}
+
+/// Classify every file under `dir` against the bundle rules, lazily as the walk proceeds.
 ///
 /// Logic:
-/// 1. Always exclude .venv and .renv directories
+/// 1. Always exclude .venv, .renv and __pycache__ directories
 /// 2. If include patterns are specified, ONLY include paths matching those patterns
 /// 3. Then exclude any paths matching the exclude patterns
 /// 4. Otherwise include everything (except blacklisted directories)
+pub fn classify_bundle(
+    dir: &Path,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+) -> Result<impl Iterator<Item = BundleCandidate> + '_> {
+    // prevent including virtual environments, renv caches, and Python bytecode caches
+    // __pycache__ can appear at any nesting level, so match it recursively
+    let blacklist = glob_set([
+        ".venv",
+        ".venv/**",
+        ".renv",
+        ".renv/**",
+        "__pycache__",
+        "__pycache__/**",
+        "**/__pycache__",
+        "**/__pycache__/**",
+    ])?;
+    let include_matcher = include
+        .map(|patterns| glob_set(patterns.iter().map(String::as_str)))
+        .transpose()?;
+    let exclude = exclude.unwrap_or_default();
+    let exclude_matcher = glob_set(exclude.iter().map(String::as_str))?;
+
+    Ok(walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+        .map(move |entry| {
+            let path = entry
+                .path()
+                .strip_prefix(dir)
+                .unwrap_or(entry.path())
+                .to_path_buf();
+
+            let exclusion = if blacklist.is_match(&path) {
+                Some(Exclusion::AlwaysExcluded)
+            } else if include_matcher
+                .as_ref()
+                .is_some_and(|matcher| !matcher.is_match(&path))
+            {
+                Some(Exclusion::NotIncluded)
+            } else {
+                exclude_matcher
+                    .matches(&path)
+                    .first()
+                    .and_then(|&index| exclude.get(index))
+                    .map(|pattern| Exclusion::Pattern(pattern.clone()))
+            };
+
+            BundleCandidate { path, exclusion }
+        }))
+}
+
+/// List the files a deploy bundles from `dir`, as absolute paths.
 pub fn prepare_bundle(
     dir: &Path,
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
 ) -> Result<Vec<PathBuf>> {
-    // prevent including virtual environments, renv caches, and Python bytecode caches
-    let mut blacklist_builder = GlobSetBuilder::new();
-    blacklist_builder.add(Glob::new(".venv")?);
-    blacklist_builder.add(Glob::new(".venv/**")?);
-    blacklist_builder.add(Glob::new(".renv")?);
-    blacklist_builder.add(Glob::new(".renv/**")?);
-    // __pycache__ can appear at any nesting level, so match it recursively
-    blacklist_builder.add(Glob::new("__pycache__")?);
-    blacklist_builder.add(Glob::new("__pycache__/**")?);
-    blacklist_builder.add(Glob::new("**/__pycache__")?);
-    blacklist_builder.add(Glob::new("**/__pycache__/**")?);
-    let blacklist = blacklist_builder.build()?;
-
-    let include_matcher = if let Some(patterns) = include {
-        let mut builder = GlobSetBuilder::new();
-        for pattern in patterns {
-            builder.add(Glob::new(&pattern)?);
-        }
-        Some(builder.build()?)
-    } else {
-        None
-    };
-
-    let exclude_matcher = if let Some(patterns) = exclude {
-        let mut builder = GlobSetBuilder::new();
-        for pattern in patterns {
-            builder.add(Glob::new(&pattern)?);
-        }
-        Some(builder.build()?)
-    } else {
-        None
-    };
-
-    let mut files_to_bundle = Vec::new();
-
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        let relative_path = entry.path().strip_prefix(dir).unwrap_or(entry.path());
-
-        if blacklist.is_match(relative_path) {
-            continue;
-        }
-
-        // include / exclude files based on include
-        if let Some(ref matcher) = include_matcher
-            && !matcher.is_match(relative_path)
-        {
-            continue;
-        }
-
-        if let Some(ref matcher) = exclude_matcher
-            && matcher.is_match(relative_path)
-        {
-            continue;
-        }
-
-        files_to_bundle.push(entry.path().to_path_buf());
-    }
-
-    Ok(files_to_bundle)
+    Ok(classify_bundle(dir, include, exclude)?
+        .filter(|candidate| candidate.exclusion.is_none())
+        .map(|candidate| dir.join(candidate.path))
+        .collect())
 }
 
 pub fn create_bundle(
@@ -166,7 +205,7 @@ pub fn create_bundle(
     Ok(())
 }
 
-fn format_size(bytes: u64) -> String {
+pub(crate) fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
     const GB: u64 = MB * 1024;
@@ -223,6 +262,51 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+
+    #[test]
+    fn classify_bundle_names_the_reason_for_each_exclusion() {
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+
+        fs::write(dir_path.join("app.R"), "library(shiny)").unwrap();
+        fs::write(dir_path.join("notes.txt"), "notes").unwrap();
+        fs::create_dir_all(dir_path.join("data")).unwrap();
+        fs::write(dir_path.join("data").join("big.parquet"), "rows").unwrap();
+        fs::create_dir_all(dir_path.join(".venv").join("lib")).unwrap();
+        fs::write(dir_path.join(".venv").join("lib").join("x.py"), "").unwrap();
+
+        let include = Some(vec!["**/*.R".to_string(), "data/**".to_string()]);
+        let exclude = Some(vec!["*.md".to_string(), "data/**".to_string()]);
+        let mut result: Vec<_> = classify_bundle(dir_path, include, exclude)
+            .unwrap()
+            .collect();
+        result.sort_by(|a, b| a.path.cmp(&b.path));
+
+        let verdicts: Vec<(String, Option<String>)> = result
+            .iter()
+            .map(|c| {
+                (
+                    c.path.to_string_lossy().replace('\\', "/"),
+                    c.exclusion.as_ref().map(Exclusion::to_string),
+                )
+            })
+            .collect();
+        assert_eq!(
+            verdicts,
+            vec![
+                (
+                    ".venv/lib/x.py".to_string(),
+                    Some("always-excluded".to_string())
+                ),
+                ("app.R".to_string(), None),
+                (
+                    "data/big.parquet".to_string(),
+                    Some("exclude:data/**".to_string())
+                ),
+                ("notes.txt".to_string(), Some("not-included".to_string())),
+            ]
+        );
+    }
 
     #[test]
     fn test_prepare_bundle_excludes_venv() {

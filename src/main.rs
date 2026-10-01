@@ -75,6 +75,9 @@ enum Commands {
         /// .env, .Renviron, or the calling environment. Repeatable.
         #[arg(short = 'e', long = "env", value_name = "KEY[=VALUE]")]
         env: Vec<String>,
+        /// List the files in a deployment bundle without deploying
+        #[arg(long, conflicts_with_all = ["git", "env"])]
+        dry_run: bool,
         /// Deploy from a Git repository instead of a local bundle
         #[arg(long)]
         git: Option<String>,
@@ -492,6 +495,7 @@ async fn main() -> Result<()> {
             name,
             description,
             env,
+            dry_run,
             git,
             branch,
             repo_path,
@@ -510,6 +514,8 @@ async fn main() -> Result<()> {
                     cli.format,
                 )
                 .await?;
+            } else if dry_run {
+                commands::deploy::deploy_dry_run(&path, cli.format)?;
             } else {
                 commands::deploy::deploy(
                     &config,
