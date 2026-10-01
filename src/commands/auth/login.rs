@@ -13,12 +13,12 @@ use url::Url;
 const HOSTED_TRIAL_SERVER: &str = "https://try.ricochet.rs";
 const HOSTED_TRIAL_PROFILE: &str = "try";
 
-/// How `login` obtains a key when none is passed with `--api-key`.
+/// How to fetch an API key when no credentials are persisted or set with `--api-key`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoginFlow {
-    /// Open a browser and receive the key on a local callback.
+    /// Interactive browser authentication
     Browser,
-    /// Print the server's credentials page and read a pasted key.
+    /// Paste the API key directly, used in headless sessions
     PastedKey,
 }
 

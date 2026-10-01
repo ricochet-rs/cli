@@ -53,7 +53,7 @@ enum Commands {
         /// API key (can also be provided interactively)
         #[arg(short = 'k', long)]
         api_key: Option<String>,
-        /// Print the server's credentials page instead of opening a browser, then read the key from stdin
+        /// Do not attempt to open a browser, designed for headless sessions
         #[arg(long, conflicts_with = "api_key")]
         no_browser: bool,
     },
