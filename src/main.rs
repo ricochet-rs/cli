@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use ricochet_cli::{OutputFormat, app, commands, config::Config, item, update};
+use ricochet_cli::{OutputFormat, app, commands, config::Config, item, task, update};
 use ricochet_core::content::OwnershipScope;
 
 // App specific methods go in `src/app/`
@@ -262,6 +262,14 @@ enum TaskCommands {
     Invoke {
         /// Content item ID (ULID)
         id: String,
+        /// Wait for the run to finish, and exit with an error unless it succeeds
+        #[arg(short = 'w', long)]
+        wait: bool,
+    },
+    /// Inspect runs of a task
+    Invocation {
+        #[command(subcommand)]
+        command: InvocationCommands,
     },
     /// Set or update the schedule for a task
     Schedule {
@@ -288,6 +296,17 @@ enum TaskCommands {
     EnvVars {
         #[command(subcommand)]
         command: EnvVarsCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum InvocationCommands {
+    /// Show the status of a task run
+    Get {
+        /// Content item ID (ULID)
+        id: String,
+        /// Invocation ID, as printed by `ricochet task invoke`
+        invocation_id: String,
     },
 }
 
@@ -515,7 +534,14 @@ async fn main() -> Result<()> {
                 "{} `ricochet invoke` is deprecated. Use `ricochet task invoke` instead.",
                 "warning:".yellow().bold()
             );
-            item::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
+            item::invoke::invoke(
+                &config,
+                cli.server.as_deref(),
+                &id,
+                item::invoke::Follow::Detach,
+                cli.format,
+            )
+            .await?;
         }
         Some(Commands::Config { show_all }) => {
             commands::config::show(&config, show_all, cli.format)?;
@@ -710,8 +736,26 @@ async fn main() -> Result<()> {
             TaskCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
             }
-            TaskCommands::Invoke { id } => {
-                item::invoke::invoke(&config, cli.server.as_deref(), &id, cli.format).await?;
+            TaskCommands::Invoke { id, wait } => {
+                let follow = if wait {
+                    item::invoke::Follow::UntilFinished
+                } else {
+                    item::invoke::Follow::Detach
+                };
+                item::invoke::invoke(&config, cli.server.as_deref(), &id, follow, cli.format)
+                    .await?;
+            }
+            TaskCommands::Invocation {
+                command: InvocationCommands::Get { id, invocation_id },
+            } => {
+                task::invocation::get(
+                    &config,
+                    cli.server.as_deref(),
+                    &id,
+                    &invocation_id,
+                    cli.format,
+                )
+                .await?;
             }
             TaskCommands::Schedule { id, schedule } => {
                 item::schedule::schedule_task(

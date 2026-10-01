@@ -31,6 +31,8 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet task list`↴](#ricochet-task-list)
 * [`ricochet task toml`↴](#ricochet-task-toml)
 * [`ricochet task invoke`↴](#ricochet-task-invoke)
+* [`ricochet task invocation`↴](#ricochet-task-invocation)
+* [`ricochet task invocation get`↴](#ricochet-task-invocation-get)
 * [`ricochet task schedule`↴](#ricochet-task-schedule)
 * [`ricochet task settings`↴](#ricochet-task-settings)
 * [`ricochet task settings update`↴](#ricochet-task-settings-update)
@@ -440,6 +442,7 @@ Manage deployed task items
 * `list` — List deployed task content items
 * `toml` — Fetch the remote _ricochet.toml for a task
 * `invoke` — Invoke a task
+* `invocation` — Inspect runs of a task
 * `schedule` — Set or update the schedule for a task
 * `settings` — Show the diff between the local _ricochet.toml and the deployed item. Use the `update` subcommand to apply it
 * `deployment` — Manage deployments for a task
@@ -482,11 +485,40 @@ Fetch the remote _ricochet.toml for a task
 
 Invoke a task
 
-**Usage:** `ricochet task invoke <ID>`
+**Usage:** `ricochet task invoke [OPTIONS] <ID>`
 
 ###### **Arguments:**
 
 * `<ID>` — Content item ID (ULID)
+
+###### **Options:**
+
+* `-w`, `--wait` — Wait for the run to finish, and exit with an error unless it succeeds
+
+
+
+## `ricochet task invocation`
+
+Inspect runs of a task
+
+**Usage:** `ricochet task invocation <COMMAND>`
+
+###### **Subcommands:**
+
+* `get` — Show the status of a task run
+
+
+
+## `ricochet task invocation get`
+
+Show the status of a task run
+
+**Usage:** `ricochet task invocation get <ID> <INVOCATION_ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Content item ID (ULID)
+* `<INVOCATION_ID>` — Invocation ID, as printed by `ricochet task invoke`
 
 
 
