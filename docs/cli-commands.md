@@ -96,6 +96,7 @@ Authenticate with a Ricochet server
 ###### **Options:**
 
 * `-k`, `--api-key <API_KEY>` — API key (can also be provided interactively)
+* `--no-browser` — Do not attempt to open a browser, designed for headless sessions
 
 
 

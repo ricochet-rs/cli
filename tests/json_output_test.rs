@@ -348,6 +348,34 @@ impl Cli {
             .expect("running the ricochet binary")
     }
 
+    /// Run with `input` written to stdin.
+    async fn run_with_stdin(&self, args: &[&str], input: &str) -> std::process::Output {
+        use tokio::io::AsyncWriteExt;
+
+        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_ricochet"))
+            .args(args)
+            .env("HOME", self.home.path())
+            .env_remove("RICOCHET_SERVER")
+            .env_remove("RICOCHET_API_KEY")
+            .env("RICOCHET_NO_UPDATE_CHECK", "1")
+            .env("NO_COLOR", "1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawning the ricochet binary");
+        let mut stdin = child.stdin.take().expect("stdin is piped");
+        stdin
+            .write_all(input.as_bytes())
+            .await
+            .expect("writing to stdin");
+        drop(stdin);
+        child
+            .wait_with_output()
+            .await
+            .expect("running the ricochet binary")
+    }
+
     /// Run with `-F json` and return the parsed stdout.
     async fn json(&self, args: &[&str]) -> serde_json::Value {
         let mut with_format = args.to_vec();
@@ -877,4 +905,38 @@ async fn login_and_logout_write_json_alone() {
     let login = cli.json(&["login", "-k", "rico_testkey123456"]).await;
     assert_eq!(login["server"], "test");
     assert_eq!(login["api_key"], "rico_tes...3456");
+}
+
+#[tokio::test]
+async fn login_without_browser_reads_the_key_from_stdin() {
+    let cli = Cli::new().await;
+    cli.json(&["logout"]).await;
+
+    let output = cli
+        .run_with_stdin(
+            &["login", "--no-browser", "-F", "json"],
+            "rico_pastedkey123456\n",
+        )
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "login failed: {stderr}");
+    assert!(
+        stderr.contains("/credentials"),
+        "credentials page not shown: {stderr}"
+    );
+
+    let login: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout is JSON alone");
+    assert_eq!(login["server"], "test");
+    assert_eq!(login["api_key"], "rico_pas...3456");
+}
+
+#[tokio::test]
+async fn login_without_browser_rejects_empty_stdin() {
+    let cli = Cli::new().await;
+    cli.json(&["logout"]).await;
+
+    let output = cli.run_with_stdin(&["login", "--no-browser"], "").await;
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No API key was provided on stdin"));
 }
