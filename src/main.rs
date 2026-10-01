@@ -73,7 +73,7 @@ enum Commands {
         #[arg(short = 'e', long = "env", value_name = "KEY[=VALUE]")]
         env: Vec<String>,
         /// List the files a deploy would upload and why any are left out, without contacting the server
-        #[arg(long, conflicts_with = "git")]
+        #[arg(long, conflicts_with_all = ["git", "env"])]
         dry_run: bool,
         /// Deploy from a Git repository instead of a local bundle
         #[arg(long)]

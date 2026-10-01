@@ -63,7 +63,7 @@ fn glob_set<'a>(patterns: impl IntoIterator<Item = &'a str>) -> Result<GlobSet> 
     Ok(builder.build()?)
 }
 
-/// Classify every file under `dir` against the bundle rules.
+/// Classify every file under `dir` against the bundle rules, lazily as the walk proceeds.
 ///
 /// Logic:
 /// 1. Always exclude .venv, .renv and __pycache__ directories
@@ -74,7 +74,7 @@ pub fn classify_bundle(
     dir: &Path,
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
-) -> Result<Vec<BundleCandidate>> {
+) -> Result<impl Iterator<Item = BundleCandidate> + '_> {
     // prevent including virtual environments, renv caches, and Python bytecode caches
     // __pycache__ can appear at any nesting level, so match it recursively
     let blacklist = glob_set([
@@ -93,38 +93,34 @@ pub fn classify_bundle(
     let exclude = exclude.unwrap_or_default();
     let exclude_matcher = glob_set(exclude.iter().map(String::as_str))?;
 
-    let mut candidates = Vec::new();
-
-    for entry in walkdir::WalkDir::new(dir)
+    Ok(walkdir::WalkDir::new(dir)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file())
-    {
-        let path = entry
-            .path()
-            .strip_prefix(dir)
-            .unwrap_or(entry.path())
-            .to_path_buf();
+        .map(move |entry| {
+            let path = entry
+                .path()
+                .strip_prefix(dir)
+                .unwrap_or(entry.path())
+                .to_path_buf();
 
-        let exclusion = if blacklist.is_match(&path) {
-            Some(Exclusion::AlwaysExcluded)
-        } else if include_matcher
-            .as_ref()
-            .is_some_and(|matcher| !matcher.is_match(&path))
-        {
-            Some(Exclusion::NotIncluded)
-        } else {
-            exclude_matcher
-                .matches(&path)
-                .first()
-                .and_then(|&index| exclude.get(index))
-                .map(|pattern| Exclusion::Pattern(pattern.clone()))
-        };
+            let exclusion = if blacklist.is_match(&path) {
+                Some(Exclusion::AlwaysExcluded)
+            } else if include_matcher
+                .as_ref()
+                .is_some_and(|matcher| !matcher.is_match(&path))
+            {
+                Some(Exclusion::NotIncluded)
+            } else {
+                exclude_matcher
+                    .matches(&path)
+                    .first()
+                    .and_then(|&index| exclude.get(index))
+                    .map(|pattern| Exclusion::Pattern(pattern.clone()))
+            };
 
-        candidates.push(BundleCandidate { path, exclusion });
-    }
-
-    Ok(candidates)
+            BundleCandidate { path, exclusion }
+        }))
 }
 
 /// List the files a deploy bundles from `dir`, as absolute paths.
@@ -134,7 +130,6 @@ pub fn prepare_bundle(
     exclude: Option<Vec<String>>,
 ) -> Result<Vec<PathBuf>> {
     Ok(classify_bundle(dir, include, exclude)?
-        .into_iter()
         .filter(|candidate| candidate.exclusion.is_none())
         .map(|candidate| dir.join(candidate.path))
         .collect())
@@ -282,7 +277,9 @@ mod tests {
 
         let include = Some(vec!["**/*.R".to_string(), "data/**".to_string()]);
         let exclude = Some(vec!["*.md".to_string(), "data/**".to_string()]);
-        let mut result = classify_bundle(dir_path, include, exclude).unwrap();
+        let mut result: Vec<_> = classify_bundle(dir_path, include, exclude)
+            .unwrap()
+            .collect();
         result.sort_by(|a, b| a.path.cmp(&b.path));
 
         let verdicts: Vec<(String, Option<String>)> = result

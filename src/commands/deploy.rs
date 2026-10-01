@@ -403,19 +403,14 @@ impl DryRun {
         }
 
         if !excluded.is_empty() {
-            let mut reasons: Vec<(String, usize, u64)> = Vec::new();
+            let mut reasons: Vec<(&Exclusion, Vec<&DryRunFile>)> = Vec::new();
             for file in &excluded {
-                let reason = file
-                    .exclusion
-                    .as_ref()
-                    .map(Exclusion::to_string)
-                    .unwrap_or_default();
-                match reasons.iter_mut().find(|(known, ..)| *known == reason) {
-                    Some((_, count, size)) => {
-                        *count += 1;
-                        *size += file.size;
-                    }
-                    None => reasons.push((reason, 1, file.size)),
+                let Some(reason) = &file.exclusion else {
+                    continue;
+                };
+                match reasons.iter_mut().find(|(known, _)| *known == reason) {
+                    Some((_, files)) => files.push(file),
+                    None => reasons.push((reason, vec![file])),
                 }
             }
 
@@ -424,12 +419,24 @@ impl DryRun {
                 "Would leave out".bold(),
                 file_count(excluded.len())
             ));
-            for (reason, count, size) in reasons {
+            for (reason, files) in reasons {
+                let size: u64 = files.iter().map(|file| file.size).sum();
                 output.push_str(&format!(
                     "\n    {reason}  {} ({})",
-                    file_count(count),
+                    file_count(files.len()),
                     format_size(size)
                 ));
+                // Caches and virtual environments run to thousands of files nobody needs listed.
+                if *reason == Exclusion::AlwaysExcluded {
+                    continue;
+                }
+                for file in files {
+                    output.push_str(&format!(
+                        "\n      {}  {}",
+                        file.path.display(),
+                        format_size(file.size)
+                    ));
+                }
             }
         }
 
