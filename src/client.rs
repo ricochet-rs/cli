@@ -380,10 +380,12 @@ impl RicochetClient {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{id}/invocations/{invocation_id}"));
 
+        // Short enough that a stalled check cannot outlast the retry window of `wait`.
         let response = self
             .client
             .get(url)
             .header("Authorization", format!("Key {}", self.api_key))
+            .timeout(std::time::Duration::from_secs(10))
             .send()
             .await?;
 

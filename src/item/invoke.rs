@@ -1,5 +1,5 @@
 use crate::{OutputFormat, client::RicochetClient, config::Config, task::invocation};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 use comfy_table::{Cell, Table, presets::UTF8_FULL};
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,14 @@ pub async fn invoke(
             ))
         }),
         Follow::UntilFinished => {
-            let run = invocation::wait(&client, id, &invoked.id).await?;
+            let run = invocation::wait(&client, id, &invoked.id)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Lost track of task run {run_id}. Check it later with `ricochet task invocation get {id} {run_id}`",
+                        run_id = invoked.id
+                    )
+                })?;
             run.print(format, server_config.url.as_str())?;
             run.require_success()
         }

@@ -6,12 +6,12 @@ use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
-/// Consecutive failed status checks after which `wait` gives up.
-const MAX_FAILED_CHECKS: u32 = 5;
+/// How long `wait` keeps retrying status checks that fail in a row.
+const RETRY_WINDOW: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -122,28 +122,26 @@ pub async fn wait(client: &RicochetClient, id: &str, invocation_id: &str) -> Res
     spinner.set_message(waiting.clone());
     spinner.enable_steady_tick(Duration::from_millis(100));
 
-    let mut failed_checks = 0;
-    let run = loop {
+    let mut failing_since: Option<Instant> = None;
+    let outcome = loop {
         match client.get_invocation(id, invocation_id).await {
-            Ok(run) if run.status != InvocationStatus::Pending => break run,
+            Ok(run) if run.status != InvocationStatus::Pending => break Ok(run),
             Ok(_) => {
-                failed_checks = 0;
+                failing_since = None;
                 spinner.set_message(waiting.clone());
-                tokio::time::sleep(POLL_INTERVAL).await;
             }
-            Err(e) if is_transient(&e) && failed_checks + 1 < MAX_FAILED_CHECKS => {
-                failed_checks += 1;
+            Err(e) if is_transient(&e) => {
+                if failing_since.get_or_insert_with(Instant::now).elapsed() >= RETRY_WINDOW {
+                    break Err(e);
+                }
                 spinner.set_message(format!("{waiting} (retrying after: {e})"));
-                tokio::time::sleep(POLL_INTERVAL * 2u32.pow(failed_checks - 1)).await;
             }
-            Err(e) => {
-                spinner.finish_and_clear();
-                return Err(e);
-            }
+            Err(e) => break Err(e),
         }
+        tokio::time::sleep(POLL_INTERVAL).await;
     };
     spinner.finish_and_clear();
-    Ok(run)
+    outcome
 }
 
 /// Whether a failed status check may succeed when repeated: the server was unreachable or erred.

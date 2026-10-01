@@ -31,6 +31,10 @@ const FAILED_INVOCATION_ID: &str = "01KR6666666666666666666666";
 const FLAKY_TASK_ID: &str = "01KR7777777777777777777777";
 const FLAKY_INVOCATION_ID: &str = "01KR8888888888888888888888";
 
+/// A task whose runs the key may start but not read.
+const UNREADABLE_TASK_ID: &str = "01KR9999999999999999999999";
+const UNREADABLE_INVOCATION_ID: &str = "01KRAAAAAAAAAAAAAAAAAAAAAA";
+
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
@@ -293,6 +297,27 @@ fn mock_api(server: &mut Server) {
         )
         .with_status(200)
         .with_body(json!({"id": FLAKY_INVOCATION_ID, "content_id": FLAKY_TASK_ID}).to_string())
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{UNREADABLE_TASK_ID}/invoke").as_str(),
+        )
+        .with_status(200)
+        .with_body(
+            json!({"id": UNREADABLE_INVOCATION_ID, "content_id": UNREADABLE_TASK_ID}).to_string(),
+        )
+        .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{UNREADABLE_TASK_ID}/invocations/{UNREADABLE_INVOCATION_ID}")
+                .as_str(),
+        )
+        .with_status(403)
+        .with_body(json!({"error": "insufficient scopes"}).to_string())
         .create();
 
     let flaky_path = format!("/api/v0/content/{FLAKY_TASK_ID}/invocations/{FLAKY_INVOCATION_ID}");
@@ -750,6 +775,24 @@ async fn task_invoke_wait_retries_a_server_fault() {
     let cli = Cli::new().await;
     let payload = cli.json(&["task", "invoke", FLAKY_TASK_ID, "--wait"]).await;
     assert_eq!(payload["status"], "success");
+}
+
+#[tokio::test]
+async fn task_invoke_wait_names_the_run_it_lost() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&["task", "invoke", UNREADABLE_TASK_ID, "--wait", "-F", "json"])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "stdout must stay empty");
+    assert!(
+        stderr.contains(&format!(
+            "ricochet task invocation get {UNREADABLE_TASK_ID} {UNREADABLE_INVOCATION_ID}"
+        )),
+        "{stderr}"
+    );
 }
 
 #[tokio::test]
