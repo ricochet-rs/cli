@@ -25,9 +25,9 @@ pub fn is_non_interactive() -> bool {
 pub enum Exclusion {
     /// Under `.venv`, `.renv` or `__pycache__`, which are never bundled.
     AlwaysExcluded,
-    /// Matched by none of the `content.include` patterns.
+    /// Not matched by a `content.include` pattern.
     NotIncluded,
-    /// Matched the named `content.exclude` pattern.
+    /// Captured by a `content.exclude` pattern.
     Pattern(String),
 }
 

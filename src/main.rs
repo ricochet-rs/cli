@@ -53,6 +53,9 @@ enum Commands {
         /// API key (can also be provided interactively)
         #[arg(short = 'k', long)]
         api_key: Option<String>,
+        /// Do not attempt to open a browser, designed for headless sessions
+        #[arg(long, conflicts_with = "api_key")]
+        no_browser: bool,
     },
     /// Remove stored credentials
     Logout,
@@ -72,7 +75,7 @@ enum Commands {
         /// .env, .Renviron, or the calling environment. Repeatable.
         #[arg(short = 'e', long = "env", value_name = "KEY[=VALUE]")]
         env: Vec<String>,
-        /// List the files a deploy would upload and why any are left out, without contacting the server
+        /// List the files in a deployment bundle without deploying
         #[arg(long, conflicts_with_all = ["git", "env"])]
         dry_run: bool,
         /// Deploy from a Git repository instead of a local bundle
@@ -466,8 +469,23 @@ async fn main() -> Result<()> {
 
     // Execute command
     match cli.command {
-        Some(Commands::Login { api_key }) => {
-            commands::auth::login(&mut config, cli.server.as_deref(), api_key, cli.format).await?;
+        Some(Commands::Login {
+            api_key,
+            no_browser,
+        }) => {
+            let flow = if no_browser {
+                commands::auth::LoginFlow::PastedKey
+            } else {
+                commands::auth::LoginFlow::Browser
+            };
+            commands::auth::login(
+                &mut config,
+                cli.server.as_deref(),
+                api_key,
+                flow,
+                cli.format,
+            )
+            .await?;
         }
         Some(Commands::Logout) => {
             commands::auth::logout(&mut config, cli.server.as_deref(), cli.format)?;

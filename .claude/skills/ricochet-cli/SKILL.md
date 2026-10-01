@@ -42,10 +42,12 @@ ricochet server set-default production
 The URL must carry an `http://` or `https://` scheme.
 `ricochet login` opens a browser callback flow, falls back to pasting a key when no display server is present, and accepts a key directly with `-k`.
 It is recommended to login via the web UI first before running this command.
+Over SSH, in a dev container, or in a remote editor window, the browser callback reaches the wrong machine, so pass `--no-browser`: it prints the server's `/credentials` page and reads the key from a prompt, or from stdin when stdin is not a terminal.
 
 ```sh
 ricochet login -S production
 ricochet login -S https://ricochet.example.com -k rico_...
+ricochet login -S production --no-browser
 ```
 
 Keys minted by `ricochet login` expire after 8 hours, so a long-lived automation key must be created in the web UI and supplied through `RICOCHET_API_KEY`.
