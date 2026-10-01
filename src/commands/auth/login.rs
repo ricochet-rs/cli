@@ -147,7 +147,8 @@ pub async fn login(
     if flow == LoginFlow::PastedKey || is_headless() {
         eprintln!(
             "Create an API key at {} and paste it below.\n",
-            credentials_url(&server_url)
+            server_url
+                .join("/credentials")?
                 .as_str()
                 .bright_cyan()
                 .underline()
@@ -383,7 +384,7 @@ async fn oauth_login_with_callback(
         );
         eprintln!("Please create an API key manually in the browser");
 
-        let keys_url = credentials_url(&server);
+        let keys_url = server.join("/credentials")?;
         if webbrowser::open(keys_url.as_str()).is_err() {
             eprintln!("Open: {}", keys_url.as_str().bright_cyan().underline());
         }
@@ -536,13 +537,6 @@ fn store_login_credentials(
         config.set_default_server(&name)?;
     }
     Ok(name)
-}
-
-/// The web UI page where a user creates API keys.
-fn credentials_url(server: &Url) -> Url {
-    let mut url = server.clone();
-    url.set_path("/credentials");
-    url
 }
 
 /// Prompt for an API key on a terminal, or read one line from piped stdin.
