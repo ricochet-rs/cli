@@ -1,3 +1,4 @@
+use crate::utils::{Exclusion, classify_bundle, format_size};
 use crate::{OutputFormat, client::RicochetClient, config::Config};
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
@@ -9,6 +10,7 @@ use ricochet_core::{
     kinds::ServerYml,
     language::Package,
 };
+use serde::{Serialize, ser::SerializeStruct};
 use std::path::{Path, PathBuf};
 
 /// The one file name the server.yml standard accepts, in any directory of the bundle.
@@ -57,6 +59,107 @@ fn write_content_id(toml_path: &std::path::Path, id: &str) -> Result<()> {
 
     std::fs::write(toml_path, updated)?;
     Ok(())
+}
+
+/// What a deploy reads and checks on disk before it contacts the server.
+struct LocalDeploy {
+    item: ContentItem,
+    /// Files outside the deployed directory that land at the bundle root.
+    extra_root_files: Vec<(PathBuf, String)>,
+}
+
+impl LocalDeploy {
+    fn read(path: &Path, toml_path: &Path) -> Result<Self> {
+        // Read and parse _ricochet.toml
+        let toml_content = std::fs::read_to_string(toml_path)?;
+        let ricochet_toml = ContentItem::from_toml(&toml_content)?;
+
+        let content_type = ricochet_toml.content.content_type;
+        let kind = if content_type.is_task() {
+            "task"
+        } else {
+            "app"
+        };
+        let change = if ricochet_toml.content.id.is_some() {
+            "updated"
+        } else {
+            "new"
+        };
+        let name = ricochet_toml.content.name.trim();
+        let name = if name.is_empty() {
+            path.file_name()
+                .unwrap_or(path.as_os_str())
+                .to_string_lossy()
+        } else {
+            name.into()
+        };
+        eprintln!(
+            "\n{} ({change} {kind})\n  Path:       {}\n  Type:       {content_type}",
+            name.bold(),
+            path.display()
+        );
+
+        // check for existence of packages file, searching parent dirs for uv workspaces
+        let pkgs = ricochet_toml.language.packages.clone();
+        let pkg_path = path.join(pkgs.to_string());
+        let mut extra_root_files = Vec::new();
+
+        if !pkg_path.exists() {
+            if let Package::UvLock = pkgs {
+                // uv workspaces keep uv.lock at the workspace root — search parent dirs
+                if let Some(found) = crate::utils::find_in_parent_dirs(path, "uv.lock") {
+                    eprintln!(
+                        "  {} Using {} from workspace root",
+                        "→".bright_cyan(),
+                        found.display().to_string().bright_cyan()
+                    );
+                    extra_root_files.push((found, "uv.lock".to_string()));
+                } else {
+                    bail!(
+                        "Required package file `uv.lock` not found.\n  {} Create it by running `uv init`",
+                        "Hint:".yellow().bold(),
+                    );
+                }
+            } else {
+                let hint = match pkgs {
+                    Package::RenvLock => "Create it by running `renv::snapshot()` in R",
+                    Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
+                    Package::UvLock => unreachable!(),
+                };
+                bail!(
+                    "Required package file `{}` not found.\n  {} {}",
+                    pkgs,
+                    "Hint:".yellow().bold(),
+                    hint
+                );
+            }
+        }
+
+        // if python and no .python-version, check parent dirs (workspace root)
+        if let Package::UvLock = pkgs
+            && !path.join(".python-version").exists()
+        {
+            if let Some(found) = crate::utils::find_in_parent_dirs(path, ".python-version") {
+                eprintln!(
+                    "  {} Using {} from workspace root",
+                    "→".bright_cyan(),
+                    found.display().to_string().bright_cyan()
+                );
+                extra_root_files.push((found, ".python-version".to_string()));
+            } else {
+                bail!("Please create a `.python-version` via `uv python pin`")
+            }
+        }
+
+        if content_type == ContentType::RServer {
+            verify_server_yml(path, &ricochet_toml.content.entrypoint)?;
+        }
+
+        Ok(Self {
+            item: ricochet_toml,
+            extra_root_files,
+        })
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -114,91 +217,16 @@ pub async fn deploy(
         }
     }
 
-    // Read and parse _ricochet.toml
-    let toml_content = std::fs::read_to_string(&toml_path)?;
-    let ricochet_toml = ContentItem::from_toml(&toml_content)?;
-
-    let content_id = ricochet_toml.content.id.clone();
-    let content_type = ricochet_toml.content.content_type;
-    let (kind, label, route) = if content_type.is_task() {
-        ("task", "Task:", "tasks")
+    let LocalDeploy {
+        item: ricochet_toml,
+        extra_root_files,
+    } = LocalDeploy::read(&path, &toml_path)?;
+    let content_id = ricochet_toml.content.id;
+    let (label, route) = if ricochet_toml.content.content_type.is_task() {
+        ("Task:", "tasks")
     } else {
-        ("app", "App:", "apps")
+        ("App:", "apps")
     };
-    let change = if content_id.is_some() {
-        "updated"
-    } else {
-        "new"
-    };
-    let name = ricochet_toml.content.name.trim();
-    let name = if name.is_empty() {
-        path.file_name()
-            .unwrap_or(path.as_os_str())
-            .to_string_lossy()
-    } else {
-        name.into()
-    };
-    eprintln!(
-        "\n{} ({change} {kind})\n  Path:       {}\n  Type:       {content_type}",
-        name.bold(),
-        path.display()
-    );
-
-    // check for existence of packages file, searching parent dirs for uv workspaces
-    let pkgs = ricochet_toml.language.packages;
-    let pkg_path = path.join(pkgs.to_string());
-    let mut extra_root_files = Vec::new();
-
-    if !pkg_path.exists() {
-        if let Package::UvLock = pkgs {
-            // uv workspaces keep uv.lock at the workspace root — search parent dirs
-            if let Some(found) = crate::utils::find_in_parent_dirs(&path, "uv.lock") {
-                eprintln!(
-                    "  {} Using {} from workspace root",
-                    "→".bright_cyan(),
-                    found.display().to_string().bright_cyan()
-                );
-                extra_root_files.push((found, "uv.lock".to_string()));
-            } else {
-                bail!(
-                    "Required package file `uv.lock` not found.\n  {} Create it by running `uv init`",
-                    "Hint:".yellow().bold(),
-                );
-            }
-        } else {
-            let hint = match pkgs {
-                Package::RenvLock => "Create it by running `renv::snapshot()` in R",
-                Package::ManifestToml => "Create it by running `Pkg.instantiate()` in Julia",
-                Package::UvLock => unreachable!(),
-            };
-            bail!(
-                "Required package file `{}` not found.\n  {} {}",
-                pkgs,
-                "Hint:".yellow().bold(),
-                hint
-            );
-        }
-    }
-
-    // if python and no .python-version, check parent dirs (workspace root)
-    if let Package::UvLock = pkgs
-        && !path.join(".python-version").exists()
-    {
-        if let Some(found) = crate::utils::find_in_parent_dirs(&path, ".python-version") {
-            eprintln!(
-                "  {} Using {} from workspace root",
-                "→".bright_cyan(),
-                found.display().to_string().bright_cyan()
-            );
-            extra_root_files.push((found, ".python-version".to_string()));
-        } else {
-            bail!("Please create a `.python-version` via `uv python pin`")
-        }
-    }
-
-    if content_type == ContentType::RServer {
-        verify_server_yml(&path, &ricochet_toml.content.entrypoint)?;
-    }
 
     // Resolve and encrypt environment variables, if any were provided.
     // Only named keys are sent; whole dotfiles are never auto-loaded.
@@ -307,6 +335,147 @@ pub async fn deploy(
             anyhow::bail!("Deployment failed: {}", e)
         }
     }
+}
+
+/// A file `deploy --dry-run` reports, with the verdict a deploy would reach on it.
+struct DryRunFile {
+    /// Path inside the bundle.
+    path: PathBuf,
+    size: u64,
+    exclusion: Option<Exclusion>,
+    /// Where a file from outside the deployed directory is read from.
+    source: Option<PathBuf>,
+}
+
+impl Serialize for DryRunFile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut file = serializer.serialize_struct("DryRunFile", 5)?;
+        file.serialize_field("path", &self.path)?;
+        file.serialize_field("included", &self.exclusion.is_none())?;
+        file.serialize_field("size", &self.size)?;
+        match &self.exclusion {
+            Some(reason) => file.serialize_field("reason", reason)?,
+            None => file.skip_field("reason")?,
+        }
+        match &self.source {
+            Some(source) => file.serialize_field("source", source)?,
+            None => file.skip_field("source")?,
+        }
+        file.end()
+    }
+}
+
+#[derive(Serialize)]
+struct DryRun {
+    files: Vec<DryRunFile>,
+}
+
+/// Count files for a person, as in "1 file" or "3 files".
+fn file_count(count: usize) -> String {
+    if count == 1 {
+        "1 file".to_string()
+    } else {
+        format!("{count} files")
+    }
+}
+
+impl DryRun {
+    fn render_table(&self) -> String {
+        let (included, excluded): (Vec<_>, Vec<_>) =
+            self.files.iter().partition(|file| file.exclusion.is_none());
+
+        let total: u64 = included.iter().map(|file| file.size).sum();
+        let mut output = format!(
+            "  {} {} ({})",
+            "Would bundle".bold(),
+            file_count(included.len()),
+            format_size(total)
+        );
+        for file in &included {
+            output.push_str(&format!(
+                "\n    {}  {}",
+                file.path.display(),
+                format_size(file.size)
+            ));
+            if let Some(source) = &file.source {
+                output.push_str(&format!("  (from {})", source.display()));
+            }
+        }
+
+        if !excluded.is_empty() {
+            let mut reasons: Vec<(String, usize, u64)> = Vec::new();
+            for file in &excluded {
+                let reason = file
+                    .exclusion
+                    .as_ref()
+                    .map(Exclusion::to_string)
+                    .unwrap_or_default();
+                match reasons.iter_mut().find(|(known, ..)| *known == reason) {
+                    Some((_, count, size)) => {
+                        *count += 1;
+                        *size += file.size;
+                    }
+                    None => reasons.push((reason, 1, file.size)),
+                }
+            }
+
+            output.push_str(&format!(
+                "\n  {} {}",
+                "Would leave out".bold(),
+                file_count(excluded.len())
+            ));
+            for (reason, count, size) in reasons {
+                output.push_str(&format!(
+                    "\n    {reason}  {} ({})",
+                    file_count(count),
+                    format_size(size)
+                ));
+            }
+        }
+
+        output
+    }
+}
+
+/// Report the files a deploy of `path` would bundle, without contacting a server.
+pub fn deploy_dry_run(path: &Path, format: OutputFormat) -> Result<()> {
+    if !path.is_dir() {
+        bail!("Path must be a directory containing _ricochet.toml");
+    }
+    let toml_path = path.join("_ricochet.toml");
+    if !toml_path.exists() {
+        bail!(
+            "No _ricochet.toml found in {}. Please create one with `ricochet init`",
+            path.display()
+        );
+    }
+
+    let LocalDeploy {
+        item,
+        extra_root_files,
+    } = LocalDeploy::read(path, &toml_path)?;
+
+    let mut files = Vec::new();
+    for candidate in classify_bundle(path, item.content.include, item.content.exclude)? {
+        files.push(DryRunFile {
+            size: std::fs::metadata(path.join(&candidate.path))?.len(),
+            path: candidate.path,
+            exclusion: candidate.exclusion,
+            source: None,
+        });
+    }
+    for (source, name) in extra_root_files {
+        files.push(DryRunFile {
+            path: name.into(),
+            size: std::fs::metadata(&source)?.len(),
+            exclusion: None,
+            source: Some(source),
+        });
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let report = DryRun { files };
+    format.print(&report, || Ok(report.render_table()))
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -124,6 +124,7 @@ Deploy content to a Ricochet server
 * `-n`, `--name <NAME>` — Name for the deployment
 * `-d`, `--description <DESCRIPTION>` — Description for the deployment
 * `-e`, `--env <KEY[=VALUE]>` — Set an environment variable on the initial deployment. `KEY=VALUE` sets it directly; `KEY` alone resolves the value from .env, .Renviron, or the calling environment. Repeatable
+* `--dry-run` — List the files a deploy would upload and why any are left out, without contacting the server
 * `--git <GIT>` — Deploy from a Git repository instead of a local bundle
 * `--branch <BRANCH>` — Git branch to deploy (only with --git)
 * `--path <REPO_PATH>` — Subdirectory within the Git repo containing _ricochet.toml (only with --git)
