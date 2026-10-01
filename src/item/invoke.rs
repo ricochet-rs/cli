@@ -1,12 +1,29 @@
-use crate::{OutputFormat, client::RicochetClient, config::Config};
+use crate::{OutputFormat, client::RicochetClient, config::Config, task::invocation};
 use anyhow::Result;
 use colored::Colorize;
-use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
+use comfy_table::{Cell, Table, presets::UTF8_FULL};
+use serde::{Deserialize, Serialize};
+
+/// The run the server started.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Invoked {
+    /// Invocation ID
+    pub id: String,
+    pub content_id: String,
+}
+
+/// Whether `invoke` returns once the run starts or once it finishes.
+#[derive(Debug, Clone, Copy)]
+pub enum Follow {
+    Detach,
+    UntilFinished,
+}
 
 pub async fn invoke(
     config: &Config,
     server_ref: Option<&str>,
     id: &str,
+    follow: Follow,
     format: OutputFormat,
 ) -> Result<()> {
     eprintln!("Invoking task: {}", id.bright_cyan());
@@ -16,40 +33,31 @@ pub async fn invoke(
     let client = RicochetClient::new(&server_config)?;
     client.preflight_key_check().await?;
 
-    match client.invoke(id, None).await {
-        Ok(result) => {
-            eprintln!("{} Task invoked successfully!", "✓".green().bold());
+    let invoked = client
+        .invoke(id, None)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to invoke task: {e}"))?;
+    eprintln!("{} Task invoked successfully!", "✓".green().bold());
 
-            format.print(&result, || {
-                let mut table = Table::new();
-                table.load_style(UTF8_FULL);
+    match follow {
+        Follow::Detach => format.print(&invoked, || {
+            let mut table = Table::new();
+            table.load_style(UTF8_FULL);
+            table.add_row(vec![Cell::new("Invocation ID"), Cell::new(&invoked.id)]);
+            table.add_row(vec![
+                Cell::new("Content ID"),
+                Cell::new(&invoked.content_id),
+            ]);
 
-                if let Some(invocation_id) = result.get("invocation_id").and_then(|v| v.as_str()) {
-                    table.add_row(vec![Cell::new("Invocation ID"), Cell::new(invocation_id)]);
-                }
-
-                if let Some(content_id) = result.get("content_id").and_then(|v| v.as_str()) {
-                    table.add_row(vec![Cell::new("Content ID"), Cell::new(content_id)]);
-                }
-
-                if let Some(status) = result.get("status").and_then(|v| v.as_str()) {
-                    let status_cell = match status {
-                        "running" | "success" | "completed" => Cell::new(status).fg(Color::Green),
-                        "failed" | "error" => Cell::new(status).fg(Color::Red),
-                        "pending" | "queued" => Cell::new(status).fg(Color::Yellow),
-                        _ => Cell::new(status),
-                    };
-                    table.add_row(vec![Cell::new("Status"), status_cell]);
-                }
-
-                Ok(format!(
-                    "{}\n{table}",
-                    server_config.url.as_str().italic().dimmed()
-                ))
-            })
-        }
-        Err(e) => {
-            anyhow::bail!("Failed to invoke task: {e}")
+            Ok(format!(
+                "{}\n{table}",
+                server_config.url.as_str().italic().dimmed()
+            ))
+        }),
+        Follow::UntilFinished => {
+            let run = invocation::wait(&client, id, &invoked.id).await?;
+            run.print(format, server_config.url.as_str())?;
+            run.require_success()
         }
     }
 }

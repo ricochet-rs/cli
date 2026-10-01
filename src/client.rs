@@ -346,7 +346,11 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
-    pub async fn invoke(&self, id: &str, params: Option<String>) -> Result<serde_json::Value> {
+    pub async fn invoke(
+        &self,
+        id: &str,
+        params: Option<String>,
+    ) -> Result<crate::item::invoke::Invoked> {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/{id}/invoke"));
 
@@ -363,6 +367,36 @@ impl RicochetClient {
             .json(&body)
             .send()
             .await?;
+
+        Self::handle_response(response).await
+    }
+
+    /// Read one run of a task, finished or not.
+    pub async fn get_invocation(
+        &self,
+        id: &str,
+        invocation_id: &str,
+    ) -> Result<crate::task::invocation::Invocation> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/{id}/invocations/{invocation_id}"));
+
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        // The server records a run before returning its ID, so a fresh run is never missing.
+        if response.status() == StatusCode::NOT_FOUND {
+            anyhow::bail!(
+                "Task run {invocation_id} of {id} was not found. If the ID is correct, update the Ricochet server to follow task runs from the CLI."
+            );
+        }
+        // Raised as a `reqwest::Error` so `wait` can retry a passing server fault.
+        if response.status().is_server_error() {
+            response.error_for_status_ref()?;
+        }
 
         Self::handle_response(response).await
     }

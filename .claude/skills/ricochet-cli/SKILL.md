@@ -133,11 +133,17 @@ Tasks are the content types that can be invoked rather than served: `r`, `rmd`, 
 ```sh
 ricochet task list
 ricochet task invoke <ID>
+ricochet task invoke <ID> --wait
+ricochet task invocation get <ID> <INVOCATION_ID>
 ricochet task schedule <ID> "0 9 * * 1-5"
 ```
 
-`ricochet task invoke` starts a run and returns the invocation record immediately, so its reported status is usually `pending` or `running` rather than a final result.
-The CLI has no command that polls an invocation, so follow the run in the web UI.
+`ricochet task invoke` starts a run and prints its invocation ID without waiting for it to finish.
+Add `--wait` to block until the run finishes.
+The command then exits non-zero when the run fails or is cancelled, so a task can serve as a CI step.
+While waiting, it rides out about 30 seconds of an unreachable or failing server before giving up.
+`ricochet task invocation get` reads the status of one run, finished or not.
+Both need a server that can report a single run, and an older server answers that the run was not found.
 `ricochet task schedule` validates the cron expression locally, then prints the parsed description and the next run time in UTC.
 A schedule can also be declared in `[schedule]` and applied with `ricochet task settings update`.
 
