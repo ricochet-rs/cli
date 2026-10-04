@@ -56,6 +56,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
             ContentType::Python,
             ContentType::PythonService,
             ContentType::QuartoPy,
+            ContentType::Jupyter,
             ContentType::FastApi,
             ContentType::Flask,
             ContentType::Streamlit,
@@ -212,6 +213,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         | ContentType::Streamlit
         | ContentType::ShinyPy
         | ContentType::Dash => find_candidate_entrypoints("py", dir),
+        ContentType::Jupyter => find_candidate_entrypoints("ipynb", dir),
     }
 }
 
@@ -237,7 +239,7 @@ fn static_settings(
     content_type: &ContentType,
     entrypoint: &Path,
 ) -> anyhow::Result<Option<StaticSettings>> {
-    if !content_type.maybe_static() {
+    if !content_type.maybe_static() || *content_type == ContentType::Jupyter {
         return Ok(None);
     }
 
