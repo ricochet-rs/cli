@@ -443,6 +443,34 @@ impl Cli {
             .expect("running the ricochet binary")
     }
 
+    /// Run with `input` written to stdin.
+    async fn run_with_stdin(&self, args: &[&str], input: &str) -> std::process::Output {
+        use tokio::io::AsyncWriteExt;
+
+        let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_ricochet"))
+            .args(args)
+            .env("HOME", self.home.path())
+            .env_remove("RICOCHET_SERVER")
+            .env_remove("RICOCHET_API_KEY")
+            .env("RICOCHET_NO_UPDATE_CHECK", "1")
+            .env("NO_COLOR", "1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawning the ricochet binary");
+        let mut stdin = child.stdin.take().expect("stdin is piped");
+        stdin
+            .write_all(input.as_bytes())
+            .await
+            .expect("writing to stdin");
+        drop(stdin);
+        child
+            .wait_with_output()
+            .await
+            .expect("running the ricochet binary")
+    }
+
     /// Run with `-F json` and return the parsed stdout.
     async fn json(&self, args: &[&str]) -> serde_json::Value {
         let mut with_format = args.to_vec();
@@ -1031,4 +1059,97 @@ async fn login_and_logout_write_json_alone() {
     let login = cli.json(&["login", "-k", "rico_testkey123456"]).await;
     assert_eq!(login["server"], "test");
     assert_eq!(login["api_key"], "rico_tes...3456");
+}
+
+/// `deploy --dry-run` reads only the directory, so it works before `ricochet login`.
+#[tokio::test]
+async fn deploy_dry_run_reports_each_file_without_a_server() {
+    let home = TempDir::new().expect("creating a temporary home");
+    let project = TempDir::new().expect("creating a project directory");
+    write_project(
+        project.path(),
+        &LOCAL_TOML.replace("[language]", "exclude = [\"data/**\"]\n\n[language]"),
+    );
+    std::fs::create_dir_all(project.path().join("data")).expect("creating data/");
+    std::fs::write(project.path().join("data").join("big.parquet"), "rows")
+        .expect("writing data/big.parquet");
+    std::fs::create_dir_all(project.path().join(".renv")).expect("creating .renv/");
+    std::fs::write(project.path().join(".renv").join("activate.R"), "")
+        .expect("writing .renv/activate.R");
+
+    let output = tokio::process::Command::new(env!("CARGO_BIN_EXE_ricochet"))
+        .args(["deploy", "--dry-run", "-F", "json"])
+        .arg(project.path())
+        .env("HOME", home.path())
+        .env_remove("RICOCHET_SERVER")
+        .env_remove("RICOCHET_API_KEY")
+        .env("RICOCHET_NO_UPDATE_CHECK", "1")
+        .env("NO_COLOR", "1")
+        .output()
+        .await
+        .expect("running the ricochet binary");
+    assert!(
+        output.status.success(),
+        "deploy --dry-run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout carries JSON alone");
+    let verdict = |path: &str| {
+        report["files"]
+            .as_array()
+            .expect("files is an array")
+            .iter()
+            .find(|file| {
+                file["path"]
+                    .as_str()
+                    .map(|p| p.replace('\\', "/"))
+                    .as_deref()
+                    == Some(path)
+            })
+            .unwrap_or_else(|| panic!("{path} is missing from {report}"))
+            .clone()
+    };
+
+    assert_eq!(verdict("app.R")["included"], true);
+    assert!(verdict("app.R").get("reason").is_none());
+    assert_eq!(verdict("data/big.parquet")["included"], false);
+    assert_eq!(verdict("data/big.parquet")["reason"], "exclude:data/**");
+    assert_eq!(verdict("data/big.parquet")["size"], 4);
+    assert_eq!(verdict(".renv/activate.R")["reason"], "always-excluded");
+}
+
+#[tokio::test]
+async fn login_without_browser_reads_the_key_from_stdin() {
+    let cli = Cli::new().await;
+    cli.json(&["logout"]).await;
+
+    let output = cli
+        .run_with_stdin(
+            &["login", "--no-browser", "-F", "json"],
+            "rico_pastedkey123456\n",
+        )
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "login failed: {stderr}");
+    assert!(
+        stderr.contains("/credentials"),
+        "credentials page not shown: {stderr}"
+    );
+
+    let login: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout is JSON alone");
+    assert_eq!(login["server"], "test");
+    assert_eq!(login["api_key"], "rico_pas...3456");
+}
+
+#[tokio::test]
+async fn login_without_browser_rejects_empty_stdin() {
+    let cli = Cli::new().await;
+    cli.json(&["logout"]).await;
+
+    let output = cli.run_with_stdin(&["login", "--no-browser"], "").await;
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No API key was provided on stdin"));
 }
