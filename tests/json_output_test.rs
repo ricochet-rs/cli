@@ -20,6 +20,21 @@ const STUCK_INSTANCE: &str = "01KR2222222222222222222222";
 /// An item running nothing, so the empty rendering is exercised.
 const NO_INSTANCES_ID: &str = "01KR3333333333333333333333";
 
+/// A task run that is pending on the first poll and succeeds on the next.
+const INVOCATION_ID: &str = "01KR4444444444444444444444";
+
+/// A task whose every run fails.
+const FAILING_TASK_ID: &str = "01KR5555555555555555555555";
+const FAILED_INVOCATION_ID: &str = "01KR6666666666666666666666";
+
+/// A task whose first status check meets a server fault.
+const FLAKY_TASK_ID: &str = "01KR7777777777777777777777";
+const FLAKY_INVOCATION_ID: &str = "01KR8888888888888888888888";
+
+/// A task whose runs the key may start but not read.
+const UNREADABLE_TASK_ID: &str = "01KR9999999999999999999999";
+const UNREADABLE_INVOCATION_ID: &str = "01KRAAAAAAAAAAAAAAAAAAAAAA";
+
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
@@ -240,14 +255,81 @@ fn mock_api(server: &mut Server) {
             format!("/api/v0/content/{CONTENT_ID}/invoke").as_str(),
         )
         .with_status(200)
-        .with_body(
-            json!({
-                "invocation_id": "01KQZPF4Y5SRHES967VZEYY765",
-                "content_id": CONTENT_ID,
-                "status": "pending"
-            })
-            .to_string(),
+        .with_body(json!({"id": INVOCATION_ID, "content_id": CONTENT_ID}).to_string())
+        .create();
+
+    let run_path = format!("/api/v0/content/{CONTENT_ID}/invocations/{INVOCATION_ID}");
+    server
+        .mock("GET", run_path.as_str())
+        .with_status(200)
+        .with_body(invocation(INVOCATION_ID, "pending").to_string())
+        .expect(1)
+        .create();
+    server
+        .mock("GET", run_path.as_str())
+        .with_status(200)
+        .with_body(invocation(INVOCATION_ID, "success").to_string())
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{FAILING_TASK_ID}/invoke").as_str(),
         )
+        .with_status(200)
+        .with_body(json!({"id": FAILED_INVOCATION_ID, "content_id": FAILING_TASK_ID}).to_string())
+        .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{FAILING_TASK_ID}/invocations/{FAILED_INVOCATION_ID}")
+                .as_str(),
+        )
+        .with_status(200)
+        .with_body(invocation(FAILED_INVOCATION_ID, "failure").to_string())
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{FLAKY_TASK_ID}/invoke").as_str(),
+        )
+        .with_status(200)
+        .with_body(json!({"id": FLAKY_INVOCATION_ID, "content_id": FLAKY_TASK_ID}).to_string())
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{UNREADABLE_TASK_ID}/invoke").as_str(),
+        )
+        .with_status(200)
+        .with_body(
+            json!({"id": UNREADABLE_INVOCATION_ID, "content_id": UNREADABLE_TASK_ID}).to_string(),
+        )
+        .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{UNREADABLE_TASK_ID}/invocations/{UNREADABLE_INVOCATION_ID}")
+                .as_str(),
+        )
+        .with_status(403)
+        .with_body(json!({"error": "insufficient scopes"}).to_string())
+        .create();
+
+    let flaky_path = format!("/api/v0/content/{FLAKY_TASK_ID}/invocations/{FLAKY_INVOCATION_ID}");
+    server
+        .mock("GET", flaky_path.as_str())
+        .with_status(503)
+        .expect(1)
+        .create();
+    server
+        .mock("GET", flaky_path.as_str())
+        .with_status(200)
+        .with_body(invocation(FLAKY_INVOCATION_ID, "success").to_string())
         .create();
 
     server
@@ -288,6 +370,19 @@ fn mock_api(server: &mut Server) {
         .with_status(200)
         .with_body(json!({"id": CONTENT_ID}).to_string())
         .create();
+}
+
+fn invocation(id: &str, status: &str) -> serde_json::Value {
+    json!({
+        "id": id,
+        "invoked_at": 1778106471,
+        "status": status,
+        "started": 1778106472,
+        "ended": null,
+        "deployment_id": DEPLOYMENT_ID,
+        "display_name": "Ada",
+        "invoked_by": "344509059241640593"
+    })
 }
 
 fn deployment() -> serde_json::Value {
@@ -675,7 +770,66 @@ async fn app_settings_update_writes_json_alone() {
 async fn task_invoke_writes_json_alone() {
     let cli = Cli::new().await;
     let payload = cli.json(&["task", "invoke", CONTENT_ID]).await;
-    assert_eq!(payload["status"], "pending");
+    assert_eq!(payload["id"], INVOCATION_ID);
+}
+
+#[tokio::test]
+async fn task_invoke_wait_writes_the_finished_run_alone() {
+    let cli = Cli::new().await;
+    let payload = cli.json(&["task", "invoke", CONTENT_ID, "--wait"]).await;
+    assert_eq!(payload["id"], INVOCATION_ID);
+    assert_eq!(payload["status"], "success");
+}
+
+#[tokio::test]
+async fn task_invoke_wait_fails_when_the_run_fails() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&["task", "invoke", FAILING_TASK_ID, "--wait", "-F", "json"])
+        .await;
+
+    assert!(
+        !output.status.success(),
+        "a failed run must exit non-zero, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout still carries the run as JSON");
+    assert_eq!(payload["status"], "failure");
+}
+
+#[tokio::test]
+async fn task_invoke_wait_retries_a_server_fault() {
+    let cli = Cli::new().await;
+    let payload = cli.json(&["task", "invoke", FLAKY_TASK_ID, "--wait"]).await;
+    assert_eq!(payload["status"], "success");
+}
+
+#[tokio::test]
+async fn task_invoke_wait_names_the_run_it_lost() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&["task", "invoke", UNREADABLE_TASK_ID, "--wait", "-F", "json"])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "stdout must stay empty");
+    assert!(
+        stderr.contains(&format!(
+            "ricochet task invocation get {UNREADABLE_TASK_ID} {UNREADABLE_INVOCATION_ID}"
+        )),
+        "{stderr}"
+    );
+}
+
+#[tokio::test]
+async fn task_invocation_get_writes_json_alone() {
+    let cli = Cli::new().await;
+    let payload = cli
+        .json(&["task", "invocation", "get", CONTENT_ID, INVOCATION_ID])
+        .await;
+    assert_eq!(payload["id"], INVOCATION_ID);
 }
 
 #[tokio::test]

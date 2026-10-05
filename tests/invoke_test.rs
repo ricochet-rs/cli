@@ -23,8 +23,7 @@ mod invoke_tests {
             .with_status(200)
             .with_body(
                 json!({
-                    "invocation_id": "01JSZB123456789ABCDEFGHIJ",
-                    "status": "running",
+                    "id": "01JSZB123456789ABCDEFGHIJ",
                     "content_id": content_id
                 })
                 .to_string(),
@@ -48,8 +47,8 @@ mod invoke_tests {
 
         let response = result.unwrap();
 
-        assert!(response.get("invocation_id").is_some());
-        assert_eq!(response["content_id"], content_id);
+        assert_eq!(response.id, "01JSZB123456789ABCDEFGHIJ");
+        assert_eq!(response.content_id, content_id);
     }
 
     #[tokio::test]
@@ -141,8 +140,7 @@ mod invoke_tests {
             .with_status(200)
             .with_body(
                 json!({
-                    "invocation_id": "01JSZB123456789ABCDEFGHIJ",
-                    "status": "running",
+                    "id": "01JSZB123456789ABCDEFGHIJ",
                     "content_id": content_id
                 })
                 .to_string(),
@@ -166,10 +164,7 @@ mod invoke_tests {
         println!("JSON Output:\n{}", json_str);
 
         // Verify the JSON contains expected fields
-        assert!(json_str.contains("invocation_id"));
         assert!(json_str.contains("01JSZB123456789ABCDEFGHIJ"));
-        assert!(json_str.contains("status"));
-        assert!(json_str.contains("running"));
         assert!(json_str.contains("content_id"));
     }
 
@@ -189,8 +184,7 @@ mod invoke_tests {
             .with_status(200)
             .with_body(
                 json!({
-                    "invocation_id": "01JSZB123456789ABCDEFGHIJ",
-                    "status": "running",
+                    "id": "01JSZB123456789ABCDEFGHIJ",
                     "content_id": content_id
                 })
                 .to_string(),
@@ -214,10 +208,36 @@ mod invoke_tests {
         println!("YAML Output:\n{}", yaml_str);
 
         // Verify the YAML contains expected fields
-        assert!(yaml_str.contains("invocation_id"));
         assert!(yaml_str.contains("01JSZB123456789ABCDEFGHIJ"));
-        assert!(yaml_str.contains("status"));
-        assert!(yaml_str.contains("running"));
         assert!(yaml_str.contains("content_id"));
+    }
+
+    #[tokio::test]
+    async fn test_get_invocation_missing_suggests_updating_the_server() {
+        let mut server = Server::new_async().await;
+        let content_id = "01JSZAXZ3TSTAYXP56ARDVFJCJ";
+        let invocation_id = "01JSZB123456789ABCDEFGHIJ";
+
+        let _m = server
+            .mock(
+                "GET",
+                format!("/api/v0/content/{content_id}/invocations/{invocation_id}").as_str(),
+            )
+            .with_status(404)
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+        let server_config = config.resolve_server(None).unwrap();
+        let client = ricochet_cli::client::RicochetClient::new(&server_config).unwrap();
+
+        let err = client
+            .get_invocation(content_id, invocation_id)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("update the Ricochet server"), "{err}");
     }
 }
