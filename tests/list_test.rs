@@ -414,6 +414,7 @@ mod classify_tests {
             "quarto-r",
             "quarto-jl",
             "quarto-py",
+            "jupyter",
         ];
 
         for content_type in task_types {

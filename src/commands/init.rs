@@ -56,6 +56,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
             ContentType::Python,
             ContentType::PythonService,
             ContentType::QuartoPy,
+            ContentType::Jupyter,
             ContentType::FastApi,
             ContentType::Flask,
             ContentType::Streamlit,
@@ -205,6 +206,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
 
             Ok(candidates[selection].clone())
         }
+        ContentType::Jupyter => find_candidate_entrypoints("ipynb", dir),
         ContentType::Python
         | ContentType::PythonService
         | ContentType::FastApi
@@ -237,7 +239,8 @@ fn static_settings(
     content_type: &ContentType,
     entrypoint: &Path,
 ) -> anyhow::Result<Option<StaticSettings>> {
-    if !content_type.maybe_static() {
+    // The server always serves a notebook as the HTML it renders beside the entrypoint
+    if !content_type.maybe_static() || *content_type == ContentType::Jupyter {
         return Ok(None);
     }
 
