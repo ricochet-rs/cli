@@ -23,7 +23,7 @@ pub fn is_non_interactive() -> bool {
 /// Why a file stays out of the bundle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Exclusion {
-    /// Under `.venv`, `.renv` or `__pycache__`, which are never bundled.
+    /// Under `.venv`, `.renv`, `__pycache__` or `.ipynb_checkpoints`, which are never bundled.
     AlwaysExcluded,
     /// Not matched by a `content.include` pattern.
     NotIncluded,
@@ -66,7 +66,7 @@ fn glob_set<'a>(patterns: impl IntoIterator<Item = &'a str>) -> Result<GlobSet> 
 /// Classify every file under `dir` against the bundle rules, lazily as the walk proceeds.
 ///
 /// Logic:
-/// 1. Always exclude .venv, .renv and __pycache__ directories
+/// 1. Always exclude .venv, .renv, __pycache__ and .ipynb_checkpoints directories
 /// 2. If include patterns are specified, ONLY include paths matching those patterns
 /// 3. Then exclude any paths matching the exclude patterns
 /// 4. Otherwise include everything (except blacklisted directories)
@@ -75,8 +75,8 @@ pub fn classify_bundle(
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
 ) -> Result<impl Iterator<Item = BundleCandidate> + '_> {
-    // prevent including virtual environments, renv caches, and Python bytecode caches
-    // __pycache__ can appear at any nesting level, so match it recursively
+    // prevent including virtual environments, renv caches, Python bytecode caches and Jupyter autosaves
+    // __pycache__ and .ipynb_checkpoints can appear at any nesting level, so match them recursively
     let blacklist = glob_set([
         ".venv",
         ".venv/**",
@@ -86,6 +86,10 @@ pub fn classify_bundle(
         "__pycache__/**",
         "**/__pycache__",
         "**/__pycache__/**",
+        ".ipynb_checkpoints",
+        ".ipynb_checkpoints/**",
+        "**/.ipynb_checkpoints",
+        "**/.ipynb_checkpoints/**",
     ])?;
     let include_matcher = include
         .map(|patterns| glob_set(patterns.iter().map(String::as_str)))
@@ -399,6 +403,57 @@ mod tests {
             relative_paths
                 .iter()
                 .any(|p| p == "pkg/mod.py" || p == "pkg\\mod.py")
+        );
+    }
+
+    #[test]
+    fn test_prepare_bundle_excludes_ipynb_checkpoints() {
+        let temp_dir = tempdir().unwrap();
+        let dir_path = temp_dir.path();
+
+        fs::write(dir_path.join("analysis.ipynb"), "{}").unwrap();
+        fs::create_dir(dir_path.join(".ipynb_checkpoints")).unwrap();
+        fs::write(
+            dir_path
+                .join(".ipynb_checkpoints")
+                .join("analysis-checkpoint.ipynb"),
+            "{}",
+        )
+        .unwrap();
+        fs::create_dir_all(dir_path.join("notebooks").join(".ipynb_checkpoints")).unwrap();
+        fs::write(dir_path.join("notebooks").join("eda.ipynb"), "{}").unwrap();
+        fs::write(
+            dir_path
+                .join("notebooks")
+                .join(".ipynb_checkpoints")
+                .join("eda-checkpoint.ipynb"),
+            "{}",
+        )
+        .unwrap();
+
+        let result = prepare_bundle(dir_path, None, None).unwrap();
+
+        let relative_paths: Vec<String> = result
+            .iter()
+            .map(|p| {
+                p.strip_prefix(dir_path)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        assert!(
+            !relative_paths
+                .iter()
+                .any(|p| p.contains(".ipynb_checkpoints")),
+            "Bundle should not contain any .ipynb_checkpoints directory or its contents"
+        );
+        assert!(relative_paths.contains(&"analysis.ipynb".to_string()));
+        assert!(
+            relative_paths
+                .iter()
+                .any(|p| p == "notebooks/eda.ipynb" || p == "notebooks\\eda.ipynb")
         );
     }
 
