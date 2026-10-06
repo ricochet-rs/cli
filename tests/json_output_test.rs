@@ -1156,21 +1156,64 @@ async fn deploy_reports_an_invalid_public_key_as_a_server_error_event() {
 async fn deploy_ends_in_done_when_the_new_id_cannot_be_recorded() {
     let cli = Cli::new().await;
     let project = TempDir::new().expect("creating project");
-    write_project(
-        project.path(),
-        &LOCAL_TOML.replace(&format!("id = \"{CONTENT_ID}\"\n"), ""),
-    );
-    let toml_path = project.path().join("_ricochet.toml");
-    let mut permissions = std::fs::metadata(&toml_path)
-        .expect("reading permissions")
-        .permissions();
-    permissions.set_readonly(true);
-    std::fs::set_permissions(&toml_path, permissions).expect("making _ricochet.toml read-only");
+    let toml = LOCAL_TOML.replace(&format!("id = \"{CONTENT_ID}\"\n"), "");
+    write_project(project.path(), &toml);
 
-    let events = cli.deployed_events(project.path()).await;
-    let done = events.last().expect("a done event");
+    // Swap `_ricochet.toml` for a directory while the upload is in flight, a write failure even root cannot bypass.
+    let toml_path = project.path().join("_ricochet.toml");
+    let set_aside = project.path().join("original.toml");
+    let mut accepting = Server::new_async().await;
+    accepting
+        .mock("GET", "/api/v0/check_key")
+        .with_status(200)
+        .create();
+    {
+        let (toml_path, set_aside) = (toml_path.clone(), set_aside.clone());
+        accepting
+            .mock("POST", "/api/v0/content/upload")
+            .match_body(Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_| {
+                std::fs::rename(&toml_path, &set_aside).expect("setting _ricochet.toml aside");
+                std::fs::create_dir(&toml_path).expect("blocking _ricochet.toml");
+                json!({"id": CONTENT_ID, "deployment_id": DEPLOYMENT_ID})
+                    .to_string()
+                    .into()
+            })
+            .create();
+    }
+    cli.use_server(&accepting.url());
+
+    let output = cli
+        .run(&[
+            "deploy",
+            project.path().to_str().expect("project path"),
+            "-F",
+            "json",
+        ])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let done: serde_json::Value =
+        serde_json::from_str(stdout.lines().last().expect("a done event")).expect("a JSON event");
     assert_eq!(done["event"], "done");
     assert_eq!(done["id"], CONTENT_ID);
+
+    assert!(
+        stderr.contains("could not record the ID")
+            && stderr.contains(&format!("id = \"{CONTENT_ID}\"")),
+        "{stderr}"
+    );
+    assert!(
+        toml_path.is_dir(),
+        "the ID was written over the blocked path"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&set_aside).expect("reading the original _ricochet.toml"),
+        toml
+    );
 }
 
 #[tokio::test]
