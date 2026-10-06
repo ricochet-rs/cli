@@ -7,7 +7,7 @@ labels:
 
 steps:
   bump:
-    image: reg.ricochet.rs/docker.io/library/rust:1.98-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.99-slim
     when:
       event: tag
     environment:
@@ -43,7 +43,7 @@ steps:
         fi
 
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.98-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.99-slim
     depends_on:
       - bump
     environment:
@@ -157,7 +157,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:3.0.3
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:3.0.4
     depends_on:
       - 'Push bump and tag'
     commands:
