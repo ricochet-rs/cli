@@ -27,7 +27,8 @@ It reports candidates rather than choosing one, so a directory holding both `app
 Pass `-F json` to any command whose output must be parsed.
 Under `-F json` and `-F yaml` stdout carries the serialised payload and nothing else, while status lines, hints and links go to stderr.
 `ricochet deploy -F json` is the exception: it writes one JSON event per line, so read the last line.
-That line is `{"event":"done",...}` with the content `id` and `deployment_id`, or `{"event":"error",...}` with a `kind` of `project`, `auth`, `network`, `rejected` or `server`.
+That line is `{"event":"done",...}` with the server's response, which holds the content `id` and, for a local deploy, the `deployment_id`.
+On failure it is `{"event":"error",...}` with a `kind` of `project`, `auth`, `network`, `rejected` or `server`.
 Pass `--debug` to surface the underlying request and response when a command fails.
 
 ## Connect to a server

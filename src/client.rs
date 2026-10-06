@@ -35,6 +35,8 @@ pub(crate) enum ApiError {
     Credentials { message: String },
     /// The server could not be reached.
     Unreachable { message: String },
+    /// The server answered successfully with data the CLI cannot use.
+    Malformed { message: String },
 }
 
 impl std::fmt::Display for ApiError {
@@ -42,7 +44,8 @@ impl std::fmt::Display for ApiError {
         match self {
             Self::Status { message, .. }
             | Self::Credentials { message }
-            | Self::Unreachable { message } => f.write_str(message),
+            | Self::Unreachable { message }
+            | Self::Malformed { message } => f.write_str(message),
         }
     }
 }
@@ -75,6 +78,7 @@ impl DeployFailure {
                 return match api {
                     ApiError::Credentials { .. } => Self::Auth,
                     ApiError::Unreachable { .. } => Self::Network,
+                    ApiError::Malformed { .. } => Self::Server { status: None },
                     ApiError::Status { status, .. }
                         if *status == StatusCode::UNAUTHORIZED
                             || *status == StatusCode::FORBIDDEN =>
@@ -297,6 +301,10 @@ impl RicochetClient {
     }
 
     pub async fn validate_key(&self) -> Result<bool> {
+        Ok(self.check_key_status().await? == StatusCode::OK)
+    }
+
+    async fn check_key_status(&self) -> Result<StatusCode> {
         let mut url = self.base_url.clone();
         url.set_path("/api/v0/check_key");
         let response = self
@@ -306,7 +314,7 @@ impl RicochetClient {
             .send()
             .await?;
 
-        Ok(response.status() == StatusCode::OK)
+        Ok(response.status())
     }
 
     /// Fetch the server's RSA public key (PKCS#1 PEM) used to encrypt env vars.
@@ -323,7 +331,12 @@ impl RicochetClient {
             }
             .into());
         }
-        crate::crypto::parse_public_key_pem(&body)
+        crate::crypto::parse_public_key_pem(&body).map_err(|e| {
+            ApiError::Malformed {
+                message: format!("The server sent an invalid public key: {e}"),
+            }
+            .into()
+        })
     }
 
     /// Check if a key is expired and report if so
@@ -331,9 +344,16 @@ impl RicochetClient {
     pub async fn preflight_key_check(&self) -> Result<()> {
         let server_url = self.base_url.as_str().trim_end_matches('/');
         let login_cmd = format!("ricochet login -S {server_url}").bright_cyan();
-        match self.validate_key().await {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(ApiError::Credentials {
+        match self.check_key_status().await {
+            Ok(StatusCode::OK) => Ok(()),
+            Ok(status) if status.is_server_error() => Err(ApiError::Status {
+                status,
+                message: format!(
+                    "Could not validate credentials for {server_url}: the server responded with {status}."
+                ),
+            }
+            .into()),
+            Ok(_) => Err(ApiError::Credentials {
                 message: format!(
                     "Credentials are invalid or expired for server {server_url}.\nRun {login_cmd} to authenticate."
                 ),
@@ -899,6 +919,9 @@ mod tests {
         let credentials = ApiError::Credentials {
             message: "expired".into(),
         };
+        let malformed = ApiError::Malformed {
+            message: "invalid key".into(),
+        };
         let unreachable = ApiError::Unreachable {
             message: "refused".into(),
         };
@@ -909,6 +932,10 @@ mod tests {
         assert_eq!(
             DeployFailure::classify(&unreachable.into()),
             DeployFailure::Network
+        );
+        assert_eq!(
+            DeployFailure::classify(&malformed.into()),
+            DeployFailure::Server { status: None }
         );
     }
 

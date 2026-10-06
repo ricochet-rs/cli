@@ -1102,6 +1102,78 @@ async fn deploy_reports_a_rejected_upload_as_an_error_event() {
 }
 
 #[tokio::test]
+async fn deploy_reports_a_failing_credential_check_as_a_server_error_event() {
+    let cli = Cli::new().await;
+    let mut failing = Server::new_async().await;
+    failing
+        .mock("GET", "/api/v0/check_key")
+        .with_status(503)
+        .create();
+    cli.use_server(&failing.url());
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().expect("project path")])
+        .await;
+    assert!(!status.success());
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["kind"], "server");
+    assert_eq!(events[0]["status"], 503);
+}
+
+#[tokio::test]
+async fn deploy_reports_an_invalid_public_key_as_a_server_error_event() {
+    let cli = Cli::new().await;
+    let mut misconfigured = Server::new_async().await;
+    misconfigured
+        .mock("GET", "/api/v0/check_key")
+        .with_status(200)
+        .create();
+    misconfigured
+        .mock("GET", "/api/v0/public-key")
+        .with_status(200)
+        .with_body("not a key")
+        .create();
+    cli.use_server(&misconfigured.url());
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[
+            project.path().to_str().expect("project path"),
+            "--env",
+            "TOKEN=secret",
+        ])
+        .await;
+    assert!(!status.success());
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["kind"], "server");
+    assert!(events[0].get("status").is_none(), "{events:?}");
+}
+
+#[tokio::test]
+async fn deploy_ends_in_done_when_the_new_id_cannot_be_recorded() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    write_project(
+        project.path(),
+        &LOCAL_TOML.replace(&format!("id = \"{CONTENT_ID}\"\n"), ""),
+    );
+    let toml_path = project.path().join("_ricochet.toml");
+    let mut permissions = std::fs::metadata(&toml_path)
+        .expect("reading permissions")
+        .permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&toml_path, permissions).expect("making _ricochet.toml read-only");
+
+    let events = cli.deployed_events(project.path()).await;
+    let done = events.last().expect("a done event");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["id"], CONTENT_ID);
+}
+
+#[tokio::test]
 async fn deploy_reports_a_local_problem_as_a_project_error_event() {
     let cli = Cli::new().await;
     let project = TempDir::new().expect("creating project");

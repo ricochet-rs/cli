@@ -269,10 +269,16 @@ pub async fn deploy(
             let id = response.get("id").and_then(|v| v.as_str());
 
             // A new content item only learns its ID here, so write it back.
+            // The deploy already succeeded, so a failed write must not invite a retry that creates a second item.
             if let Some(id) = id
                 && content_id.is_none()
+                && let Err(e) = write_content_id(&toml_path, id)
             {
-                write_content_id(&toml_path, id)?;
+                eprintln!(
+                    "{} Deployed, but could not record the ID in {}: {e}\n  Add `id = \"{id}\"` under [content] before deploying again, or the next deploy creates a new item.",
+                    "⚠".yellow(),
+                    toml_path.display()
+                );
             }
 
             if let DeployProgress::Events = progress {
