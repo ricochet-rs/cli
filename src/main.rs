@@ -60,6 +60,10 @@ enum Commands {
     /// Remove stored credentials
     Logout,
     /// Deploy content to a Ricochet server
+    ///
+    /// Under `-F json`, deploy writes one JSON event per line.
+    /// A local deploy reports `bundling` and then `uploading` as the bundle is sent.
+    /// Every deploy ends with `done`, which carries the server's response, or with `error`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
     Deploy {
         /// Path to the content directory or bundle
         #[arg(default_value = ".")]
@@ -521,32 +525,35 @@ async fn main() -> Result<()> {
             config_path,
             credential,
         }) => {
-            if let Some(git) = git {
-                commands::deploy::deploy_git(
-                    &config,
-                    cli.server.as_deref(),
-                    git,
-                    branch,
-                    repo_path,
-                    config_path,
-                    credential,
-                    cli.format,
-                )
-                .await?;
-            } else if dry_run {
+            if dry_run {
                 commands::deploy::deploy_dry_run(&path, cli.format)?;
             } else {
-                commands::deploy::deploy(
-                    &config,
-                    cli.server.as_deref(),
-                    path,
-                    name,
-                    description,
-                    env,
-                    cli.format,
-                    cli.debug,
-                )
-                .await?;
+                let deployed = if let Some(git) = git {
+                    commands::deploy::deploy_git(
+                        &config,
+                        cli.server.as_deref(),
+                        git,
+                        branch,
+                        repo_path,
+                        config_path,
+                        credential,
+                        cli.format,
+                    )
+                    .await
+                } else {
+                    commands::deploy::deploy(
+                        &config,
+                        cli.server.as_deref(),
+                        path,
+                        name,
+                        description,
+                        env,
+                        cli.format,
+                        cli.debug,
+                    )
+                    .await
+                };
+                commands::deploy::emit_error_event(cli.format, deployed)?;
             }
         }
         Some(Commands::Delete { id, force }) => {

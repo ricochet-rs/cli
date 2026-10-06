@@ -6,7 +6,7 @@ use ricochet_core::{
     config::git::{GitCredential, GitProtocol, GitRepo},
     content::{ContentItem, OwnershipScope},
 };
-use serde::de::DeserializeOwned;
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
 use std::{
     fs::read_to_string,
@@ -17,11 +17,194 @@ use std::{
 use tokio::io::{AsyncRead, ReadBuf};
 use url::Url;
 
-// Progress tracking wrapper for AsyncRead
+/// Where a local deploy reports its progress.
+#[derive(Clone)]
+pub(crate) enum DeployProgress {
+    /// A spinner, then a byte bar, drawn on stderr for a person.
+    Bar(indicatif::ProgressBar),
+    /// Newline-delimited JSON events on stdout for a program.
+    Events,
+}
+
+/// A request the server failed, keeping its cause for [`DeployFailure`] to classify.
+#[derive(Debug)]
+pub(crate) enum ApiError {
+    /// The server answered with a failure status.
+    Status { status: StatusCode, message: String },
+    /// The server did not accept the API key.
+    Credentials { message: String },
+    /// The server could not be reached.
+    Unreachable { message: String },
+}
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Status { message, .. }
+            | Self::Credentials { message }
+            | Self::Unreachable { message } => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for ApiError {}
+
+/// Why a deploy failed, so a program can react without parsing the message.
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum DeployFailure {
+    /// The local project cannot be deployed as configured.
+    Project,
+    /// The server did not accept the API key.
+    Auth,
+    /// The server could not be reached.
+    Network,
+    /// The server refused the deployment request.
+    Rejected { status: u16 },
+    /// The server failed while handling the request.
+    Server {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<u16>,
+    },
+}
+
+impl DeployFailure {
+    fn classify(error: &anyhow::Error) -> Self {
+        for cause in error.chain() {
+            if let Some(api) = cause.downcast_ref::<ApiError>() {
+                return match api {
+                    ApiError::Credentials { .. } => Self::Auth,
+                    ApiError::Unreachable { .. } => Self::Network,
+                    ApiError::Status { status, .. }
+                        if *status == StatusCode::UNAUTHORIZED
+                            || *status == StatusCode::FORBIDDEN =>
+                    {
+                        Self::Auth
+                    }
+                    ApiError::Status { status, .. } if status.is_server_error() => Self::Server {
+                        status: Some(status.as_u16()),
+                    },
+                    ApiError::Status { status, .. } => Self::Rejected {
+                        status: status.as_u16(),
+                    },
+                };
+            }
+            if let Some(request) = cause.downcast_ref::<reqwest::Error>() {
+                return if request.is_decode() {
+                    Self::Server { status: None }
+                } else {
+                    Self::Network
+                };
+            }
+        }
+        Self::Project
+    }
+}
+
+/// One line of `deploy -F json` output.
+#[derive(Serialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+enum DeployEvent {
+    Bundling {
+        files: usize,
+    },
+    Uploading {
+        bytes_sent: u64,
+        bytes_total: u64,
+    },
+    Error {
+        #[serde(flatten)]
+        failure: DeployFailure,
+        message: String,
+    },
+}
+
+impl DeployEvent {
+    fn emit(&self) -> serde_json::Result<()> {
+        println!("{}", serde_json::to_string(self)?);
+        Ok(())
+    }
+}
+
+impl DeployProgress {
+    fn bundled(&self, files: usize) -> Result<()> {
+        if let Self::Events = self {
+            DeployEvent::Bundling { files }.emit()?;
+        }
+        Ok(())
+    }
+
+    fn upload_started(&self, bytes_total: u64) -> Result<()> {
+        match self {
+            Self::Bar(pb) => {
+                pb.set_style(
+                    indicatif::ProgressStyle::default_bar()
+                        .template("{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({percent}%)")?
+                        .progress_chars("#>-"),
+                );
+                pb.set_length(bytes_total);
+                pb.set_position(0);
+                pb.set_message("Uploading to server");
+            }
+            Self::Events => DeployEvent::Uploading {
+                bytes_sent: 0,
+                bytes_total,
+            }
+            .emit()?,
+        }
+        Ok(())
+    }
+
+    /// Report an upload advancing from `before` to `after` bytes, one event per percent for a program.
+    fn uploaded(&self, before: u64, after: u64, bytes_total: u64) -> serde_json::Result<()> {
+        match self {
+            Self::Bar(pb) => pb.set_position(after),
+            Self::Events => {
+                let percent = |bytes: u64| bytes * 100 / bytes_total.max(1);
+                if percent(after) > percent(before) {
+                    DeployEvent::Uploading {
+                        bytes_sent: after,
+                        bytes_total,
+                    }
+                    .emit()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn finish(&self) {
+        if let Self::Bar(pb) = self {
+            pb.finish_and_clear();
+        }
+    }
+
+    /// Write the final `done` event, carrying every field of the server's `response`.
+    pub(crate) fn emit_done(response: &serde_json::Value) {
+        let mut done = serde_json::Map::from_iter([("event".into(), "done".into())]);
+        if let Some(fields) = response.as_object() {
+            done.extend(fields.clone());
+        }
+        println!("{}", serde_json::Value::Object(done));
+    }
+
+    /// Write the final `error` event, classifying `error` for a program.
+    pub(crate) fn emit_error(error: &anyhow::Error) -> Result<()> {
+        DeployEvent::Error {
+            failure: DeployFailure::classify(error),
+            message: console::strip_ansi_codes(&error.to_string()).into_owned(),
+        }
+        .emit()?;
+        Ok(())
+    }
+}
+
+/// Reports the bytes read from the bundle as they are uploaded.
 struct ProgressReader<R> {
     reader: R,
-    progress_bar: indicatif::ProgressBar,
+    progress: DeployProgress,
     bytes_read: u64,
+    bytes_total: u64,
 }
 
 impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
@@ -33,10 +216,12 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
         let before = buf.filled().len();
         let result = Pin::new(&mut self.reader).poll_read(cx, buf);
         let after = buf.filled().len();
-        let bytes_read = (after - before) as u64;
 
-        self.bytes_read += bytes_read;
-        self.progress_bar.set_position(self.bytes_read);
+        let bytes_before = self.bytes_read;
+        self.bytes_read += (after - before) as u64;
+        self.progress
+            .uploaded(bytes_before, self.bytes_read, self.bytes_total)
+            .map_err(std::io::Error::other)?;
 
         result
     }
@@ -93,7 +278,11 @@ impl RicochetClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            anyhow::bail!("Request failed with status {}: {}", status, error_text)
+            Err(ApiError::Status {
+                status,
+                message: format!("Request failed with status {status}: {error_text}"),
+            }
+            .into())
         }
     }
 
@@ -128,7 +317,11 @@ impl RicochetClient {
         let status = response.status();
         let body = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("Failed to fetch public key (status {status}): {body}");
+            return Err(ApiError::Status {
+                status,
+                message: format!("Failed to fetch public key (status {status}): {body}"),
+            }
+            .into());
         }
         crate::crypto::parse_public_key_pem(&body)
     }
@@ -139,22 +332,21 @@ impl RicochetClient {
         let server_url = self.base_url.as_str().trim_end_matches('/');
         let login_cmd = format!("ricochet login -S {server_url}").bright_cyan();
         match self.validate_key().await {
-            Ok(v) => {
-                if !v {
-                    anyhow::bail!(
-                        "Credentials are invalid or expired for server {server_url}.\nRun {login_cmd} to authenticate."
-                    );
-                } else {
-                    Ok(())
-                }
+            Ok(true) => Ok(()),
+            Ok(false) => Err(ApiError::Credentials {
+                message: format!(
+                    "Credentials are invalid or expired for server {server_url}.\nRun {login_cmd} to authenticate."
+                ),
             }
-            Err(e) => {
-                anyhow::bail!(
+            .into()),
+            Err(e) => Err(ApiError::Unreachable {
+                message: format!(
                     "Failed to validate credentials for {server_url}:\n{} {}\nRun {login_cmd} to authenticate.",
                     "⚠".bright_yellow(),
                     e.to_string().dimmed()
-                );
+                ),
             }
+            .into()),
         }
     }
 
@@ -203,14 +395,14 @@ impl RicochetClient {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn deploy(
+    pub(crate) async fn deploy(
         &self,
         path: &Path,
         content_id: Option<String>,
         toml_path: &Path,
         extra_root_files: &[(std::path::PathBuf, String)],
         env_vars: Option<crate::crypto::RsaEncryptedEnvVars>,
-        pb: &indicatif::ProgressBar,
+        progress: &DeployProgress,
         debug: bool,
     ) -> Result<serde_json::Value> {
         let mut url = self.base_url.clone();
@@ -226,30 +418,30 @@ impl RicochetClient {
         let exclude = content_item.content.exclude;
 
         // Create a tar bundle from the directory
-        pb.set_message("Creating bundle...");
+        if let DeployProgress::Bar(pb) = progress {
+            pb.set_message("Creating bundle...");
+        }
         let tar_path =
             std::env::temp_dir().join(format!("ricochet-{}.tar.gz", ulid::Ulid::generate()));
-        crate::utils::create_bundle(path, &tar_path, include, exclude, extra_root_files, debug)?;
+        let files = crate::utils::create_bundle(
+            path,
+            &tar_path,
+            include,
+            exclude,
+            extra_root_files,
+            debug,
+        )?;
+        progress.bundled(files)?;
 
-        // Get file size for progress tracking
-        let file_size = tokio::fs::metadata(&tar_path).await?.len();
-
-        // Change to progress bar with bytes
-        pb.set_style(
-            indicatif::ProgressStyle::default_bar()
-                .template("{spinner:.green} {msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({percent}%)")
-                .unwrap()
-                .progress_chars("#>-"),
-        );
-        pb.set_length(file_size);
-        pb.set_position(0);
-        pb.set_message("Uploading to server");
+        let bytes_total = tokio::fs::metadata(&tar_path).await?.len();
+        progress.upload_started(bytes_total)?;
 
         let bundle_file = tokio::fs::File::open(&tar_path).await?;
         let progress_reader = ProgressReader {
             reader: bundle_file,
-            progress_bar: pb.clone(),
+            progress: progress.clone(),
             bytes_read: 0,
+            bytes_total,
         };
         let bundle_body =
             reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(progress_reader));
@@ -293,7 +485,10 @@ impl RicochetClient {
                 // Check if this is an authentication error
                 if e.to_string().contains("403") && e.to_string().contains("Invalid API key") {
                     let masked_key = Self::mask_api_key(&self.api_key);
-                    anyhow::bail!("Authentication failed. API key used: {}", masked_key)
+                    Err(ApiError::Credentials {
+                        message: format!("Authentication failed. API key used: {masked_key}"),
+                    }
+                    .into())
                 } else {
                     Err(e)
                 }
@@ -670,5 +865,78 @@ impl RicochetClient {
 
         let toml_content = response.text().await?;
         Ok(toml_content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn status(code: u16) -> anyhow::Error {
+        ApiError::Status {
+            status: StatusCode::from_u16(code).expect("a valid status code"),
+            message: format!("status {code}"),
+        }
+        .into()
+    }
+
+    #[test]
+    fn failure_statuses_classify_by_who_must_act() {
+        assert_eq!(DeployFailure::classify(&status(401)), DeployFailure::Auth);
+        assert_eq!(DeployFailure::classify(&status(403)), DeployFailure::Auth);
+        assert_eq!(
+            DeployFailure::classify(&status(422)),
+            DeployFailure::Rejected { status: 422 }
+        );
+        assert_eq!(
+            DeployFailure::classify(&status(503)),
+            DeployFailure::Server { status: Some(503) }
+        );
+    }
+
+    #[test]
+    fn credential_and_connection_failures_classify_without_a_status() {
+        let credentials = ApiError::Credentials {
+            message: "expired".into(),
+        };
+        let unreachable = ApiError::Unreachable {
+            message: "refused".into(),
+        };
+        assert_eq!(
+            DeployFailure::classify(&credentials.into()),
+            DeployFailure::Auth
+        );
+        assert_eq!(
+            DeployFailure::classify(&unreachable.into()),
+            DeployFailure::Network
+        );
+    }
+
+    #[test]
+    fn a_failure_found_through_context_keeps_its_class() {
+        let wrapped = status(422).context("Deployment failed");
+        assert_eq!(
+            DeployFailure::classify(&wrapped),
+            DeployFailure::Rejected { status: 422 }
+        );
+    }
+
+    #[test]
+    fn a_failure_without_a_server_cause_is_the_project() {
+        let local = anyhow::anyhow!("Required package file `renv.lock` not found.");
+        assert_eq!(DeployFailure::classify(&local), DeployFailure::Project);
+    }
+
+    #[test]
+    fn an_error_event_carries_its_kind_beside_the_message() -> Result<()> {
+        let event = DeployEvent::Error {
+            failure: DeployFailure::Rejected { status: 422 },
+            message: "bad bundle".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&event)?,
+            json!({"event": "error", "kind": "rejected", "status": 422, "message": "bad bundle"})
+        );
+        Ok(())
     }
 }

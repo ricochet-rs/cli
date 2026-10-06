@@ -97,6 +97,8 @@ Legacy single-server configs are automatically migrated to multi-server format.
 
 The CLI supports multiple output formats: `table` (default), `json`, and `yaml`.
 Under `json` and `yaml`, stdout carries the serialised payload and nothing else, so status lines, hints, prompts and links go to stderr.
+`deploy -F json` instead streams newline-delimited events through `DeployProgress` in `src/client.rs`, ending with `done` or `error`, so do not route its output through `OutputFormat::print`.
+Raise a server failure as `ApiError` rather than `bail!`, because the `error` event's `kind` comes from downcasting it and a string error is reported as a `project` failure.
 Print command output through `OutputFormat::print` in `src/output.rs`, which serialises the payload for a machine reader and defers the human rendering to a closure that returns a `String`.
 Give every new command a `format` argument and a case in `tests/json_output_test.rs`, which spawns the built binary and asserts that stdout parses as JSON.
 
@@ -121,6 +123,7 @@ On a tagged release, the `binaries.yaml` pipeline:
 - Git hooks use **prek** (`prek.toml`), not pre-commit; hooks should mirror the checks in `.crow/lint.yaml`
 - Run `cargo check --all-targets` before committing so compile errors are caught locally, not in CI
 - Tests are in `tests/` directory and inline in source files (`#[cfg(test)]`)
+- mockito answers with the first mock that matches, so a test needing a different response from an endpoint `mock_api` already serves must point the CLI at its own server with `Cli::use_server`
 - Run tests with `cargo test --all-features` (use `--test-threads=1` for env var tests)
 - The project uses tokio for async runtime
 - HTTP client uses reqwest with 5-minute timeout

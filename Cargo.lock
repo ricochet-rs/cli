@@ -2296,6 +2296,7 @@ dependencies = [
  "clap-markdown",
  "colored",
  "comfy-table",
+ "console",
  "croner 4.0.0",
  "dialoguer",
  "dirs",
