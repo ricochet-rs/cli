@@ -109,6 +109,13 @@ impl Detection {
             entrypoints.push(EntrypointCandidate { path, content_type });
         }
 
+        for path in find_files_by_extension("ipynb", &dir)? {
+            entrypoints.push(EntrypointCandidate {
+                path,
+                content_type: ContentType::Jupyter,
+            });
+        }
+
         for path in find_files_by_extension("jl", &dir)? {
             entrypoints.push(EntrypointCandidate {
                 path,
@@ -217,7 +224,11 @@ pub fn find_files_by_extension(extension: &str, search_dir: &Path) -> Result<Vec
         .into_iter()
         .filter_entry(|entry| {
             let name = entry.file_name();
-            !name.eq("renv") && !name.eq(".venv") && !name.eq("venv") && !name.eq("env")
+            !name.eq("renv")
+                && !name.eq(".venv")
+                && !name.eq("venv")
+                && !name.eq("env")
+                && !name.eq(".ipynb_checkpoints")
         })
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
@@ -752,6 +763,28 @@ mod tests {
 
         assert_eq!(detection.language, Some(Language::Python));
         assert_eq!(detection.content_types, vec![ContentType::QuartoPy]);
+    }
+
+    #[test]
+    fn a_notebook_is_a_python_jupyter_entrypoint() {
+        let dir = TempDir::new().expect("tempdir");
+        write(dir.path(), "analysis.ipynb", "{}");
+        write(
+            dir.path(),
+            ".ipynb_checkpoints/analysis-checkpoint.ipynb",
+            "{}",
+        );
+
+        let detection = scan(&dir);
+
+        assert_eq!(detection.language, Some(Language::Python));
+        assert_eq!(
+            detection.entrypoints,
+            vec![EntrypointCandidate {
+                path: PathBuf::from("analysis.ipynb"),
+                content_type: ContentType::Jupyter,
+            }]
+        );
     }
 
     #[test]
