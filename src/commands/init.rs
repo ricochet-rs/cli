@@ -4,7 +4,7 @@ use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
     content::{AccessType, Content, ContentItem, ContentType},
     language::{Language, LanguageConfig, Package},
-    settings::{ScheduleSettings, ServeSettings, StaticSettings},
+    settings::{CronSchedule, ScheduleSettings, ServeSettings, StaticSettings},
 };
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -341,26 +341,15 @@ fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSetting
     }
 
     if opt.eq(&3usize) {
-        let cron = Input::with_theme(&theme)
+        let cron = Input::<CronSchedule>::with_theme(&theme)
             .with_prompt("Enter cron schedule")
             .with_initial_text("0 0 * * *")
-            .validate_with(|v: &String| {
-                let sched = ScheduleSettings {
-                    cron: Some(v.to_string()),
-                    ..Default::default()
-                };
-
-                sched.validate_cron().map_err(|e| match e {
-                    ricochet_core::content::ContentError::InvalidSchedule(ee) => ee.to_string(),
-                    _ => "Invalid cron schedule".to_string(),
-                })
-            })
             .allow_empty(false)
             .with_post_completion_text("Schedule saved!")
             .interact_text()?;
         sched.cron = Some(cron);
     } else {
-        sched.cron = Some(opts[opt].to_string());
+        sched.cron = Some(opts[opt].parse()?);
     }
     Ok(Some(sched))
 }
