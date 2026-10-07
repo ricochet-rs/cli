@@ -90,6 +90,69 @@ fn every_content_type_initializes_without_a_terminal() {
     }
 }
 
+fn answers<'a>(content_type: &'a str, entrypoint: &'a str) -> [&'a str; 8] {
+    [
+        "--content-type",
+        content_type,
+        "--entrypoint",
+        entrypoint,
+        "--name",
+        "Item",
+        "--access-type",
+        "private",
+    ]
+}
+
+fn written(dir: &Path) -> toml::Value {
+    let text = std::fs::read_to_string(dir.join("_ricochet.toml")).expect("reading _ricochet.toml");
+    toml::from_str(&text).expect("parsing _ricochet.toml")
+}
+
+#[test]
+fn a_shiny_directory_with_ui_and_server_is_an_entrypoint() {
+    let dir = TempDir::new().expect("creating project");
+    let app = dir.path().join("dashboard");
+    std::fs::create_dir(&app).expect("creating dashboard");
+    std::fs::write(app.join("ui.R"), "").expect("writing ui.R");
+    std::fs::write(app.join("server.R"), "").expect("writing server.R");
+
+    let output = init(dir.path(), &answers("shiny", "dashboard"));
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        written(dir.path())["content"]["entrypoint"].as_str(),
+        Some("dashboard")
+    );
+}
+
+#[test]
+fn a_quarto_website_is_served_from_its_output_dir_without_prompting() {
+    let dir = TempDir::new().expect("creating project");
+    std::fs::write(
+        dir.path().join("_quarto.yml"),
+        "project:\n  type: website\n  output-dir: _site\n",
+    )
+    .expect("writing _quarto.yml");
+    std::fs::write(dir.path().join("index.qmd"), "---\ntitle: Site\n---\n")
+        .expect("writing index.qmd");
+
+    let output = init(dir.path(), &answers("quarto-r", "index.qmd"));
+    assert!(output.status.success(), "{}", stderr(&output));
+    let item = written(dir.path());
+    assert_eq!(item["static"]["output_dir"].as_str(), Some("_site"));
+    assert_eq!(item["static"]["index"].as_str(), Some("index.html"));
+}
+
+#[test]
+fn a_single_quarto_document_gets_no_static_settings_without_prompting() {
+    let dir = TempDir::new().expect("creating project");
+    std::fs::write(dir.path().join("report.qmd"), "---\ntitle: Report\n---\n")
+        .expect("writing report.qmd");
+
+    let output = init(dir.path(), &answers("quarto-r", "report.qmd"));
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(written(dir.path()).get("static").is_none());
+}
+
 #[test]
 fn missing_answers_are_named_rather_than_prompted_for() {
     let dir = TempDir::new().expect("creating project");

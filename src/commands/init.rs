@@ -93,37 +93,10 @@ const CONTENT_TYPES: [ContentType; 23] = [
     ContentType::Dash,
 ];
 
-/// The language a content type runs on.
-fn language_of(content_type: ContentType) -> Language {
-    match content_type {
-        ContentType::R
-        | ContentType::RService
-        | ContentType::Plumber
-        | ContentType::RServer
-        | ContentType::Ambiorix
-        | ContentType::Shiny
-        | ContentType::Rmd
-        | ContentType::RmdShiny
-        | ContentType::ServerlessR
-        | ContentType::QuartoR
-        | ContentType::QuartoRShiny => Language::R,
-        ContentType::Julia | ContentType::JuliaService | ContentType::QuartoJl => Language::Julia,
-        ContentType::Python
-        | ContentType::PythonService
-        | ContentType::QuartoPy
-        | ContentType::Jupyter
-        | ContentType::FastApi
-        | ContentType::Flask
-        | ContentType::Streamlit
-        | ContentType::ShinyPy
-        | ContentType::Dash => Language::Python,
-    }
-}
-
 pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
     let opts: Vec<ContentType> = CONTENT_TYPES
         .into_iter()
-        .filter(|content_type| language_of(*content_type) == *language)
+        .filter(|content_type| Language::from(content_type) == *language)
         .collect();
 
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
@@ -470,7 +443,7 @@ pub fn init_rico_toml(
     }
 
     let (lang, content_type) = match answers.content_type {
-        Some(content_type) => (language_of(content_type), content_type),
+        Some(content_type) => (Language::from(&content_type), content_type),
         None => {
             let lang = choose_language();
             (lang, choose_content_type(&lang)?)
@@ -531,7 +504,10 @@ pub fn init_rico_toml(
         retention: None,
     };
 
-    res.validate_config()?;
+    // ricochet-core checks for a Shiny directory entrypoint relative to the working directory, so validate the entrypoint where it lives.
+    let mut located = res.clone();
+    located.content.entrypoint = dir.join(&res.content.entrypoint);
+    located.validate_config()?;
     let toml_content = toml::to_string_pretty(&res)?;
 
     if dry_run {
