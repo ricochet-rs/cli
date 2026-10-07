@@ -67,6 +67,14 @@ build-static target="all":
       export CARGO_HOME="${CARGO_HOME:-${CARGO_HOME_DIR}}"
       export RUSTUP_HOME="${RUSTUP_HOME:-${RUSTUP_HOME_DIR}}"
       export RUSTC_WRAPPER=sccache
+
+      # xcrun can resolve a Command Line Tools SDK newer than the selected
+      # Xcode's linker understands (ld fails with "tapi error: unknown
+      # architecture"), so link against the SDK shipped with that Xcode.
+      XCODE_SDK="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+      if [ -z "${SDKROOT:-}" ] && [ -d "$XCODE_SDK" ]; then
+          export SDKROOT="$XCODE_SDK"
+      fi
     fi
 
     # Set up sccache directory (macOS only)
