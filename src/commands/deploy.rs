@@ -207,7 +207,13 @@ pub async fn deploy(
             }
 
             // Create _ricochet.toml using init command
-            crate::commands::init::init_rico_toml(&path, false, false)?;
+            crate::commands::init::init_rico_toml(
+                &path,
+                false,
+                false,
+                crate::commands::init::InitAnswers::default(),
+                OutputFormat::Table,
+            )?;
         } else {
             // Non-interactive mode (tests, CI, etc.)
             anyhow::bail!(

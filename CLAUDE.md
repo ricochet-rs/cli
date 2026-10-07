@@ -66,7 +66,7 @@ The CLI follows a subcommand pattern with these main operations:
 
 - `login/logout` - Authentication management (supports `--server` flag)
 - `detect` - Report deployable entrypoints in a directory without writing anything
-- `init` - Write a `_ricochet.toml` interactively
+- `init` - Write a `_ricochet.toml`, prompting for any answer not given as a flag
 - `deploy` - Upload content to a ricochet server (supports `--server` flag)
 - `list` - List deployed content items with filtering
 - `delete` - Remove content items
