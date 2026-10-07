@@ -411,23 +411,26 @@ impl Cli {
         let mut server = Server::new_async().await;
         mock_api(&mut server);
 
+        let cli = Self {
+            home: TempDir::new().expect("creating a temporary home"),
+            _server: server,
+        };
+        cli.use_server(&cli._server.url());
+        cli
+    }
+
+    /// Make the server at `url` the default for every later command.
+    fn use_server(&self, url: &str) {
         // The CLI reads its configuration from `$HOME/.config/ricochet`.
-        let home = TempDir::new().expect("creating a temporary home");
-        let config_dir = home.path().join(".config").join("ricochet");
+        let config_dir = self.home.path().join(".config").join("ricochet");
         std::fs::create_dir_all(&config_dir).expect("creating the config directory");
         std::fs::write(
             config_dir.join("config.toml"),
             format!(
-                "default_server = \"test\"\ndefault_format = \"table\"\n\n[servers.test]\nurl = \"{}\"\napi_key = \"test_api_key\"\n",
-                server.url()
+                "default_server = \"test\"\ndefault_format = \"table\"\n\n[servers.test]\nurl = \"{url}\"\napi_key = \"test_api_key\"\n"
             ),
         )
         .expect("writing the test config");
-
-        Self {
-            _server: server,
-            home,
-        }
     }
 
     async fn run(&self, args: &[&str]) -> std::process::Output {
@@ -491,6 +494,36 @@ impl Cli {
                 with_format.join(" ")
             )
         })
+    }
+
+    /// Run `deploy <args> -F json` and return the newline-delimited events it writes to stdout.
+    async fn deploy_events(
+        &self,
+        args: &[&str],
+    ) -> (std::process::ExitStatus, Vec<serde_json::Value>) {
+        let mut with_format = vec!["deploy"];
+        with_format.extend(args);
+        with_format.extend(["-F", "json"]);
+        let output = self.run(&with_format).await;
+        let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+
+        let events = stdout
+            .lines()
+            .map(|line| {
+                serde_json::from_str(line)
+                    .unwrap_or_else(|e| panic!("`{line}` is not a JSON event ({e}):\n{stdout}"))
+            })
+            .collect();
+        (output.status, events)
+    }
+
+    /// Deploy `project` with `-F json`, require success, and return the events.
+    async fn deployed_events(&self, project: &Path) -> Vec<serde_json::Value> {
+        let (status, events) = self
+            .deploy_events(&[project.to_str().expect("project path")])
+            .await;
+        assert!(status.success(), "deploy failed: {events:?}");
+        events
     }
 
     /// Run with `-F yaml` and return the parsed stdout.
@@ -842,13 +875,37 @@ async fn task_schedule_writes_json_alone() {
 }
 
 #[tokio::test]
-async fn deploy_writes_json_alone() {
+async fn deploy_writes_progress_events_ending_in_done() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().unwrap();
+    write_project(project.path(), LOCAL_TOML);
+
+    let events = cli.deployed_events(project.path()).await;
+
+    assert_eq!(events[0]["event"], "bundling", "{events:?}");
+    assert!(events[0]["files"].as_u64() > Some(0), "{events:?}");
+
+    let uploads: Vec<&serde_json::Value> = events
+        .iter()
+        .filter(|event| event["event"] == "uploading")
+        .collect();
+    let last_upload = uploads.last().expect("an uploading event");
+    assert_eq!(last_upload["bytes_sent"], last_upload["bytes_total"]);
+
+    let done = events.last().expect("a done event");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["id"], CONTENT_ID);
+    assert_eq!(done["deployment_id"], DEPLOYMENT_ID);
+}
+
+#[tokio::test]
+async fn deploy_writes_yaml_alone() {
     let cli = Cli::new().await;
     let project = TempDir::new().unwrap();
     write_project(project.path(), LOCAL_TOML);
 
     let payload = cli
-        .json(&["deploy", project.path().to_str().unwrap()])
+        .yaml(&["deploy", project.path().to_str().unwrap()])
         .await;
     assert_eq!(payload["id"], CONTENT_ID);
     assert_eq!(payload["deployment_id"], DEPLOYMENT_ID);
@@ -994,19 +1051,185 @@ async fn deploy_server_engine_hint_keeps_json_stdout_clean() {
     );
     std::fs::write(project.path().join("_server.yml"), "engine: plumber2\n")
         .expect("writing server config");
-    let payload = cli
-        .json(&["deploy", project.path().to_str().expect("project path")])
-        .await;
-    assert_eq!(payload["id"], CONTENT_ID);
+    let events = cli.deployed_events(project.path()).await;
+    let done = events.last().expect("a done event");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["id"], CONTENT_ID);
 }
 
 #[tokio::test]
-async fn deploy_git_writes_json_alone() {
+async fn deploy_git_writes_a_done_event_alone() {
     let cli = Cli::new().await;
-    let payload = cli
-        .json(&["deploy", "--git", "https://github.com/org/repo"])
+    let (status, events) = cli
+        .deploy_events(&["--git", "https://github.com/org/repo"])
         .await;
-    assert_eq!(payload["id"], CONTENT_ID);
+    assert!(status.success(), "{events:?}");
+    assert_eq!(events, [json!({"event": "done", "id": CONTENT_ID})]);
+}
+
+#[tokio::test]
+async fn deploy_reports_a_rejected_upload_as_an_error_event() {
+    let cli = Cli::new().await;
+    let mut rejecting = Server::new_async().await;
+    rejecting
+        .mock("GET", "/api/v0/check_key")
+        .with_status(200)
+        .create();
+    rejecting
+        .mock("POST", "/api/v0/content/upload")
+        .match_body(Matcher::Any)
+        .with_status(422)
+        .with_body("entrypoint not found")
+        .create();
+    cli.use_server(&rejecting.url());
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().expect("project path")])
+        .await;
+    assert!(!status.success());
+    let error = events.last().expect("an error event");
+    assert_eq!(error["event"], "error");
+    assert_eq!(error["kind"], "rejected");
+    assert_eq!(error["status"], 422);
+    assert!(
+        error["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("entrypoint not found")),
+        "{error}"
+    );
+}
+
+#[tokio::test]
+async fn deploy_reports_a_failing_credential_check_as_a_server_error_event() {
+    let cli = Cli::new().await;
+    let mut failing = Server::new_async().await;
+    failing
+        .mock("GET", "/api/v0/check_key")
+        .with_status(503)
+        .create();
+    cli.use_server(&failing.url());
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().expect("project path")])
+        .await;
+    assert!(!status.success());
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["kind"], "server");
+    assert_eq!(events[0]["status"], 503);
+}
+
+#[tokio::test]
+async fn deploy_reports_an_invalid_public_key_as_a_server_error_event() {
+    let cli = Cli::new().await;
+    let mut misconfigured = Server::new_async().await;
+    misconfigured
+        .mock("GET", "/api/v0/check_key")
+        .with_status(200)
+        .create();
+    misconfigured
+        .mock("GET", "/api/v0/public-key")
+        .with_status(200)
+        .with_body("not a key")
+        .create();
+    cli.use_server(&misconfigured.url());
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[
+            project.path().to_str().expect("project path"),
+            "--env",
+            "TOKEN=secret",
+        ])
+        .await;
+    assert!(!status.success());
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["kind"], "server");
+    assert!(events[0].get("status").is_none(), "{events:?}");
+}
+
+#[tokio::test]
+async fn deploy_ends_in_done_when_the_new_id_cannot_be_recorded() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    let toml = LOCAL_TOML.replace(&format!("id = \"{CONTENT_ID}\"\n"), "");
+    write_project(project.path(), &toml);
+
+    // Swap `_ricochet.toml` for a directory while the upload is in flight, a write failure even root cannot bypass.
+    let toml_path = project.path().join("_ricochet.toml");
+    let set_aside = project.path().join("original.toml");
+    let mut accepting = Server::new_async().await;
+    accepting
+        .mock("GET", "/api/v0/check_key")
+        .with_status(200)
+        .create();
+    {
+        let (toml_path, set_aside) = (toml_path.clone(), set_aside.clone());
+        accepting
+            .mock("POST", "/api/v0/content/upload")
+            .match_body(Matcher::Any)
+            .with_status(200)
+            .with_body_from_request(move |_| {
+                std::fs::rename(&toml_path, &set_aside).expect("setting _ricochet.toml aside");
+                std::fs::create_dir(&toml_path).expect("blocking _ricochet.toml");
+                json!({"id": CONTENT_ID, "deployment_id": DEPLOYMENT_ID})
+                    .to_string()
+                    .into()
+            })
+            .create();
+    }
+    cli.use_server(&accepting.url());
+
+    let output = cli
+        .run(&[
+            "deploy",
+            project.path().to_str().expect("project path"),
+            "-F",
+            "json",
+        ])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let done: serde_json::Value =
+        serde_json::from_str(stdout.lines().last().expect("a done event")).expect("a JSON event");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["id"], CONTENT_ID);
+
+    assert!(
+        stderr.contains("could not record the ID")
+            && stderr.contains(&format!("id = \"{CONTENT_ID}\"")),
+        "{stderr}"
+    );
+    assert!(
+        toml_path.is_dir(),
+        "the ID was written over the blocked path"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&set_aside).expect("reading the original _ricochet.toml"),
+        toml
+    );
+}
+
+#[tokio::test]
+async fn deploy_reports_a_local_problem_as_a_project_error_event() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    write_project(project.path(), LOCAL_TOML);
+    std::fs::remove_file(project.path().join("renv.lock")).expect("removing renv.lock");
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().expect("project path")])
+        .await;
+    assert!(!status.success());
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["event"], "error");
+    assert_eq!(events[0]["kind"], "project");
 }
 
 #[tokio::test]

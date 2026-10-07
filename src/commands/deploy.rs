@@ -1,5 +1,9 @@
 use crate::utils::{Exclusion, classify_bundle, format_size};
-use crate::{OutputFormat, client::RicochetClient, config::Config};
+use crate::{
+    OutputFormat,
+    client::{DeployProgress, RicochetClient},
+    config::Config,
+};
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use dialoguer::{Confirm, theme::ColorfulTheme};
@@ -238,9 +242,14 @@ pub async fn deploy(
         Some(crate::crypto::encrypt_env_vars(&pub_key, &resolved)?)
     };
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner().template("  {spinner:.green} {msg}")?);
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
+    let progress = if format == OutputFormat::Json {
+        DeployProgress::Events
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().template("  {spinner:.green} {msg}")?);
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        DeployProgress::Bar(pb)
+    };
 
     match client
         .deploy(
@@ -249,21 +258,32 @@ pub async fn deploy(
             &toml_path,
             &extra_root_files,
             env_vars,
-            &pb,
+            &progress,
             debug,
         )
         .await
     {
         Ok(response) => {
-            pb.finish_and_clear();
+            progress.finish();
 
             let id = response.get("id").and_then(|v| v.as_str());
 
             // A new content item only learns its ID here, so write it back.
+            // The deploy already succeeded, so a failed write must not invite a retry that creates a second item.
             if let Some(id) = id
                 && content_id.is_none()
+                && let Err(e) = write_content_id(&toml_path, id)
             {
-                write_content_id(&toml_path, id)?;
+                eprintln!(
+                    "{} Deployed, but could not record the ID in {}: {e}\n  Add `id = \"{id}\"` under [content] before deploying again, or the next deploy creates a new item.",
+                    "⚠".yellow(),
+                    toml_path.display()
+                );
+            }
+
+            if let DeployProgress::Events = progress {
+                DeployProgress::emit_done(&response);
+                return Ok(());
             }
 
             format.print(&response, || {
@@ -288,7 +308,12 @@ pub async fn deploy(
             })
         }
         Err(e) => {
-            pb.finish_and_clear();
+            progress.finish();
+
+            // The error event's `kind` stands in for the hints, which would also discard the error's type.
+            if let DeployProgress::Events = progress {
+                return Err(e);
+            }
 
             if e.to_string().contains("first deployment") {
                 eprintln!("{} Deployment failed: {}\n", "✗".red().bold(), e);
@@ -335,6 +360,16 @@ pub async fn deploy(
             anyhow::bail!("Deployment failed: {}", e)
         }
     }
+}
+
+/// Under `-F json`, write the `error` event for a failed deploy, then pass `deployed` on.
+pub fn emit_error_event(format: OutputFormat, deployed: Result<()>) -> Result<()> {
+    if let Err(e) = &deployed
+        && format == OutputFormat::Json
+    {
+        DeployProgress::emit_error(e)?;
+    }
+    deployed
 }
 
 /// A file `deploy --dry-run` reports, with the verdict a deploy would reach on it.
@@ -516,14 +551,24 @@ pub async fn deploy_git(
         repo.url.bright_cyan()
     );
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    pb.set_message("Creating content item and starting deployment");
+    let progress = if format == OutputFormat::Json {
+        DeployProgress::Events
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        pb.set_message("Creating content item and starting deployment");
+        DeployProgress::Bar(pb)
+    };
 
     match client.deploy_git(&repo, toml_content, credential).await {
         Ok(response) => {
-            pb.finish_and_clear();
+            progress.finish();
+
+            if let DeployProgress::Events = progress {
+                DeployProgress::emit_done(&response);
+                return Ok(());
+            }
 
             format.print(&response, || {
                 let mut output = format!("{} Deployment successful!", "✓".green().bold());
@@ -545,7 +590,10 @@ pub async fn deploy_git(
             })
         }
         Err(e) => {
-            pb.finish_and_clear();
+            progress.finish();
+            if let DeployProgress::Events = progress {
+                return Err(e);
+            }
             anyhow::bail!("Deployment failed: {}", e)
         }
     }
