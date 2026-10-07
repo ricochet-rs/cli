@@ -4,7 +4,7 @@ use dialoguer::{Confirm, FuzzySelect, Input, Select, theme::ColorfulTheme};
 use ricochet_core::{
     content::{AccessType, Content, ContentItem, ContentType},
     language::{Language, LanguageConfig, Package},
-    settings::{ScheduleSettings, ServeSettings, StaticSettings},
+    settings::{CronSchedule, ScheduleSettings, ServeSettings, StaticSettings},
 };
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -56,6 +56,7 @@ pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
             ContentType::Python,
             ContentType::PythonService,
             ContentType::QuartoPy,
+            ContentType::Jupyter,
             ContentType::FastApi,
             ContentType::Flask,
             ContentType::Streamlit,
@@ -212,6 +213,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         | ContentType::Streamlit
         | ContentType::ShinyPy
         | ContentType::Dash => find_candidate_entrypoints("py", dir),
+        ContentType::Jupyter => find_candidate_entrypoints("ipynb", dir),
     }
 }
 
@@ -237,7 +239,7 @@ fn static_settings(
     content_type: &ContentType,
     entrypoint: &Path,
 ) -> anyhow::Result<Option<StaticSettings>> {
-    if !content_type.maybe_static() {
+    if !content_type.maybe_static() || *content_type == ContentType::Jupyter {
         return Ok(None);
     }
 
@@ -339,26 +341,15 @@ fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSetting
     }
 
     if opt.eq(&3usize) {
-        let cron = Input::with_theme(&theme)
+        let cron = Input::<CronSchedule>::with_theme(&theme)
             .with_prompt("Enter cron schedule")
             .with_initial_text("0 0 * * *")
-            .validate_with(|v: &String| {
-                let sched = ScheduleSettings {
-                    cron: Some(v.to_string()),
-                    ..Default::default()
-                };
-
-                sched.validate_cron().map_err(|e| match e {
-                    ricochet_core::content::ContentError::InvalidSchedule(ee) => ee.to_string(),
-                    _ => "Invalid cron schedule".to_string(),
-                })
-            })
             .allow_empty(false)
             .with_post_completion_text("Schedule saved!")
             .interact_text()?;
         sched.cron = Some(cron);
     } else {
-        sched.cron = Some(opts[opt].to_string());
+        sched.cron = Some(opts[opt].parse()?);
     }
     Ok(Some(sched))
 }
