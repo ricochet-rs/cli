@@ -35,6 +35,8 @@ const FLAKY_INVOCATION_ID: &str = "01KR8888888888888888888888";
 const UNREADABLE_TASK_ID: &str = "01KR9999999999999999999999";
 const UNREADABLE_INVOCATION_ID: &str = "01KRAAAAAAAAAAAAAAAAAAAAAA";
 
+const LOG_ID: &str = "01KRBBBBBBBBBBBBBBBBBBBBBB";
+
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
@@ -369,6 +371,15 @@ fn mock_api(server: &mut Server) {
         .match_body(Matcher::Any)
         .with_status(200)
         .with_body(json!({"id": CONTENT_ID}).to_string())
+        .create();
+
+    server
+        .mock("GET", format!("/api/v0/content/logs/{LOG_ID}").as_str())
+        .with_status(200)
+        .with_header("content-type", "text/plain; charset=utf-8")
+        .with_body(
+            "Execution environment: host\n[2026-10-09T13:48:04.089522Z stdout] {\"not\": \"json\"}\n[2026-10-09T13:48:06.643970Z stderr] restore complete",
+        )
         .create();
 }
 
@@ -1152,4 +1163,37 @@ async fn login_without_browser_rejects_empty_stdin() {
     let output = cli.run_with_stdin(&["login", "--no-browser"], "").await;
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("No API key was provided on stdin"));
+}
+
+#[tokio::test]
+async fn log_writes_one_json_object_per_line() {
+    let cli = Cli::new().await;
+    let output = cli.run(&["log", LOG_ID, "-F", "json"]).await;
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    assert!(
+        output.status.success(),
+        "log failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lines: Vec<serde_json::Value> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each stdout line is JSON"))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            json!({"line": "Execution environment: host", "timestamp": null, "stream": null}),
+            json!({
+                "line": "{\"not\": \"json\"}",
+                "timestamp": "2026-10-09T13:48:04.089522Z",
+                "stream": "stdout"
+            }),
+            json!({
+                "line": "restore complete",
+                "timestamp": "2026-10-09T13:48:06.64397Z",
+                "stream": "stderr"
+            }),
+        ]
+    );
 }

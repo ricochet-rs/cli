@@ -332,6 +332,33 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
+    /// Open a log for reading, following it until the server closes it.
+    pub(crate) async fn stream_log(&self, log_id: &str) -> Result<crate::log_stream::LogStream> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/logs/{log_id}"));
+
+        // A live log outlasts the shared client's request timeout, so only connecting is bounded.
+        let client = Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .build()?;
+        let response = client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Request failed with status {status}: {error_text}")
+        }
+
+        Ok(crate::log_stream::LogStream::new(response))
+    }
+
     pub async fn get_status(&self, id: &str) -> Result<serde_json::Value> {
         // Get deployments for the item
         let mut url = self.base_url.clone();

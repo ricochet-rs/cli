@@ -9,6 +9,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet logout`↴](#ricochet-logout)
 * [`ricochet deploy`↴](#ricochet-deploy)
 * [`ricochet delete`↴](#ricochet-delete)
+* [`ricochet log`↴](#ricochet-log)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet detect`↴](#ricochet-detect)
 * [`ricochet init`↴](#ricochet-init)
@@ -66,6 +67,7 @@ Ricochet CLI
 * `logout` — Remove stored credentials
 * `deploy` — Deploy content to a Ricochet server
 * `delete` — Delete a content item
+* `log` — Stream a log
 * `config` — Show configuration
 * `detect` — Report deployable content in a directory without writing anything
 * `init` — Initialize a new Ricochet deployment
@@ -149,6 +151,22 @@ Delete a content item
 ###### **Options:**
 
 * `-f`, `--force` — Skip confirmation
+
+
+
+## `ricochet log`
+
+Stream a log
+
+**Usage:** `ricochet log [OPTIONS] <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Log ID (ULID)
+
+###### **Options:**
+
+* `-n`, `--lines <LINES>` — Number of latest lines to keep on screen, or `all`. Defaults to the terminal height
 
 
 
