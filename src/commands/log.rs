@@ -7,6 +7,9 @@ use jiff::tz::TimeZone;
 use std::collections::VecDeque;
 use std::str::FromStr;
 
+/// The most lines kept for the scrollback replay, about what a terminal keeps itself.
+const SCROLLBACK_LINES: usize = 10_000;
+
 /// How many of the latest log lines stay on screen.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Lines {
@@ -43,62 +46,69 @@ pub async fn follow_log(
 
     let term = Term::stdout();
     // A rolling window only makes sense where lines can be redrawn in place.
+    // Each redraw caps the window at the terminal height.
     let window = match (format, lines) {
         (OutputFormat::Table, Some(Lines::Count(count))) if term.is_term() => Some(count),
-        (OutputFormat::Table, None) if term.is_term() => {
-            Some(usize::from(term.size().0).saturating_sub(1).max(1))
-        }
+        (OutputFormat::Table, None) if term.is_term() => Some(usize::MAX),
         _ => None,
     };
 
     let Some(window) = window else {
         while let Some(line) = stream.next_line().await? {
-            match format {
-                OutputFormat::Table => println!("{}", render_line(&line, &timezone)),
-                OutputFormat::Json => println!("{}", serde_json::to_string(&line)?),
-                OutputFormat::Yaml => {
-                    println!("---\n{}", serde_yaml::to_string(&line)?.trim_end())
-                }
-            }
+            format.print_record(&line, || Ok(render_line(&line, &timezone)))?;
         }
         return Ok(());
     };
 
-    let mut history = Vec::new();
-    let mut visible = VecDeque::with_capacity(window);
+    let mut history = VecDeque::new();
+    let mut omitted = 0;
+    let mut drawn = 0;
     let interrupted = tokio::signal::ctrl_c();
     tokio::pin!(interrupted);
-    loop {
+    let outcome = loop {
         let line = tokio::select! {
-            line = stream.next_line() => line?,
-            _ = &mut interrupted => None,
+            line = stream.next_line() => line,
+            _ = &mut interrupted => Ok(None),
         };
-        let Some(line) = line else { break };
+        let line = match line {
+            Ok(Some(line)) => line,
+            Ok(None) => break Ok(()),
+            Err(error) => break Err(error),
+        };
 
-        let drawn = visible.len();
-        let rendered = render_line(&line, &timezone);
-        if visible.len() == window {
-            visible.pop_front();
+        if history.len() == SCROLLBACK_LINES {
+            history.pop_front();
+            omitted += 1;
         }
-        visible.push_back(rendered.clone());
-        history.push(rendered);
+        history.push_back(render_line(&line, &timezone));
 
-        // Lines are cut to the terminal width so none wraps and throws off the redraw.
-        let width = usize::from(term.size().1);
+        // The cursor cannot reach rows that scrolled off the screen, so the window never outgrows it.
+        // Rows are cut to the terminal width so none wraps and throws off the redraw.
+        let (height, width) = term.size();
+        let rows = window
+            .min(usize::from(height).saturating_sub(1).max(1))
+            .min(history.len());
         term.move_cursor_up(drawn)?;
-        for row in &visible {
-            term.clear_line()?;
-            term.write_line(&console::truncate_str(row, width, "…"))?;
+        term.clear_to_end_of_screen()?;
+        for row in history.iter().skip(history.len() - rows) {
+            term.write_line(&console::truncate_str(row, usize::from(width), "…"))?;
         }
-    }
+        drawn = rows;
+    };
 
     // Swap the window for every line so the whole log stays in the terminal's scrollback.
-    term.move_cursor_up(visible.len())?;
+    term.move_cursor_up(drawn)?;
     term.clear_to_end_of_screen()?;
+    if omitted > 0 {
+        let notice = format!(
+            "{omitted} earlier lines are not shown. Run `ricochet log {id} --lines all` to see every line."
+        );
+        term.write_line(&notice.dimmed().to_string())?;
+    }
     for row in &history {
         term.write_line(row)?;
     }
-    Ok(())
+    outcome
 }
 
 /// Render a line as `HH:MM:SS stream text`, with the time in the viewer's zone.

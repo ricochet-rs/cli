@@ -337,15 +337,17 @@ impl RicochetClient {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/logs/{log_id}"));
 
-        // A live log outlasts the shared client's request timeout, so only connecting is bounded.
-        let client = Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(30))
-            .build()?;
-        let response = client
+        // A live log outlasts the shared client's request timeout, so only the wait for headers is bounded.
+        let client = Client::builder().build()?;
+        let request = client
             .get(url)
             .header("Authorization", format!("Key {}", self.api_key))
-            .send()
-            .await?;
+            .send();
+        let response = tokio::time::timeout(std::time::Duration::from_secs(30), request)
+            .await
+            .with_context(|| {
+                format!("The server did not start sending log {log_id} within 30 seconds")
+            })??;
 
         let status = response.status();
         if !status.is_success() {

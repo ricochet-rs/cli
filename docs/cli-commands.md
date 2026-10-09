@@ -166,7 +166,7 @@ Stream a log
 
 ###### **Options:**
 
-* `-n`, `--lines <LINES>` — Number of latest lines to keep on screen, or `all`. Defaults to the terminal height
+* `-n`, `--lines <LINES>` — Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
 
 
 

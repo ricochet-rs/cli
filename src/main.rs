@@ -106,7 +106,7 @@ enum Commands {
     Log {
         /// Log ID (ULID)
         id: String,
-        /// Number of latest lines to keep on screen, or `all`. Defaults to the terminal height
+        /// Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
         #[arg(short = 'n', long)]
         lines: Option<commands::log::Lines>,
     },

@@ -36,6 +36,32 @@ impl OutputFormat {
         println!("{}", self.render(payload, table)?);
         Ok(())
     }
+
+    /// Render one record of a stream: a JSON line, a YAML document, or `table` for a person.
+    pub fn render_record<T: Serialize>(
+        self,
+        record: &T,
+        table: impl FnOnce() -> Result<String>,
+    ) -> Result<String> {
+        match self {
+            Self::Json => Ok(serde_json::to_string(record)?),
+            Self::Yaml => Ok(format!(
+                "---\n{}",
+                serde_yaml::to_string(record)?.trim_end()
+            )),
+            Self::Table => table(),
+        }
+    }
+
+    /// Write one rendered record of a stream to stdout.
+    pub fn print_record<T: Serialize>(
+        self,
+        record: &T,
+        table: impl FnOnce() -> Result<String>,
+    ) -> Result<()> {
+        println!("{}", self.render_record(record, table)?);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -67,6 +93,28 @@ mod tests {
         let rendered =
             OutputFormat::Table.render(&json!({"id": "01J"}), || Ok("human text".to_string()))?;
         assert_eq!(rendered, "human text");
+        Ok(())
+    }
+
+    #[test]
+    fn a_json_record_fits_on_one_line() -> Result<()> {
+        let rendered = OutputFormat::Json
+            .render_record(&json!({"line": "a", "stream": "stdout"}), || {
+                Ok("human text".to_string())
+            })?;
+        assert!(!rendered.contains('\n'));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&rendered)?["line"],
+            "a"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_yaml_record_is_its_own_document() -> Result<()> {
+        let rendered = OutputFormat::Yaml
+            .render_record(&json!({"line": "a"}), || Ok("human text".to_string()))?;
+        assert_eq!(rendered, "---\nline: a");
         Ok(())
     }
 }
