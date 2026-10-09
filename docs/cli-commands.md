@@ -487,14 +487,15 @@ Fetch the remote _ricochet.toml for a task
 
 Invoke a task
 
-**Usage:** `ricochet task invoke [OPTIONS] <ID>`
+**Usage:** `ricochet task invoke [OPTIONS] [ID]`
 
 ###### **Arguments:**
 
-* `<ID>` — Content item ID (ULID)
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
 
 ###### **Options:**
 
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
 * `-w`, `--wait` — Wait for the run to finish, and exit with an error unless it succeeds
 
 
