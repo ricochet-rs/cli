@@ -266,8 +266,11 @@ enum TaskCommands {
     },
     /// Invoke a task
     Invoke {
-        /// Content item ID (ULID)
-        id: String,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
         /// Wait for the run to finish, and exit with an error unless it succeeds
         #[arg(short = 'w', long)]
         wait: bool,
@@ -760,7 +763,8 @@ async fn main() -> Result<()> {
             TaskCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
             }
-            TaskCommands::Invoke { id, wait } => {
+            TaskCommands::Invoke { id, path, wait } => {
+                let id = item::resolve_id(id.as_deref(), path.as_deref())?;
                 let follow = if wait {
                     item::invoke::Follow::UntilFinished
                 } else {
