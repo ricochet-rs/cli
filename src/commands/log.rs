@@ -69,12 +69,16 @@ pub async fn follow_log(
     let mut history = VecDeque::new();
     let mut omitted = 0;
     let mut drawn = 0;
-    let interrupted = tokio::signal::ctrl_c();
-    tokio::pin!(interrupted);
+    let mut interrupted = false;
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
     let outcome = loop {
         let line = tokio::select! {
             line = stream.next_line() => line,
-            _ = &mut interrupted => Ok(None),
+            _ = &mut ctrl_c => {
+                interrupted = true;
+                Ok(None)
+            }
         };
         let line = match line {
             Ok(Some(line)) => line,
@@ -124,6 +128,10 @@ pub async fn follow_log(
         term.write_line(row)?;
     }
     term.flush()?;
+    if interrupted {
+        // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
+        std::process::exit(130);
+    }
     outcome
 }
 
