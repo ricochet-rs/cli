@@ -38,6 +38,8 @@ pub(crate) enum LogEnd {
     Closed,
     /// The viewer pressed Ctrl-C.
     Interrupted,
+    /// The reader of stdout, such as `head`, closed the pipe.
+    ReaderGone,
 }
 
 /// Print a log as it is written, until the server closes it.
@@ -50,13 +52,20 @@ pub async fn follow_log(
 ) -> Result<()> {
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
-    print_log(&client, id, lines, format, &Term::stdout()).await?;
+    let term = Term::buffered_stdout();
+    if print_log(&client, server_ref, id, lines, format, &term).await? == LogEnd::Interrupted {
+        // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
+        std::process::exit(130);
+    }
     Ok(())
 }
 
-/// Write a log to `term` as it is written, until the server closes it or the viewer presses Ctrl-C.
+/// Write a log to `term` as it is written, until the server closes it or the viewer stops watching.
+///
+/// `term` is flushed after every batch of lines, so it can be buffered.
 pub(crate) async fn print_log(
     client: &RicochetClient,
+    server_ref: Option<&str>,
     id: &str,
     lines: Option<Lines>,
     format: OutputFormat,
@@ -75,7 +84,14 @@ pub(crate) async fn print_log(
 
     let Some(window) = window else {
         while let Some(line) = stream.next_line().await? {
-            term.write_line(&format.render_record(&line, || Ok(render_line(&line, &timezone)))?)?;
+            let record = format.render_record(&line, || Ok(render_line(&line, &timezone)))?;
+            if let Err(error) = term.write_line(&record).and_then(|()| term.flush()) {
+                // A reader such as `head` that has seen enough closes the pipe, which ends the follow.
+                return match error.kind() {
+                    std::io::ErrorKind::BrokenPipe => Ok(LogEnd::ReaderGone),
+                    _ => Err(error.into()),
+                };
+            }
         }
         return Ok(LogEnd::Closed);
     };
@@ -96,11 +112,16 @@ pub(crate) async fn print_log(
             Err(error) => break Err(error),
         };
 
-        if history.len() == SCROLLBACK_LINES {
-            history.pop_front();
-            omitted += 1;
+        // Lines that arrived together are drawn once, so replaying a finished log stays fast.
+        let buffered = std::iter::from_fn(|| stream.take_buffered_line());
+        for mut line in std::iter::once(line).chain(buffered) {
+            line.line = screen_text(&line.line);
+            if history.len() == SCROLLBACK_LINES {
+                history.pop_front();
+                omitted += 1;
+            }
+            history.push_back(render_line(&line, &timezone));
         }
-        history.push_back(render_line(&line, &timezone));
 
         // The cursor cannot reach rows that scrolled off the screen, so the window never outgrows it.
         // Rows are cut to the terminal width so none wraps and throws off the redraw.
@@ -113,6 +134,7 @@ pub(crate) async fn print_log(
         for row in history.iter().skip(history.len() - rows) {
             term.write_line(&console::truncate_str(row, usize::from(width), "…"))?;
         }
+        term.flush()?;
         drawn = rows;
     };
 
@@ -120,15 +142,38 @@ pub(crate) async fn print_log(
     term.move_cursor_up(drawn)?;
     term.clear_to_end_of_screen()?;
     if omitted > 0 {
+        let server_flag = server_ref
+            .map(|server| format!(" --server {server}"))
+            .unwrap_or_default();
         let notice = format!(
-            "{omitted} earlier lines are not shown. Run `ricochet log {id} --lines all` to see every line."
+            "{omitted} earlier lines are not shown. Run `ricochet log {id} --lines all{server_flag}` to see every line."
         );
         term.write_line(&notice.dimmed().to_string())?;
     }
     for row in &history {
         term.write_line(row)?;
     }
+    term.flush()?;
     outcome
+}
+
+/// Text as a terminal shows it on one row: what follows the last carriage return, with tabs expanded.
+fn screen_text(text: &str) -> String {
+    let text = text
+        .trim_end_matches('\r')
+        .rsplit('\r')
+        .next()
+        .unwrap_or_default();
+    let mut row = String::with_capacity(text.len());
+    for character in text.chars() {
+        if character == '\t' {
+            let column = console::measure_text_width(&row);
+            row.push_str(&" ".repeat(8 - column % 8));
+        } else {
+            row.push(character);
+        }
+    }
+    row
 }
 
 /// Render a line as `HH:MM:SS stream text`, with the time in the viewer's zone.
@@ -156,6 +201,13 @@ mod tests {
     fn lines_accepts_a_count_or_all() {
         assert_eq!("20".parse::<Lines>().ok(), Some(Lines::Count(20)));
         assert_eq!("ALL".parse::<Lines>().ok(), Some(Lines::All));
+    }
+
+    #[test]
+    fn screen_text_keeps_the_last_overwrite_and_expands_tabs() {
+        assert_eq!(screen_text("10%\r55%\r100%"), "100%");
+        assert_eq!(screen_text("done\r"), "done");
+        assert_eq!(screen_text("a\tbc\td"), "a       bc      d");
     }
 
     #[test]

@@ -309,7 +309,7 @@ pub async fn deploy(
                     "The server did not return a deployment ID, so its logs cannot be followed. Update the Ricochet server to use `deploy --follow`."
                 );
             };
-            follow_deployment_logs(&client, deployment_id, lines, format).await
+            follow_deployment_logs(&client, server_ref, deployment_id, lines, format).await
         }
         Err(e) => {
             pb.finish_and_clear();
@@ -364,6 +364,7 @@ pub async fn deploy(
 /// Stream each of a deployment's restore logs in turn, one per architecture it builds for.
 async fn follow_deployment_logs(
     client: &RicochetClient,
+    server_ref: Option<&str>,
     deployment_id: &str,
     lines: Option<Lines>,
     format: OutputFormat,
@@ -375,15 +376,18 @@ async fn follow_deployment_logs(
     };
 
     let log_ids = client.deployment_logs(deployment_id).await?;
+    let log_term = Term::buffered_stdout();
     let total = log_ids.len();
     for (index, log_id) in log_ids.iter().enumerate() {
         status.write_line("")?;
         if total > 1 {
             status.write_line(&format!("Log {} of {total}", index + 1).bold().to_string())?;
         }
-        let end = print_log(client, log_id, lines, format, &Term::stdout()).await?;
-        if end == LogEnd::Interrupted {
-            break;
+        match print_log(client, server_ref, log_id, lines, format, &log_term).await? {
+            LogEnd::Closed => {}
+            LogEnd::ReaderGone => break,
+            // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
+            LogEnd::Interrupted => std::process::exit(130),
         }
     }
     Ok(())
