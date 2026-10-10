@@ -200,6 +200,8 @@ Report deployable content in a directory without writing anything
 
 Initialize a new Ricochet deployment
 
+Prompts for each setting not given as a flag. With `--content-type`, `--entrypoint`, `--name` and `--access-type` it asks nothing, so it runs without a terminal and leaves the item unscheduled.
+
 **Usage:** `ricochet init [OPTIONS] [PATH]`
 
 ###### **Arguments:**
@@ -212,6 +214,10 @@ Initialize a new Ricochet deployment
 
 * `--overwrite` — Overwrite existing _ricochet.toml file without confirmation
 * `--dry-run` — Preview the _ricochet.toml without saving to file
+* `--content-type <CONTENT_TYPE>` — Content type, spelled as in _ricochet.toml, such as `shiny` or `quarto-py`
+* `--entrypoint <ENTRYPOINT>` — Entrypoint, relative to the directory
+* `--name <NAME>` — Content item name
+* `--access-type <ACCESS_TYPE>` — Who can open the item: `private`, `internal` or `external`
 
 
 

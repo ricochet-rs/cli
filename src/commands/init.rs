@@ -9,6 +9,7 @@ use ricochet_core::{
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::OutputFormat;
 use crate::commands::detect::{
     EntrypointCandidate, StaticOutput, find_files_by_extension, find_quarto_projects,
     find_server_yml, find_shiny_dirs,
@@ -28,42 +29,75 @@ pub fn choose_language() -> Language {
     languages[selection]
 }
 
+/// Answers to `init`'s questions given up front, so it can run without prompting.
+#[derive(Debug, Default)]
+pub struct InitAnswers {
+    pub content_type: Option<ContentType>,
+    pub entrypoint: Option<PathBuf>,
+    pub name: Option<String>,
+    pub access_type: Option<AccessType>,
+}
+
+impl InitAnswers {
+    /// The flags still needed before `init` can run without a terminal.
+    fn missing(&self) -> Vec<&'static str> {
+        [
+            ("--content-type", self.content_type.is_none()),
+            ("--entrypoint", self.entrypoint.is_none()),
+            ("--name", self.name.is_none()),
+            ("--access-type", self.access_type.is_none()),
+        ]
+        .into_iter()
+        .filter_map(|(flag, missing)| missing.then_some(flag))
+        .collect()
+    }
+}
+
+/// Parse a value the way `_ricochet.toml` spells it, such as `quarto-r-shiny` or `private`.
+pub fn parse_toml_value<T: serde::de::DeserializeOwned>(value: &str) -> Result<T, String> {
+    use serde::de::IntoDeserializer;
+    T::deserialize(value.into_deserializer()).map_err(|e: serde::de::value::Error| e.to_string())
+}
+
+/// Whether `init` may ask about settings no flag covers, such as a schedule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Prompting {
+    Ask,
+    Skip,
+}
+
+/// Every content type, in the order `init` offers them.
+const CONTENT_TYPES: [ContentType; 23] = [
+    ContentType::R,
+    ContentType::RService,
+    ContentType::Plumber,
+    ContentType::RServer,
+    ContentType::Ambiorix,
+    ContentType::Shiny,
+    ContentType::Rmd,
+    ContentType::RmdShiny,
+    ContentType::ServerlessR,
+    ContentType::QuartoR,
+    ContentType::QuartoRShiny,
+    ContentType::Julia,
+    ContentType::JuliaService,
+    ContentType::QuartoJl,
+    ContentType::Python,
+    ContentType::PythonService,
+    ContentType::QuartoPy,
+    ContentType::Jupyter,
+    ContentType::FastApi,
+    ContentType::Flask,
+    ContentType::Streamlit,
+    ContentType::ShinyPy,
+    ContentType::Dash,
+];
+
 pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
-    let opts = match language {
-        Language::R => {
-            vec![
-                ContentType::R,
-                ContentType::RService,
-                ContentType::Plumber,
-                ContentType::RServer,
-                ContentType::Ambiorix,
-                ContentType::Shiny,
-                ContentType::Rmd,
-                ContentType::RmdShiny,
-                ContentType::ServerlessR,
-                ContentType::QuartoR,
-                ContentType::QuartoRShiny,
-            ]
-        }
-        Language::Julia => {
-            vec![
-                ContentType::Julia,
-                ContentType::JuliaService,
-                ContentType::QuartoJl,
-            ]
-        }
-        Language::Python => vec![
-            ContentType::Python,
-            ContentType::PythonService,
-            ContentType::QuartoPy,
-            ContentType::Jupyter,
-            ContentType::FastApi,
-            ContentType::Flask,
-            ContentType::Streamlit,
-            ContentType::ShinyPy,
-            ContentType::Dash,
-        ],
-    };
+    let opts: Vec<ContentType> = CONTENT_TYPES
+        .into_iter()
+        .filter(|content_type| Language::from(content_type) == *language)
+        .collect();
 
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Choose content type")
@@ -238,6 +272,7 @@ fn static_settings(
     path: &Path,
     content_type: &ContentType,
     entrypoint: &Path,
+    prompting: Prompting,
 ) -> anyhow::Result<Option<StaticSettings>> {
     if !content_type.maybe_static() || *content_type == ContentType::Jupyter {
         return Ok(None);
@@ -250,7 +285,7 @@ fn static_settings(
         content_type: *content_type,
     };
     if let Some(static_output) = StaticOutput::from_quarto(path, &candidate) {
-        println!(
+        eprintln!(
             "  {} Detected quarto website project (output: {})",
             "→".bright_cyan(),
             static_output.output_dir.bright_cyan()
@@ -261,6 +296,10 @@ fn static_settings(
             output_dir: Some(static_output.output_dir),
             render_fn: None,
         }));
+    }
+
+    if prompting == Prompting::Skip {
+        return Ok(None);
     }
 
     // if they skip non static html
@@ -309,8 +348,11 @@ fn static_settings(
     Ok(Some(static_settings))
 }
 
-fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSettings>> {
-    if !content_type.is_task() {
+fn schedule(
+    content_type: &ContentType,
+    prompting: Prompting,
+) -> anyhow::Result<Option<ScheduleSettings>> {
+    if !content_type.is_task() || prompting == Prompting::Skip {
         return Ok(None);
     }
     let theme = ColorfulTheme::default();
@@ -354,11 +396,26 @@ fn schedule(content_type: &ContentType) -> anyhow::Result<Option<ScheduleSetting
     Ok(Some(sched))
 }
 
-pub fn init_rico_toml(dir: &Path, overwrite: bool, dry_run: bool) -> anyhow::Result<ContentItem> {
-    // Check for non-interactive mode (tests, CI, etc.)
-    if crate::utils::is_non_interactive() {
+pub fn init_rico_toml(
+    dir: &Path,
+    overwrite: bool,
+    dry_run: bool,
+    answers: InitAnswers,
+    format: OutputFormat,
+) -> anyhow::Result<ContentItem> {
+    let missing = answers.missing();
+    // Settings no flag covers are asked about only when some answer is asked for anyway.
+    let prompting = if missing.is_empty() {
+        Prompting::Skip
+    } else {
+        Prompting::Ask
+    };
+    let interactive = !crate::utils::is_non_interactive();
+
+    if !interactive && !missing.is_empty() {
         bail!(
-            "Cannot run init in non-interactive mode. Please create _ricochet.toml manually or run `ricochet init` interactively."
+            "Cannot prompt without a terminal. Pass {} to run init non-interactively.",
+            missing.join(", ")
         );
     }
 
@@ -366,6 +423,12 @@ pub fn init_rico_toml(dir: &Path, overwrite: bool, dry_run: bool) -> anyhow::Res
     let toml_path = dir.join("_ricochet.toml");
 
     if !dry_run && toml_path.exists() && !overwrite {
+        if !interactive {
+            bail!(
+                "_ricochet.toml already exists at {}. Pass --overwrite to replace it.",
+                toml_path.display()
+            );
+        }
         let confirmed = Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
                 "_ricochet.toml already exists at {}. Overwrite?",
@@ -379,13 +442,29 @@ pub fn init_rico_toml(dir: &Path, overwrite: bool, dry_run: bool) -> anyhow::Res
         }
     }
 
-    let lang = choose_language();
-    let content_type = choose_content_type(&lang)?;
-    let entrypoint = choose_entrypoint(&content_type, dir)?;
-    let schedule = schedule(&content_type)?;
-    let static_ = static_settings(dir, &content_type, &entrypoint)?;
-    let name = choose_item_name();
-    let access_type = choose_access_type();
+    let (lang, content_type) = match answers.content_type {
+        Some(content_type) => (Language::from(&content_type), content_type),
+        None => {
+            let lang = choose_language();
+            (lang, choose_content_type(&lang)?)
+        }
+    };
+    let entrypoint = match answers.entrypoint {
+        Some(entrypoint) if dir.join(&entrypoint).exists() => entrypoint,
+        Some(entrypoint) => bail!(
+            "Entrypoint {} does not exist in {}",
+            entrypoint.display(),
+            dir.display()
+        ),
+        None => choose_entrypoint(&content_type, dir)?,
+    };
+    let schedule = schedule(&content_type, prompting)?;
+    let static_ = static_settings(dir, &content_type, &entrypoint, prompting)?;
+    let name = match answers.name {
+        Some(name) => name,
+        None => choose_item_name(),
+    };
+    let access_type = answers.access_type.unwrap_or_else(choose_access_type);
 
     let packages = Package::from(&lang);
 
@@ -425,17 +504,23 @@ pub fn init_rico_toml(dir: &Path, overwrite: bool, dry_run: bool) -> anyhow::Res
         retention: None,
     };
 
+    // ricochet-core checks for a Shiny directory entrypoint relative to the working directory, so validate the entrypoint where it lives.
+    let mut located = res.clone();
+    located.content.entrypoint = dir.join(&res.content.entrypoint);
+    located.validate_config()?;
     let toml_content = toml::to_string_pretty(&res)?;
 
     if dry_run {
         // Only print to terminal, don't save
-        println!("{}", toml_content);
+        format.print(&res, || Ok(toml_content.trim_end().to_string()))?;
     } else {
         std::fs::write(&toml_path, &toml_content)?;
-        println!(
-            "{} Created _ricochet.toml",
-            unicode_icons::icons::symbols::check_mark().0.green()
-        );
+        format.print(&res, || {
+            Ok(format!(
+                "{} Created _ricochet.toml",
+                unicode_icons::icons::symbols::check_mark().0.green()
+            ))
+        })?;
 
         // Warn if the required package file is missing
         let pkg_path = dir.join(res.language.packages.to_string());
@@ -443,7 +528,7 @@ pub fn init_rico_toml(dir: &Path, overwrite: bool, dry_run: bool) -> anyhow::Res
             // For uv.lock, check parent dirs (uv workspace support)
             if let Package::UvLock = res.language.packages {
                 if let Some(found) = crate::utils::find_in_parent_dirs(dir, "uv.lock") {
-                    println!(
+                    eprintln!(
                         "  {} Found {} in workspace root (will be included during deploy)",
                         "→".bright_cyan(),
                         found.display().to_string().bright_cyan()

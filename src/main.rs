@@ -129,6 +129,9 @@ enum Commands {
         path: std::path::PathBuf,
     },
     /// Initialize a new Ricochet deployment
+    ///
+    /// Prompts for each setting not given as a flag.
+    /// With `--content-type`, `--entrypoint`, `--name` and `--access-type` it asks nothing, so it runs without a terminal and leaves the item unscheduled.
     Init {
         /// Directory to initialize (defaults to current directory)
         #[arg(default_value = ".")]
@@ -139,6 +142,18 @@ enum Commands {
         /// Preview the _ricochet.toml without saving to file
         #[arg(long)]
         dry_run: bool,
+        /// Content type, spelled as in _ricochet.toml, such as `shiny` or `quarto-py`
+        #[arg(long, value_parser = commands::init::parse_toml_value::<ricochet_core::content::ContentType>)]
+        content_type: Option<ricochet_core::content::ContentType>,
+        /// Entrypoint, relative to the directory
+        #[arg(long)]
+        entrypoint: Option<std::path::PathBuf>,
+        /// Content item name
+        #[arg(long)]
+        name: Option<String>,
+        /// Who can open the item: `private`, `internal` or `external`
+        #[arg(long, value_parser = commands::init::parse_toml_value::<ricochet_core::content::AccessType>)]
+        access_type: Option<ricochet_core::content::AccessType>,
     },
     /// Manage deployed app items
     App {
@@ -589,8 +604,18 @@ async fn main() -> Result<()> {
             path,
             overwrite,
             dry_run,
+            content_type,
+            entrypoint,
+            name,
+            access_type,
         }) => {
-            commands::init::init_rico_toml(&path, overwrite, dry_run)?;
+            let answers = commands::init::InitAnswers {
+                content_type,
+                entrypoint,
+                name,
+                access_type,
+            };
+            commands::init::init_rico_toml(&path, overwrite, dry_run, answers, cli.format)?;
         }
 
         Some(Commands::App { command }) => match command {

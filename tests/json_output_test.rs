@@ -1075,6 +1075,30 @@ async fn login_and_logout_write_json_alone() {
 
 /// `deploy --dry-run` reads only the directory, so it works before `ricochet login`.
 #[tokio::test]
+async fn init_writes_the_item_alone() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().expect("creating project");
+    std::fs::write(project.path().join("app.R"), "").expect("writing app.R");
+
+    let payload = cli
+        .json(&[
+            "init",
+            project.path().to_str().expect("project path"),
+            "--content-type",
+            "shiny",
+            "--entrypoint",
+            "app.R",
+            "--name",
+            "Dashboard",
+            "--access-type",
+            "private",
+        ])
+        .await;
+    assert_eq!(payload["content"]["name"], "Dashboard");
+    assert_eq!(payload["content"]["content_type"], "shiny");
+}
+
+#[tokio::test]
 async fn deploy_dry_run_reports_each_file_without_a_server() {
     let home = TempDir::new().expect("creating a temporary home");
     let project = TempDir::new().expect("creating a project directory");
