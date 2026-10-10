@@ -78,6 +78,12 @@ enum Commands {
         /// List the files in a deployment bundle without deploying
         #[arg(long, conflicts_with_all = ["git", "env"])]
         dry_run: bool,
+        /// Stream the deployment's logs until it finishes
+        #[arg(short = 'f', long, conflicts_with_all = ["git", "dry_run"])]
+        follow: bool,
+        /// Number of latest log lines to keep on screen, up to the terminal height, or `all` to print every line
+        #[arg(long, requires = "follow")]
+        lines: Option<commands::log::Lines>,
         /// Deploy from a Git repository instead of a local bundle
         #[arg(long)]
         git: Option<String>,
@@ -523,6 +529,8 @@ async fn main() -> Result<()> {
             description,
             env,
             dry_run,
+            follow,
+            lines,
             git,
             branch,
             repo_path,
@@ -551,6 +559,11 @@ async fn main() -> Result<()> {
                     name,
                     description,
                     env,
+                    if follow {
+                        commands::deploy::AfterUpload::FollowLogs(lines)
+                    } else {
+                        commands::deploy::AfterUpload::Exit
+                    },
                     cli.format,
                     cli.debug,
                 )

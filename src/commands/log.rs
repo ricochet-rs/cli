@@ -31,6 +31,17 @@ impl FromStr for Lines {
     }
 }
 
+/// How following a log finished.
+#[derive(Debug, PartialEq)]
+pub(crate) enum LogEnd {
+    /// The server closed the log.
+    Closed,
+    /// The viewer pressed Ctrl-C.
+    Interrupted,
+    /// The reader of stdout, such as `head`, closed the pipe.
+    ReaderGone,
+}
+
 /// Print a log as it is written, until the server closes it.
 pub async fn follow_log(
     config: &Config,
@@ -41,10 +52,34 @@ pub async fn follow_log(
 ) -> Result<()> {
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
-    let mut stream = client.stream_log(id).await?;
+    let term = Term::buffered_stdout();
+    if print_log(&client, server_ref, id, lines, format, &term).await? == LogEnd::Interrupted {
+        // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
+        std::process::exit(130);
+    }
+    Ok(())
+}
+
+/// Write a log to `term` as it is written, until the server closes it or the viewer stops watching.
+///
+/// `term` is flushed after every batch of lines, so it can be buffered.
+pub(crate) async fn print_log(
+    client: &RicochetClient,
+    server_ref: Option<&str>,
+    id: &str,
+    lines: Option<Lines>,
+    format: OutputFormat,
+    term: &Term,
+) -> Result<LogEnd> {
+    // Once Ctrl-C is caught it no longer ends the process, so every wait below watches for it.
+    let interrupted = tokio::signal::ctrl_c();
+    tokio::pin!(interrupted);
+    let mut stream = tokio::select! {
+        stream = client.stream_log(id) => stream?,
+        _ = &mut interrupted => return Ok(LogEnd::Interrupted),
+    };
     let timezone = TimeZone::system();
 
-    let term = Term::buffered_stdout();
     // A rolling window only makes sense where lines can be redrawn in place.
     // Each redraw caps the window at the terminal height.
     let window = match (format, lines) {
@@ -54,35 +89,36 @@ pub async fn follow_log(
     };
 
     let Some(window) = window else {
-        while let Some(line) = stream.next_line().await? {
-            if let Err(error) = format.print_record(&line, || Ok(render_line(&line, &timezone))) {
+        loop {
+            let line = tokio::select! {
+                line = stream.next_line() => line?,
+                _ = &mut interrupted => return Ok(LogEnd::Interrupted),
+            };
+            let Some(line) = line else {
+                return Ok(LogEnd::Closed);
+            };
+            let record = format.render_record(&line, || Ok(render_line(&line, &timezone)))?;
+            if let Err(error) = term.write_line(&record).and_then(|()| term.flush()) {
                 // A reader such as `head` that has seen enough closes the pipe, which ends the follow.
-                return match error.downcast_ref::<std::io::Error>() {
-                    Some(io_error) if io_error.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
-                    _ => Err(error),
+                return match error.kind() {
+                    std::io::ErrorKind::BrokenPipe => Ok(LogEnd::ReaderGone),
+                    _ => Err(error.into()),
                 };
             }
         }
-        return Ok(());
     };
 
     let mut history = VecDeque::new();
     let mut omitted = 0;
     let mut drawn = 0;
-    let mut interrupted = false;
-    let ctrl_c = tokio::signal::ctrl_c();
-    tokio::pin!(ctrl_c);
     let outcome = loop {
         let line = tokio::select! {
             line = stream.next_line() => line,
-            _ = &mut ctrl_c => {
-                interrupted = true;
-                Ok(None)
-            }
+            _ = &mut interrupted => break Ok(LogEnd::Interrupted),
         };
         let line = match line {
             Ok(Some(line)) => line,
-            Ok(None) => break Ok(()),
+            Ok(None) => break Ok(LogEnd::Closed),
             Err(error) => break Err(error),
         };
 
@@ -128,10 +164,6 @@ pub async fn follow_log(
         term.write_line(row)?;
     }
     term.flush()?;
-    if interrupted {
-        // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
-        std::process::exit(130);
-    }
     outcome
 }
 
