@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use serde::Serialize;
+use std::io::Write;
 
 #[derive(clap::ValueEnum, Clone, Debug, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
@@ -53,13 +54,14 @@ impl OutputFormat {
         }
     }
 
-    /// Write one rendered record of a stream to stdout.
+    /// Write one rendered record of a stream to stdout, returning an error rather than panicking when the reader has gone.
     pub fn print_record<T: Serialize>(
         self,
         record: &T,
         table: impl FnOnce() -> Result<String>,
     ) -> Result<()> {
-        println!("{}", self.render_record(record, table)?);
+        let rendered = self.render_record(record, table)?;
+        writeln!(std::io::stdout().lock(), "{rendered}")?;
         Ok(())
     }
 }

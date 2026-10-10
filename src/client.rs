@@ -81,20 +81,24 @@ impl RicochetClient {
     }
 
     async fn handle_response<T: DeserializeOwned>(response: Response) -> Result<T> {
-        let status = response.status();
+        Self::reject_error_status(response)
+            .await?
+            .json::<T>()
+            .await
+            .context("Failed to parse response")
+    }
 
+    /// Turn a non-success response into an error carrying the server's message.
+    async fn reject_error_status(response: Response) -> Result<Response> {
+        let status = response.status();
         if status.is_success() {
-            response
-                .json::<T>()
-                .await
-                .context("Failed to parse response")
-        } else {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            anyhow::bail!("Request failed with status {}: {}", status, error_text)
+            return Ok(response);
         }
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        anyhow::bail!("Request failed with status {status}: {error_text}")
     }
 
     fn mask_api_key(key: &str) -> String {
@@ -349,15 +353,7 @@ impl RicochetClient {
                 format!("The server did not start sending log {log_id} within 30 seconds")
             })??;
 
-        let status = response.status();
-        if !status.is_success() {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            anyhow::bail!("Request failed with status {status}: {error_text}")
-        }
-
+        let response = Self::reject_error_status(response).await?;
         Ok(crate::log_stream::LogStream::new(response))
     }
 

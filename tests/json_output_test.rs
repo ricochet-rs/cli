@@ -4,6 +4,7 @@
 //! link that a command writes to stdout instead of stderr.
 
 use mockito::{Matcher, Server, ServerGuard};
+use serde::Deserialize;
 use serde_json::json;
 use std::path::Path;
 use tempfile::TempDir;
@@ -1194,6 +1195,36 @@ async fn log_writes_one_json_object_per_line() {
                 "timestamp": "2026-10-09T13:48:06.64397Z",
                 "stream": "stderr"
             }),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn log_writes_one_yaml_document_per_line() {
+    let cli = Cli::new().await;
+    let output = cli.run(&["log", LOG_ID, "-F", "yaml"]).await;
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    assert!(
+        output.status.success(),
+        "log failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lines: Vec<String> = serde_yaml::Deserializer::from_str(&stdout)
+        .map(|document| {
+            let record = serde_yaml::Value::deserialize(document).expect("each document is YAML");
+            record["line"]
+                .as_str()
+                .expect("each record has a line")
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Execution environment: host",
+            "{\"not\": \"json\"}",
+            "restore complete"
         ]
     );
 }
