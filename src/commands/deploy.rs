@@ -9,6 +9,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::{
     config::git::GitRepo,
     content::{ContentItem, ContentType},
+    events::DeploymentStatus,
     kinds::ServerYml,
     language::Package,
 };
@@ -385,12 +386,46 @@ async fn follow_deployment_logs(
         }
         match print_log(client, server_ref, log_id, lines, format, &log_term).await? {
             LogEnd::Closed => {}
-            LogEnd::ReaderGone => break,
+            LogEnd::ReaderGone => return Ok(()),
             // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
             LogEnd::Interrupted => std::process::exit(130),
         }
     }
-    Ok(())
+
+    // A log ends when its process does, which says nothing of whether the restore worked.
+    let outcome = tokio::select! {
+        outcome = settled_status(client, deployment_id) => outcome?,
+        // `print_log` caught Ctrl-C, so it no longer ends the process by itself.
+        _ = tokio::signal::ctrl_c() => std::process::exit(130),
+    };
+    match outcome {
+        DeploymentStatus::Success => Ok(()),
+        DeploymentStatus::DependencyMismatch => {
+            eprintln!(
+                "{} Deployment {deployment_id} is running with packages that differ from the ones it asked for. Run `ricochet app deployment get {deployment_id}` to compare them.",
+                "Warning:".yellow()
+            );
+            Ok(())
+        }
+        status => bail!("Deployment {deployment_id} finished with status {status}."),
+    }
+}
+
+/// How many times to look for a deployment to settle once its logs end, a second apart.
+const SETTLE_ATTEMPTS: usize = 30;
+
+/// Wait for a deployment to leave `Pending`, which it does shortly after its logs end.
+async fn settled_status(client: &RicochetClient, deployment_id: &str) -> Result<DeploymentStatus> {
+    for _ in 0..SETTLE_ATTEMPTS {
+        let deployment = client.get_deployment(deployment_id).await?;
+        if deployment.status != DeploymentStatus::Pending {
+            return Ok(deployment.status);
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+    bail!(
+        "Deployment {deployment_id} is still pending after its logs ended. Run `ricochet app deployment get {deployment_id}` to check on it."
+    )
 }
 
 /// A file `deploy --dry-run` reports, with the verdict a deploy would reach on it.

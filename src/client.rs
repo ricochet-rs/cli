@@ -346,8 +346,12 @@ impl RicochetClient {
         let mut url = self.base_url.clone();
         url.set_path(&format!("/api/v0/content/deployments/{deployment_id}/logs"));
 
-        let response = self
-            .client
+        // The server holds the request open for as long as the deployment waits in the queue,
+        // which can outlast the shared client's request timeout, so only connecting is bounded.
+        let client = Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .build()?;
+        let response = client
             .get(url)
             .header("Authorization", format!("Key {}", self.api_key))
             .send()

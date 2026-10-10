@@ -71,7 +71,13 @@ pub(crate) async fn print_log(
     format: OutputFormat,
     term: &Term,
 ) -> Result<LogEnd> {
-    let mut stream = client.stream_log(id).await?;
+    // Once Ctrl-C is caught it no longer ends the process, so every wait below watches for it.
+    let interrupted = tokio::signal::ctrl_c();
+    tokio::pin!(interrupted);
+    let mut stream = tokio::select! {
+        stream = client.stream_log(id) => stream?,
+        _ = &mut interrupted => return Ok(LogEnd::Interrupted),
+    };
     let timezone = TimeZone::system();
 
     // A rolling window only makes sense where lines can be redrawn in place.
@@ -83,7 +89,14 @@ pub(crate) async fn print_log(
     };
 
     let Some(window) = window else {
-        while let Some(line) = stream.next_line().await? {
+        loop {
+            let line = tokio::select! {
+                line = stream.next_line() => line?,
+                _ = &mut interrupted => return Ok(LogEnd::Interrupted),
+            };
+            let Some(line) = line else {
+                return Ok(LogEnd::Closed);
+            };
             let record = format.render_record(&line, || Ok(render_line(&line, &timezone)))?;
             if let Err(error) = term.write_line(&record).and_then(|()| term.flush()) {
                 // A reader such as `head` that has seen enough closes the pipe, which ends the follow.
@@ -93,14 +106,11 @@ pub(crate) async fn print_log(
                 };
             }
         }
-        return Ok(LogEnd::Closed);
     };
 
     let mut history = VecDeque::new();
     let mut omitted = 0;
     let mut drawn = 0;
-    let interrupted = tokio::signal::ctrl_c();
-    tokio::pin!(interrupted);
     let outcome = loop {
         let line = tokio::select! {
             line = stream.next_line() => line,

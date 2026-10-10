@@ -1189,4 +1189,119 @@ packages = "renv.lock"
 
         assert!(result.is_err());
     }
+
+    const DEPLOYMENT_ID: &str = "01KQZPF4Y5SRHES967VZEYY765";
+    const LOG_ID: &str = "01KQZPF4Y5SRHES967VZEYY766";
+
+    /// Deploy a new project with `--follow` against a server whose deployment ends as `status`.
+    ///
+    /// `upload` is the body the upload answers with and `logs_status` the status of the deployment logs route.
+    async fn deploy_and_follow(
+        upload: serde_json::Value,
+        logs_status: usize,
+        status: &str,
+    ) -> anyhow::Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        create_test_project(temp_dir.path(), None).unwrap();
+
+        let mut server = Server::new_async().await;
+        let _ck = mock_check_key(&mut server);
+        let _upload = server
+            .mock("POST", "/api/v0/content/upload")
+            .with_status(200)
+            .with_body(upload.to_string())
+            .create();
+        let _logs = server
+            .mock(
+                "GET",
+                format!("/api/v0/content/deployments/{DEPLOYMENT_ID}/logs").as_str(),
+            )
+            .with_status(logs_status)
+            .with_body(json!({"log_ids": [LOG_ID]}).to_string())
+            .create();
+        let _log = server
+            .mock("GET", format!("/api/v0/content/logs/{LOG_ID}").as_str())
+            .with_status(200)
+            .with_body("restore finished")
+            .create();
+        let _deployment = server
+            .mock(
+                "GET",
+                format!("/api/v0/content/deployments/{DEPLOYMENT_ID}").as_str(),
+            )
+            .with_status(200)
+            .with_body(
+                json!({
+                    "id": DEPLOYMENT_ID,
+                    "content_id": "01JZA237920RN65T2XHCCV7296",
+                    "deployed_at": 1778106471,
+                    "status": status,
+                    "deployed_by": "344509059241640593",
+                    "ip_address": "127.0.0.1",
+                    "requested_ver": null,
+                    "matched_ver": null,
+                    "git_hash": null
+                })
+                .to_string(),
+            )
+            .create();
+
+        let config = ricochet_cli::config::Config::for_test(
+            Url::parse(&server.url()).unwrap(),
+            Some("test_api_key".to_string()),
+        );
+        ricochet_cli::commands::deploy::deploy(
+            &config,
+            None,
+            temp_dir.path().to_path_buf(),
+            None,
+            None,
+            Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::FollowLogs(None),
+            OutputFormat::Json,
+            false,
+        )
+        .await
+    }
+
+    fn upload_with_deployment() -> serde_json::Value {
+        json!({"id": "01JZA237920RN65T2XHCCV7296", "deployment_id": DEPLOYMENT_ID, "content_type": "shiny"})
+    }
+
+    #[tokio::test]
+    async fn follow_succeeds_when_the_deployment_succeeds() {
+        let result = deploy_and_follow(upload_with_deployment(), 200, "success").await;
+        assert!(result.is_ok(), "{result:?}");
+    }
+
+    #[tokio::test]
+    async fn follow_fails_when_the_deployment_fails() {
+        let error = deploy_and_follow(upload_with_deployment(), 200, "failure")
+            .await
+            .expect_err("a failed deployment fails the follow");
+        assert!(
+            error.to_string().contains("finished with status Failure"),
+            "{error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn follow_asks_for_a_server_update_when_the_logs_route_is_missing() {
+        let error = deploy_and_follow(upload_with_deployment(), 404, "success")
+            .await
+            .expect_err("an old server cannot be followed");
+        assert!(error.to_string().contains("Update the server"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn follow_asks_for_a_server_update_without_a_deployment_id() {
+        let upload = json!({"id": "01JZA237920RN65T2XHCCV7296", "content_type": "shiny"});
+        let error = deploy_and_follow(upload, 200, "success")
+            .await
+            .expect_err("an upload without a deployment ID cannot be followed");
+        assert!(
+            error.to_string().contains("did not return a deployment ID"),
+            "{error}"
+        );
+    }
 }
