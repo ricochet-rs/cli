@@ -332,6 +332,34 @@ impl RicochetClient {
         Self::handle_response(response).await
     }
 
+    /// The IDs of a deployment's restore logs, one per architecture, waiting until the restore opens them.
+    pub(crate) async fn deployment_logs(&self, deployment_id: &str) -> Result<Vec<String>> {
+        #[derive(serde::Deserialize)]
+        struct DeploymentLogs {
+            log_ids: Vec<String>,
+        }
+
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/deployments/{deployment_id}/logs"));
+
+        let response = self
+            .client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        // Just after an upload the deployment exists, so a 404 means the route does not.
+        if response.status() == StatusCode::NOT_FOUND {
+            anyhow::bail!(
+                "This Ricochet server cannot stream deployment logs. Update the server to use `deploy --follow`."
+            );
+        }
+
+        let logs: DeploymentLogs = Self::handle_response(response).await?;
+        Ok(logs.log_ids)
+    }
+
     /// Open a log for reading, following it until the server closes it.
     pub(crate) async fn stream_log(&self, log_id: &str) -> Result<crate::log_stream::LogStream> {
         let mut url = self.base_url.clone();

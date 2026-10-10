@@ -381,6 +381,15 @@ fn mock_api(server: &mut Server) {
             "Execution environment: host\n[2026-10-09T13:48:04.089522Z stdout] {\"not\": \"json\"}\n[2026-10-09T13:48:06.643970Z stderr] restore complete",
         )
         .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/deployments/{DEPLOYMENT_ID}/logs").as_str(),
+        )
+        .with_status(200)
+        .with_body(json!({"log_ids": [LOG_ID]}).to_string())
+        .create();
 }
 
 fn invocation(id: &str, status: &str) -> serde_json::Value {
@@ -863,6 +872,48 @@ async fn deploy_writes_json_alone() {
         .await;
     assert_eq!(payload["id"], CONTENT_ID);
     assert_eq!(payload["deployment_id"], DEPLOYMENT_ID);
+}
+
+#[tokio::test]
+async fn deploy_follow_writes_one_json_object_per_line() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().unwrap();
+    write_project(project.path(), LOCAL_TOML);
+
+    let output = cli
+        .run(&[
+            "deploy",
+            project.path().to_str().unwrap(),
+            "--follow",
+            "-F",
+            "json",
+        ])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "deploy --follow failed: {stderr}");
+
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let records: Vec<serde_json::Value> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each stdout line is JSON"))
+        .collect();
+    assert_eq!(records[0]["deployment_id"], DEPLOYMENT_ID);
+    assert_eq!(
+        records[1..],
+        [
+            json!({"line": "Execution environment: host", "timestamp": null, "stream": null}),
+            json!({
+                "line": "{\"not\": \"json\"}",
+                "timestamp": "2026-10-09T13:48:04.089522Z",
+                "stream": "stdout"
+            }),
+            json!({
+                "line": "restore complete",
+                "timestamp": "2026-10-09T13:48:06.64397Z",
+                "stream": "stderr"
+            }),
+        ]
+    );
 }
 
 #[tokio::test]

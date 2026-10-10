@@ -155,6 +155,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -214,6 +215,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -252,6 +254,7 @@ shinyApp(ui = ui, server = server)"#,
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -299,6 +302,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -340,6 +344,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -399,6 +404,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -460,6 +466,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -511,6 +518,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -567,6 +575,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -619,6 +628,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -673,6 +683,7 @@ key = "value"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -741,6 +752,7 @@ packages = "uv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -789,6 +801,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -823,6 +836,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -858,6 +872,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -907,6 +922,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -966,6 +982,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -1012,6 +1029,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -1039,6 +1057,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -1079,6 +1098,7 @@ packages = "renv.lock"
             None,
             None,
             vec!["SECRET=shh".to_string()],
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -1121,6 +1141,7 @@ packages = "renv.lock"
             None,
             None,
             Vec::new(),
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )
@@ -1160,6 +1181,7 @@ packages = "renv.lock"
             None,
             None,
             vec!["SECRET=shh".to_string()],
+            ricochet_cli::commands::deploy::AfterUpload::Exit,
             OutputFormat::Table,
             false,
         )

@@ -31,6 +31,15 @@ impl FromStr for Lines {
     }
 }
 
+/// How following a log finished.
+#[derive(Debug, PartialEq)]
+pub(crate) enum LogEnd {
+    /// The server closed the log.
+    Closed,
+    /// The viewer pressed Ctrl-C.
+    Interrupted,
+}
+
 /// Print a log as it is written, until the server closes it.
 pub async fn follow_log(
     config: &Config,
@@ -41,10 +50,21 @@ pub async fn follow_log(
 ) -> Result<()> {
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
+    print_log(&client, id, lines, format, &Term::stdout()).await?;
+    Ok(())
+}
+
+/// Write a log to `term` as it is written, until the server closes it or the viewer presses Ctrl-C.
+pub(crate) async fn print_log(
+    client: &RicochetClient,
+    id: &str,
+    lines: Option<Lines>,
+    format: OutputFormat,
+    term: &Term,
+) -> Result<LogEnd> {
     let mut stream = client.stream_log(id).await?;
     let timezone = TimeZone::system();
 
-    let term = Term::stdout();
     // A rolling window only makes sense where lines can be redrawn in place.
     // Each redraw caps the window at the terminal height.
     let window = match (format, lines) {
@@ -55,9 +75,9 @@ pub async fn follow_log(
 
     let Some(window) = window else {
         while let Some(line) = stream.next_line().await? {
-            format.print_record(&line, || Ok(render_line(&line, &timezone)))?;
+            term.write_line(&format.render_record(&line, || Ok(render_line(&line, &timezone)))?)?;
         }
-        return Ok(());
+        return Ok(LogEnd::Closed);
     };
 
     let mut history = VecDeque::new();
@@ -68,11 +88,11 @@ pub async fn follow_log(
     let outcome = loop {
         let line = tokio::select! {
             line = stream.next_line() => line,
-            _ = &mut interrupted => Ok(None),
+            _ = &mut interrupted => break Ok(LogEnd::Interrupted),
         };
         let line = match line {
             Ok(Some(line)) => line,
-            Ok(None) => break Ok(()),
+            Ok(None) => break Ok(LogEnd::Closed),
             Err(error) => break Err(error),
         };
 

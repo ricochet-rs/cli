@@ -52,16 +52,6 @@ impl OutputFormat {
             Self::Table => table(),
         }
     }
-
-    /// Write one rendered record of a stream to stdout.
-    pub fn print_record<T: Serialize>(
-        self,
-        record: &T,
-        table: impl FnOnce() -> Result<String>,
-    ) -> Result<()> {
-        println!("{}", self.render_record(record, table)?);
-        Ok(())
-    }
 }
 
 #[cfg(test)]

@@ -1,7 +1,9 @@
+use crate::commands::log::{Lines, LogEnd, print_log};
 use crate::utils::{Exclusion, classify_bundle, format_size};
 use crate::{OutputFormat, client::RicochetClient, config::Config};
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
+use console::Term;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::{
@@ -162,6 +164,14 @@ impl LocalDeploy {
     }
 }
 
+/// What `deploy` does once the server accepts the bundle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AfterUpload {
+    Exit,
+    /// Stream the deployment's restore logs until they end, keeping `Lines` on screen as `ricochet log` does.
+    FollowLogs(Option<Lines>),
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn deploy(
     config: &Config,
@@ -170,6 +180,7 @@ pub async fn deploy(
     _name: Option<String>,
     _description: Option<String>,
     env: Vec<String>,
+    after_upload: AfterUpload,
     format: OutputFormat,
     debug: bool,
 ) -> Result<()> {
@@ -258,6 +269,10 @@ pub async fn deploy(
             pb.finish_and_clear();
 
             let id = response.get("id").and_then(|v| v.as_str());
+            let deployment_id = response
+                .get("deployment_id")
+                .or_else(|| response.get("deploymentId"))
+                .and_then(|v| v.as_str());
 
             // A new content item only learns its ID here, so write it back.
             if let Some(id) = id
@@ -266,7 +281,7 @@ pub async fn deploy(
                 write_content_id(&toml_path, id)?;
             }
 
-            format.print(&response, || {
+            let table = || {
                 let Some(id) = id else {
                     return Ok(serde_json::to_string_pretty(&response)?);
                 };
@@ -274,18 +289,27 @@ pub async fn deploy(
                 let base_url = server_config.url.as_str().trim_end_matches('/');
                 let mut output = format!("  {label:<12}{base_url}/{route}/{id}/overview");
 
-                if let Some(deployment_id) = response
-                    .get("deployment_id")
-                    .or_else(|| response.get("deploymentId"))
-                    .and_then(|v| v.as_str())
-                {
+                if let Some(deployment_id) = deployment_id {
                     output.push_str(&format!(
                         "\n  Deployment: {base_url}/deployments/{deployment_id}"
                     ));
                 }
 
                 Ok(output)
-            })
+            };
+
+            let lines = match after_upload {
+                AfterUpload::Exit => return format.print(&response, table),
+                AfterUpload::FollowLogs(lines) => lines,
+            };
+            // The log records that follow need the payload as a record too, so stdout stays one record per line.
+            println!("{}", format.render_record(&response, table)?);
+            let Some(deployment_id) = deployment_id else {
+                bail!(
+                    "The server did not return a deployment ID, so its logs cannot be followed. Update the Ricochet server to use `deploy --follow`."
+                );
+            };
+            follow_deployment_logs(&client, deployment_id, lines, format).await
         }
         Err(e) => {
             pb.finish_and_clear();
@@ -335,6 +359,34 @@ pub async fn deploy(
             anyhow::bail!("Deployment failed: {}", e)
         }
     }
+}
+
+/// Stream each of a deployment's restore logs in turn, one per architecture it builds for.
+async fn follow_deployment_logs(
+    client: &RicochetClient,
+    deployment_id: &str,
+    lines: Option<Lines>,
+    format: OutputFormat,
+) -> Result<()> {
+    // Headers are for a person, so a machine-readable format keeps them off stdout.
+    let status = match format {
+        OutputFormat::Table => Term::stdout(),
+        OutputFormat::Json | OutputFormat::Yaml => Term::stderr(),
+    };
+
+    let log_ids = client.deployment_logs(deployment_id).await?;
+    let total = log_ids.len();
+    for (index, log_id) in log_ids.iter().enumerate() {
+        status.write_line("")?;
+        if total > 1 {
+            status.write_line(&format!("Log {} of {total}", index + 1).bold().to_string())?;
+        }
+        let end = print_log(client, log_id, lines, format, &Term::stdout()).await?;
+        if end == LogEnd::Interrupted {
+            break;
+        }
+    }
+    Ok(())
 }
 
 /// A file `deploy --dry-run` reports, with the verdict a deploy would reach on it.
