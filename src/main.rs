@@ -102,6 +102,14 @@ enum Commands {
         #[arg(short = 'f', long)]
         force: bool,
     },
+    /// Stream a log
+    Log {
+        /// Log ID (ULID)
+        id: String,
+        /// Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
+        #[arg(short = 'n', long)]
+        lines: Option<commands::log::Lines>,
+    },
     /// Invoke a task (deprecated: use `ricochet task invoke` instead)
     #[command(hide = true)]
     Invoke {
@@ -551,6 +559,10 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force, cli.format)
+                .await?;
+        }
+        Some(Commands::Log { id, lines }) => {
+            commands::log::follow_log(&config, cli.server.as_deref(), &id, lines, cli.format)
                 .await?;
         }
         Some(Commands::Invoke { id }) => {

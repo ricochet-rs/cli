@@ -81,20 +81,24 @@ impl RicochetClient {
     }
 
     async fn handle_response<T: DeserializeOwned>(response: Response) -> Result<T> {
-        let status = response.status();
+        Self::reject_error_status(response)
+            .await?
+            .json::<T>()
+            .await
+            .context("Failed to parse response")
+    }
 
+    /// Turn a non-success response into an error carrying the server's message.
+    async fn reject_error_status(response: Response) -> Result<Response> {
+        let status = response.status();
         if status.is_success() {
-            response
-                .json::<T>()
-                .await
-                .context("Failed to parse response")
-        } else {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            anyhow::bail!("Request failed with status {}: {}", status, error_text)
+            return Ok(response);
         }
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        anyhow::bail!("Request failed with status {status}: {error_text}")
     }
 
     fn mask_api_key(key: &str) -> String {
@@ -330,6 +334,27 @@ impl RicochetClient {
             .await?;
 
         Self::handle_response(response).await
+    }
+
+    /// Open a log for reading, following it until the server closes it.
+    pub(crate) async fn stream_log(&self, log_id: &str) -> Result<crate::log_stream::LogStream> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/logs/{log_id}"));
+
+        // A live log outlasts the shared client's request timeout, so only the wait for headers is bounded.
+        let client = Client::builder().build()?;
+        let request = client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send();
+        let response = tokio::time::timeout(std::time::Duration::from_secs(30), request)
+            .await
+            .with_context(|| {
+                format!("The server did not start sending log {log_id} within 30 seconds")
+            })??;
+
+        let response = Self::reject_error_status(response).await?;
+        Ok(crate::log_stream::LogStream::new(response))
     }
 
     pub async fn get_status(&self, id: &str) -> Result<serde_json::Value> {
