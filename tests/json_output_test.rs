@@ -795,6 +795,35 @@ async fn task_invoke_writes_json_alone() {
 }
 
 #[tokio::test]
+async fn task_invoke_reads_the_id_from_the_local_toml() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().unwrap();
+    let toml_path = project.path().join("_ricochet.toml");
+    std::fs::write(
+        &toml_path,
+        format!(
+            r#"[content]
+id = "{CONTENT_ID}"
+name = "local-task"
+entrypoint = "task.R"
+access_type = "external"
+content_type = "r"
+
+[language]
+name = "r"
+packages = "renv.lock"
+"#
+        ),
+    )
+    .expect("writing _ricochet.toml");
+
+    let payload = cli
+        .json(&["task", "invoke", "-p", toml_path.to_str().unwrap()])
+        .await;
+    assert_eq!(payload["id"], INVOCATION_ID);
+}
+
+#[tokio::test]
 async fn task_invoke_wait_writes_the_finished_run_alone() {
     let cli = Cli::new().await;
     let payload = cli.json(&["task", "invoke", CONTENT_ID, "--wait"]).await;
