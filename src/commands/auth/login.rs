@@ -200,7 +200,7 @@ fn resolve_login_server(
         );
     }
 
-    if config.servers.is_empty() {
+    if config_is_unconfigured(config) {
         return Ok((
             crate::config::parse_server_url(HOSTED_TRIAL_SERVER)?,
             Some(HOSTED_TRIAL_PROFILE.to_string()),
@@ -216,6 +216,16 @@ fn resolve_login_server(
         server_name,
         LoginServerSource::Configured,
     ))
+}
+
+/// No servers, or only the logged-out localhost default that earlier releases saved.
+fn config_is_unconfigured(config: &Config) -> bool {
+    config.servers.is_empty()
+        || (config.default_server() == Some("default")
+            && config.servers.len() == 1
+            && config.servers.get("default").is_some_and(|server| {
+                server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
+            }))
 }
 
 async fn oauth_login_with_callback(
@@ -698,6 +708,35 @@ mod tests {
         assert_eq!(url.as_str(), "https://try.ricochet.rs/");
         assert_eq!(profile.as_deref(), Some("try"));
         assert_eq!(source, LoginServerSource::HostedTrialFallback);
+    }
+
+    #[test]
+    fn bare_login_uses_hosted_trial_for_legacy_localhost_default() {
+        let config = Config::for_test(
+            Url::parse("http://localhost:3000").expect("valid URL"),
+            None,
+        );
+
+        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+
+        assert_eq!(url.as_str(), "https://try.ricochet.rs/");
+        assert_eq!(profile.as_deref(), Some("try"));
+        assert_eq!(source, LoginServerSource::HostedTrialFallback);
+    }
+
+    #[test]
+    fn explicit_server_preserves_legacy_localhost_default() {
+        let config = Config::for_test(
+            Url::parse("http://localhost:3000").expect("valid URL"),
+            None,
+        );
+
+        let (url, profile, source) =
+            resolve_login_server(&config, Some("default")).expect("server resolves");
+
+        assert_eq!(url.as_str(), "http://localhost:3000/");
+        assert_eq!(profile.as_deref(), Some("default"));
+        assert_eq!(source, LoginServerSource::Configured);
     }
 
     #[test]
