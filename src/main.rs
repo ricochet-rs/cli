@@ -63,6 +63,7 @@ enum Commands {
     ///
     /// Under `-F json`, deploy writes one JSON event per line.
     /// A local deploy reports `bundling` and then `uploading` as the bundle is sent.
+    /// With `--follow`, the log lines follow as `ricochet log -F json` writes them, until the deployment settles.
     /// Every deploy ends with `done`, which carries the server's response, or with `error`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
     Deploy {
         /// Path to the content directory or bundle
@@ -82,6 +83,12 @@ enum Commands {
         /// List the files in a deployment bundle without deploying
         #[arg(long, conflicts_with_all = ["git", "env"])]
         dry_run: bool,
+        /// Stream the deployment's logs until it finishes
+        #[arg(short = 'f', long, conflicts_with_all = ["git", "dry_run"])]
+        follow: bool,
+        /// Number of latest log lines to keep on screen, up to the terminal height, or `all` to print every line
+        #[arg(long, requires = "follow")]
+        lines: Option<commands::log::Lines>,
         /// Deploy from a Git repository instead of a local bundle
         #[arg(long)]
         git: Option<String>,
@@ -105,6 +112,14 @@ enum Commands {
         /// Skip confirmation
         #[arg(short = 'f', long)]
         force: bool,
+    },
+    /// Stream a log
+    Log {
+        /// Log ID (ULID)
+        id: String,
+        /// Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
+        #[arg(short = 'n', long)]
+        lines: Option<commands::log::Lines>,
     },
     /// Invoke a task (deprecated: use `ricochet task invoke` instead)
     #[command(hide = true)]
@@ -519,6 +534,8 @@ async fn main() -> Result<()> {
             description,
             env,
             dry_run,
+            follow,
+            lines,
             git,
             branch,
             repo_path,
@@ -548,6 +565,11 @@ async fn main() -> Result<()> {
                         name,
                         description,
                         env,
+                        if follow {
+                            commands::deploy::AfterUpload::FollowLogs(lines)
+                        } else {
+                            commands::deploy::AfterUpload::Exit
+                        },
                         cli.format,
                         cli.debug,
                     )
@@ -558,6 +580,10 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force, cli.format)
+                .await?;
+        }
+        Some(Commands::Log { id, lines }) => {
+            commands::log::follow_log(&config, cli.server.as_deref(), &id, lines, cli.format)
                 .await?;
         }
         Some(Commands::Invoke { id }) => {

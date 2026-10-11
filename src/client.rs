@@ -270,24 +270,28 @@ impl RicochetClient {
     }
 
     async fn handle_response<T: DeserializeOwned>(response: Response) -> Result<T> {
-        let status = response.status();
+        Self::reject_error_status(response)
+            .await?
+            .json::<T>()
+            .await
+            .context("Failed to parse response")
+    }
 
+    /// Turn a non-success response into an error carrying the server's message.
+    async fn reject_error_status(response: Response) -> Result<Response> {
+        let status = response.status();
         if status.is_success() {
-            response
-                .json::<T>()
-                .await
-                .context("Failed to parse response")
-        } else {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            Err(ApiError::Status {
-                status,
-                message: format!("Request failed with status {status}: {error_text}"),
-            }
-            .into())
+            return Ok(response);
         }
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        Err(ApiError::Status {
+            status,
+            message: format!("Request failed with status {status}: {error_text}"),
+        }
+        .into())
     }
 
     fn mask_api_key(key: &str) -> String {
@@ -545,6 +549,59 @@ impl RicochetClient {
             .await?;
 
         Self::handle_response(response).await
+    }
+
+    /// The IDs of a deployment's restore logs, one per architecture, waiting until the restore opens them.
+    pub(crate) async fn deployment_logs(&self, deployment_id: &str) -> Result<Vec<String>> {
+        #[derive(serde::Deserialize)]
+        struct DeploymentLogs {
+            log_ids: Vec<String>,
+        }
+
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/deployments/{deployment_id}/logs"));
+
+        // The server holds the request open for as long as the deployment waits in the queue,
+        // which can outlast the shared client's request timeout, so only connecting is bounded.
+        let client = Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(30))
+            .build()?;
+        let response = client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send()
+            .await?;
+
+        // Just after an upload the deployment exists, so a 404 means the route does not.
+        if response.status() == StatusCode::NOT_FOUND {
+            anyhow::bail!(
+                "This Ricochet server cannot stream deployment logs. Update the server to use `deploy --follow`."
+            );
+        }
+
+        let logs: DeploymentLogs = Self::handle_response(response).await?;
+        Ok(logs.log_ids)
+    }
+
+    /// Open a log for reading, following it until the server closes it.
+    pub(crate) async fn stream_log(&self, log_id: &str) -> Result<crate::log_stream::LogStream> {
+        let mut url = self.base_url.clone();
+        url.set_path(&format!("/api/v0/content/logs/{log_id}"));
+
+        // A live log outlasts the shared client's request timeout, so only the wait for headers is bounded.
+        let client = Client::builder().build()?;
+        let request = client
+            .get(url)
+            .header("Authorization", format!("Key {}", self.api_key))
+            .send();
+        let response = tokio::time::timeout(std::time::Duration::from_secs(30), request)
+            .await
+            .with_context(|| {
+                format!("The server did not start sending log {log_id} within 30 seconds")
+            })??;
+
+        let response = Self::reject_error_status(response).await?;
+        Ok(crate::log_stream::LogStream::new(response))
     }
 
     pub async fn get_status(&self, id: &str) -> Result<serde_json::Value> {

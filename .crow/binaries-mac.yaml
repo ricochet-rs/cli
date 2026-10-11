@@ -70,6 +70,11 @@ steps:
           echo "Updated Cargo.toml and Cargo.lock to version $VERSION"
           grep "^version" Cargo.toml
         fi
+      # The matrix jobs share this runner, and an sccache server started by
+      # one job cannot read the other job's workspace (compiles fail with
+      # "Operation not permitted"). A socket inside the workspace gives each
+      # job its own server instead of the shared default port 4226.
+      - export SCCACHE_SERVER_UDS="$PWD/.sccache.sock"
       # build
       - just build-static $TARGET
       - tree target/binaries/
@@ -174,6 +179,7 @@ steps:
         ls -lah "$outdir/"
 
         sccache -s
+        sccache --stop-server
 
   'Upload to S3':
     image: bash

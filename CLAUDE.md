@@ -100,6 +100,7 @@ Under `json` and `yaml`, stdout carries the serialised payload and nothing else,
 `deploy -F json` instead streams newline-delimited events through `DeployProgress` in `src/client.rs`, ending with `done` or `error`, so do not route its output through `OutputFormat::print`.
 Raise a server failure as `ApiError` rather than `bail!`, because the `error` event's `kind` comes from downcasting it and a string error is reported as a `project` failure.
 Print command output through `OutputFormat::print` in `src/output.rs`, which serialises the payload for a machine reader and defers the human rendering to a closure that returns a `String`.
+Render each record of an open-ended stream, such as a followed log, through `OutputFormat::render_record`, which renders JSON as one line per record and YAML as one document per record.
 Give every new command a `format` argument and a case in `tests/json_output_test.rs`, which spawns the built binary and asserts that stdout parses as JSON.
 
 ### CI/CD

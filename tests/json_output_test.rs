@@ -4,6 +4,7 @@
 //! link that a command writes to stdout instead of stderr.
 
 use mockito::{Matcher, Server, ServerGuard};
+use serde::Deserialize;
 use serde_json::json;
 use std::path::Path;
 use tempfile::TempDir;
@@ -34,6 +35,8 @@ const FLAKY_INVOCATION_ID: &str = "01KR8888888888888888888888";
 /// A task whose runs the key may start but not read.
 const UNREADABLE_TASK_ID: &str = "01KR9999999999999999999999";
 const UNREADABLE_INVOCATION_ID: &str = "01KRAAAAAAAAAAAAAAAAAAAAAA";
+
+const LOG_ID: &str = "01KRBBBBBBBBBBBBBBBBBBBBBB";
 
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
@@ -369,6 +372,24 @@ fn mock_api(server: &mut Server) {
         .match_body(Matcher::Any)
         .with_status(200)
         .with_body(json!({"id": CONTENT_ID}).to_string())
+        .create();
+
+    server
+        .mock("GET", format!("/api/v0/content/logs/{LOG_ID}").as_str())
+        .with_status(200)
+        .with_header("content-type", "text/plain; charset=utf-8")
+        .with_body(
+            "Execution environment: host\n[2026-10-09T13:48:04.089522Z stdout] {\"not\": \"json\"}\n[2026-10-09T13:48:06.643970Z stderr] restore complete",
+        )
+        .create();
+
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/deployments/{DEPLOYMENT_ID}/logs").as_str(),
+        )
+        .with_status(200)
+        .with_body(json!({"log_ids": [LOG_ID]}).to_string())
         .create();
 }
 
@@ -912,6 +933,42 @@ async fn deploy_writes_yaml_alone() {
 }
 
 #[tokio::test]
+async fn deploy_follow_writes_the_log_between_the_upload_and_done() {
+    let cli = Cli::new().await;
+    let project = TempDir::new().unwrap();
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().unwrap(), "--follow"])
+        .await;
+    assert!(status.success(), "deploy --follow failed: {events:?}");
+
+    let (done, rest) = events.split_last().expect("deploy wrote events");
+    assert_eq!(done["event"], "done");
+    assert_eq!(done["deployment_id"], DEPLOYMENT_ID);
+    let records = rest
+        .iter()
+        .skip_while(|event| event.get("event").is_some())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        records,
+        [
+            &json!({"line": "Execution environment: host", "timestamp": null, "stream": null}),
+            &json!({
+                "line": "{\"not\": \"json\"}",
+                "timestamp": "2026-10-09T13:48:04.089522Z",
+                "stream": "stdout"
+            }),
+            &json!({
+                "line": "restore complete",
+                "timestamp": "2026-10-09T13:48:06.64397Z",
+                "stream": "stderr"
+            }),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn deploy_names_new_and_updated_apps_and_tasks() {
     let cli = Cli::new().await;
     for (content_type, kind, label, route) in [
@@ -1375,4 +1432,67 @@ async fn login_without_browser_rejects_empty_stdin() {
     let output = cli.run_with_stdin(&["login", "--no-browser"], "").await;
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("No API key was provided on stdin"));
+}
+
+#[tokio::test]
+async fn log_writes_one_json_object_per_line() {
+    let cli = Cli::new().await;
+    let output = cli.run(&["log", LOG_ID, "-F", "json"]).await;
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    assert!(
+        output.status.success(),
+        "log failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lines: Vec<serde_json::Value> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each stdout line is JSON"))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            json!({"line": "Execution environment: host", "timestamp": null, "stream": null}),
+            json!({
+                "line": "{\"not\": \"json\"}",
+                "timestamp": "2026-10-09T13:48:04.089522Z",
+                "stream": "stdout"
+            }),
+            json!({
+                "line": "restore complete",
+                "timestamp": "2026-10-09T13:48:06.64397Z",
+                "stream": "stderr"
+            }),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn log_writes_one_yaml_document_per_line() {
+    let cli = Cli::new().await;
+    let output = cli.run(&["log", LOG_ID, "-F", "yaml"]).await;
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    assert!(
+        output.status.success(),
+        "log failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lines: Vec<String> = serde_yaml::Deserializer::from_str(&stdout)
+        .map(|document| {
+            let record = serde_yaml::Value::deserialize(document).expect("each document is YAML");
+            record["line"]
+                .as_str()
+                .expect("each record has a line")
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Execution environment: host",
+            "{\"not\": \"json\"}",
+            "restore complete"
+        ]
+    );
 }
