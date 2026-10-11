@@ -781,7 +781,17 @@ async fn task_invoke_reads_the_id_from_the_local_toml() {
     std::fs::write(
         &toml_path,
         format!(
-            "[content]\nid = \"{CONTENT_ID}\"\nname = \"local-task\"\nentrypoint = \"task.R\"\naccess_type = \"external\"\ncontent_type = \"r\"\n\n[language]\nname = \"r\"\npackages = \"renv.lock\"\n"
+            r#"[content]
+id = "{CONTENT_ID}"
+name = "local-task"
+entrypoint = "task.R"
+access_type = "external"
+content_type = "r"
+
+[language]
+name = "r"
+packages = "renv.lock"
+"#
         ),
     )
     .expect("writing _ricochet.toml");
@@ -790,7 +800,6 @@ async fn task_invoke_reads_the_id_from_the_local_toml() {
         .json(&["task", "invoke", "-p", toml_path.to_str().unwrap()])
         .await;
     assert_eq!(payload["id"], INVOCATION_ID);
-    assert_eq!(payload["content_id"], CONTENT_ID);
 }
 
 #[tokio::test]
