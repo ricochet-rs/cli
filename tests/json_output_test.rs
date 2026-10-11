@@ -457,6 +457,7 @@ impl Cli {
             .env("HOME", self.home.path())
             .env_remove("RICOCHET_SERVER")
             .env_remove("RICOCHET_API_KEY")
+            .env_remove("RUST_LOG")
             .env("RICOCHET_NO_UPDATE_CHECK", "1")
             .env("NO_COLOR", "1")
             .output()
@@ -473,6 +474,7 @@ impl Cli {
             .env("HOME", self.home.path())
             .env_remove("RICOCHET_SERVER")
             .env_remove("RICOCHET_API_KEY")
+            .env_remove("RUST_LOG")
             .env("RICOCHET_NO_UPDATE_CHECK", "1")
             .env("NO_COLOR", "1")
             .stdin(std::process::Stdio::piped())
@@ -1122,6 +1124,31 @@ async fn login_and_logout_write_json_alone() {
     let login = cli.json(&["login", "-k", "rico_testkey123456"]).await;
     assert_eq!(login["server"], "test");
     assert_eq!(login["api_key"], "rico_tes...3456");
+}
+
+#[tokio::test]
+async fn debug_logs_to_stderr_and_keeps_json_stdout_clean() {
+    let cli = Cli::new().await;
+    let debug_event = "api key check responded";
+
+    let output = cli.run(&["login", "--debug", "-F", "json"]).await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "login --debug failed: {stderr}");
+    assert!(
+        stderr.contains(debug_event),
+        "--debug wrote no debug event to stderr:\n{stderr}"
+    );
+    let login: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout is JSON alone");
+    assert_eq!(login["server"], "test");
+
+    let output = cli.run(&["login", "-F", "json"]).await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "login failed: {stderr}");
+    assert!(
+        !stderr.contains(debug_event),
+        "debug event written without --debug:\n{stderr}"
+    );
 }
 
 /// `deploy --dry-run` reads only the directory, so it works before `ricochet login`.
