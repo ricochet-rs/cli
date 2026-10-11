@@ -116,10 +116,11 @@ impl RicochetClient {
         url.set_path("/api/v0/check_key");
         let response = self
             .client
-            .get(url)
+            .get(url.as_str())
             .header("Authorization", format!("Key {}", self.api_key))
             .send()
             .await?;
+        tracing::debug!(%url, status = %response.status(), "api key check responded");
 
         Ok(response.status() == StatusCode::OK)
     }

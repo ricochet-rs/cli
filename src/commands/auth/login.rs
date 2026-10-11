@@ -79,6 +79,21 @@ pub async fn login(
 
     // Resolve which server to authenticate with
     let (server_url, server_name, server_source) = resolve_login_server(config, server_ref)?;
+    tracing::debug!(server = %server_url, profile = ?server_name, source = ?server_source, "resolved login server");
+    let proxy_vars: Vec<&str> = [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ]
+    .into_iter()
+    .filter(|name| std::env::var_os(name).is_some())
+    .collect();
+    tracing::debug!(?proxy_vars, "proxy environment variables set");
 
     eprintln!("Server: {}", server_url.as_str().bright_cyan());
     if let Some(ref name) = server_name {
@@ -99,7 +114,11 @@ pub async fn login(
         && let Some(ref existing_key) = sc.api_key
     {
         let client = RicochetClient::new_with_key(server_url.to_string(), existing_key.clone())?;
-        if client.validate_key().await.unwrap_or(false) {
+        let existing_key_valid = client.validate_key().await.unwrap_or_else(|err| {
+            tracing::debug!(error = format!("{err:#}"), "existing api key check failed");
+            false
+        });
+        if existing_key_valid {
             eprintln!(
                 "{}",
                 "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)".dimmed()
@@ -433,6 +452,7 @@ async fn create_api_key_with_session(
         .send()
         .await?;
 
+    tracing::debug!(url = %api_key_url, status = %response.status(), "api key creation responded");
     if response.status().is_success() {
         let api_key_data: ApiKeyResponse = response.json().await?;
 
@@ -619,9 +639,7 @@ async fn validate_and_save_key(
         Ok(false) => {
             anyhow::bail!("Invalid API key. Please check and try again.")
         }
-        Err(e) => {
-            anyhow::bail!("Failed to validate credentials: {}", e)
-        }
+        Err(e) => Err(e.context("Failed to validate credentials")),
     }
 }
 

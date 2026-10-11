@@ -100,6 +100,7 @@ Under `json` and `yaml`, stdout carries the serialised payload and nothing else,
 Print command output through `OutputFormat::print` in `src/output.rs`, which serialises the payload for a machine reader and defers the human rendering to a closure that returns a `String`.
 Render each record of an open-ended stream, such as a followed log, through `OutputFormat::render_record`, which renders JSON as one line per record and YAML as one document per record.
 Give every new command a `format` argument and a case in `tests/json_output_test.rs`, which spawns the built binary and asserts that stdout parses as JSON.
+Emit diagnostics with `tracing::debug!` rather than passing `cli.debug` into a command, because `--debug` only installs the stderr subscriber in `main` and a command that is not handed the flag stays silent.
 
 ### CI/CD
 

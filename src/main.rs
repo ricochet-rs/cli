@@ -37,7 +37,7 @@ struct Cli {
     )]
     format: OutputFormat,
 
-    /// Enable debug output
+    /// Enable debug output on stderr, including HTTP connection and proxy details (filter with RUST_LOG)
     #[arg(global = true, long, help_heading = "Global Options")]
     debug: bool,
 
@@ -490,6 +490,19 @@ enum SelfCommands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if cli.debug {
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            tracing_subscriber::EnvFilter::new(
+                "ricochet=debug,ricochet_cli=debug,reqwest=debug,hyper_util=debug",
+            )
+        });
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+            .init();
+    }
 
     // Handle version flag
     if cli.version {
