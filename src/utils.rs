@@ -139,6 +139,7 @@ pub fn prepare_bundle(
         .collect())
 }
 
+/// Write the bundle for `dir` to `output` and return the number of files it holds.
 pub fn create_bundle(
     dir: &Path,
     output: &Path,
@@ -146,7 +147,7 @@ pub fn create_bundle(
     exclude: Option<Vec<String>>,
     extra_root_files: &[(PathBuf, String)],
     debug: bool,
-) -> Result<()> {
+) -> Result<usize> {
     let tar_gz = File::create(output)?;
     let enc = flate2::write::GzEncoder::new(tar_gz, flate2::Compression::default());
     let mut tar = tar::Builder::new(enc);
@@ -177,6 +178,8 @@ pub fn create_bundle(
         eprintln!();
     }
 
+    let mut files = extra_root_files.len();
+
     // Add files to tar (directories will be created automatically)
     for path in files_to_bundle {
         // Only add files, skip directories
@@ -196,6 +199,7 @@ pub fn create_bundle(
                 "Failed to add {} to bundle",
                 relative_path.display()
             ))?;
+        files += 1;
     }
 
     // Add extra files at the bundle root (e.g. uv.lock from a parent directory)
@@ -206,7 +210,7 @@ pub fn create_bundle(
 
     tar.finish().context("Failed to finalize tar bundle")?;
 
-    Ok(())
+    Ok(files)
 }
 
 pub(crate) fn format_size(bytes: u64) -> String {

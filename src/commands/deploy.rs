@@ -1,6 +1,10 @@
 use crate::commands::log::{Lines, LogEnd, print_log};
 use crate::utils::{Exclusion, classify_bundle, format_size};
-use crate::{OutputFormat, client::RicochetClient, config::Config};
+use crate::{
+    OutputFormat,
+    client::{DeployProgress, RicochetClient},
+    config::Config,
+};
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use console::Term;
@@ -250,9 +254,14 @@ pub async fn deploy(
         Some(crate::crypto::encrypt_env_vars(&pub_key, &resolved)?)
     };
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner().template("  {spinner:.green} {msg}")?);
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
+    let progress = if format == OutputFormat::Json {
+        DeployProgress::Events
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().template("  {spinner:.green} {msg}")?);
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        DeployProgress::Bar(pb)
+    };
 
     match client
         .deploy(
@@ -261,13 +270,13 @@ pub async fn deploy(
             &toml_path,
             &extra_root_files,
             env_vars,
-            &pb,
+            &progress,
             debug,
         )
         .await
     {
         Ok(response) => {
-            pb.finish_and_clear();
+            progress.finish();
 
             let id = response.get("id").and_then(|v| v.as_str());
             let deployment_id = response
@@ -276,10 +285,39 @@ pub async fn deploy(
                 .and_then(|v| v.as_str());
 
             // A new content item only learns its ID here, so write it back.
+            // The deploy already succeeded, so a failed write must not invite a retry that creates a second item.
             if let Some(id) = id
                 && content_id.is_none()
+                && let Err(e) = write_content_id(&toml_path, id)
             {
-                write_content_id(&toml_path, id)?;
+                eprintln!(
+                    "{} Deployed, but could not record the ID in {}: {e}\n  Add `id = \"{id}\"` under [content] before deploying again, or the next deploy creates a new item.",
+                    "⚠".yellow(),
+                    toml_path.display()
+                );
+            }
+
+            let follow = match after_upload {
+                AfterUpload::Exit => None,
+                AfterUpload::FollowLogs(lines) => Some(lines),
+            };
+            let followable = || {
+                deployment_id.context(
+                    "The server did not return a deployment ID, so its logs cannot be followed. Update the Ricochet server to use `deploy --follow`.",
+                )
+            };
+
+            if let DeployProgress::Events = progress {
+                // `done` ends the stream, so under `--follow` it comes after the log records, once the deployment settles.
+                if let Some(lines) = follow
+                    && follow_deployment_logs(&client, server_ref, followable()?, lines, format)
+                        .await?
+                        == LogEnd::ReaderGone
+                {
+                    return Ok(());
+                }
+                DeployProgress::emit_done(&response);
+                return Ok(());
             }
 
             let table = || {
@@ -299,21 +337,21 @@ pub async fn deploy(
                 Ok(output)
             };
 
-            let lines = match after_upload {
-                AfterUpload::Exit => return format.print(&response, table),
-                AfterUpload::FollowLogs(lines) => lines,
+            let Some(lines) = follow else {
+                return format.print(&response, table);
             };
             // The log records that follow need the payload as a record too, so stdout stays one record per line.
             println!("{}", format.render_record(&response, table)?);
-            let Some(deployment_id) = deployment_id else {
-                bail!(
-                    "The server did not return a deployment ID, so its logs cannot be followed. Update the Ricochet server to use `deploy --follow`."
-                );
-            };
-            follow_deployment_logs(&client, server_ref, deployment_id, lines, format).await
+            follow_deployment_logs(&client, server_ref, followable()?, lines, format).await?;
+            Ok(())
         }
         Err(e) => {
-            pb.finish_and_clear();
+            progress.finish();
+
+            // The error event's `kind` stands in for the hints, which would also discard the error's type.
+            if let DeployProgress::Events = progress {
+                return Err(e);
+            }
 
             if e.to_string().contains("first deployment") {
                 eprintln!("{} Deployment failed: {}\n", "✗".red().bold(), e);
@@ -362,14 +400,26 @@ pub async fn deploy(
     }
 }
 
+/// Under `-F json`, write the `error` event for a failed deploy, then pass `deployed` on.
+pub fn emit_error_event(format: OutputFormat, deployed: Result<()>) -> Result<()> {
+    if let Err(e) = &deployed
+        && format == OutputFormat::Json
+    {
+        DeployProgress::emit_error(e)?;
+    }
+    deployed
+}
+
 /// Stream each of a deployment's restore logs in turn, one per architecture it builds for.
+///
+/// Returns `LogEnd::ReaderGone` when the reader of stdout stops watching, and `LogEnd::Closed` once the deployment settles.
 async fn follow_deployment_logs(
     client: &RicochetClient,
     server_ref: Option<&str>,
     deployment_id: &str,
     lines: Option<Lines>,
     format: OutputFormat,
-) -> Result<()> {
+) -> Result<LogEnd> {
     // Headers are for a person, so a machine-readable format keeps them off stdout.
     let status = match format {
         OutputFormat::Table => Term::stdout(),
@@ -386,7 +436,7 @@ async fn follow_deployment_logs(
         }
         match print_log(client, server_ref, log_id, lines, format, &log_term).await? {
             LogEnd::Closed => {}
-            LogEnd::ReaderGone => return Ok(()),
+            LogEnd::ReaderGone => return Ok(LogEnd::ReaderGone),
             // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
             LogEnd::Interrupted => std::process::exit(130),
         }
@@ -399,13 +449,13 @@ async fn follow_deployment_logs(
         _ = tokio::signal::ctrl_c() => std::process::exit(130),
     };
     match outcome {
-        DeploymentStatus::Success => Ok(()),
+        DeploymentStatus::Success => Ok(LogEnd::Closed),
         DeploymentStatus::DependencyMismatch => {
             eprintln!(
                 "{} Deployment {deployment_id} is running with packages that differ from the ones it asked for. Run `ricochet app deployment get {deployment_id}` to compare them.",
                 "Warning:".yellow()
             );
-            Ok(())
+            Ok(LogEnd::Closed)
         }
         status => bail!("Deployment {deployment_id} finished with status {status}."),
     }
@@ -607,14 +657,24 @@ pub async fn deploy_git(
         repo.url.bright_cyan()
     );
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    pb.set_message("Creating content item and starting deployment");
+    let progress = if format == OutputFormat::Json {
+        DeployProgress::Events
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
+        pb.enable_steady_tick(std::time::Duration::from_millis(80));
+        pb.set_message("Creating content item and starting deployment");
+        DeployProgress::Bar(pb)
+    };
 
     match client.deploy_git(&repo, toml_content, credential).await {
         Ok(response) => {
-            pb.finish_and_clear();
+            progress.finish();
+
+            if let DeployProgress::Events = progress {
+                DeployProgress::emit_done(&response);
+                return Ok(());
+            }
 
             format.print(&response, || {
                 let mut output = format!("{} Deployment successful!", "✓".green().bold());
@@ -636,7 +696,10 @@ pub async fn deploy_git(
             })
         }
         Err(e) => {
-            pb.finish_and_clear();
+            progress.finish();
+            if let DeployProgress::Events = progress {
+                return Err(e);
+            }
             anyhow::bail!("Deployment failed: {}", e)
         }
     }

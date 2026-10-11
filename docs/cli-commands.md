@@ -116,6 +116,8 @@ Remove stored credentials
 
 Deploy content to a Ricochet server
 
+Under `-F json`, deploy writes one JSON event per line. A local deploy reports `bundling` and then `uploading` as the bundle is sent. With `--follow`, the log lines follow as `ricochet log -F json` writes them, until the deployment settles. Every deploy ends with `done`, which carries the server's response, or with `error`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
+
 **Usage:** `ricochet deploy [OPTIONS] [PATH]`
 
 ###### **Arguments:**
