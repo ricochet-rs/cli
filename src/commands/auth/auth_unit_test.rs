@@ -21,11 +21,10 @@ mod tests {
     fn test_logout_clears_api_key() {
         let _temp_dir = setup_test_env();
 
-        let mut config = Config::default();
-        // Set API key on the default server
-        if let Some(server) = config.servers.get_mut("default") {
-            server.api_key = Some("rico_test_key".to_string());
-        }
+        let mut config = Config::for_test(
+            url::Url::parse("https://ricochet.example.com").unwrap(),
+            Some("rico_test_key".to_string()),
+        );
 
         // Call logout with no server specified (uses default)
         let result = super::super::logout(&mut config, None, crate::OutputFormat::Table);
@@ -48,11 +47,10 @@ mod tests {
     fn test_logout_when_not_logged_in() {
         let _temp_dir = setup_test_env();
 
-        let mut config = Config::default();
-        // Clear any API key from default server
-        if let Some(server) = config.servers.get_mut("default") {
-            server.api_key = None;
-        }
+        let mut config = Config::for_test(
+            url::Url::parse("https://ricochet.example.com").unwrap(),
+            None,
+        );
 
         // Call logout when already logged out
         let result = super::super::logout(&mut config, None, crate::OutputFormat::Table);

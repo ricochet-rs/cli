@@ -47,19 +47,11 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let mut servers = HashMap::new();
-        servers.insert(
-            "default".to_string(),
-            ServerConfig {
-                url: Url::parse("http://localhost:3000").unwrap(),
-                api_key: None,
-            },
-        );
         Self {
             server: None,
             api_key: None,
-            servers,
-            default_server: Some("default".to_string()),
+            servers: HashMap::new(),
+            default_server: None,
             default_format: Some("table".to_string()),
             skip_update_check: None,
         }
@@ -127,6 +119,7 @@ impl Config {
                 config.migrate_v1_config();
                 config.save()?;
             }
+            config.remove_localhost_placeholder();
 
             Ok(config)
         } else {
@@ -141,6 +134,20 @@ impl Config {
             self.servers
                 .insert("default".to_string(), ServerConfig { url, api_key });
             self.default_server = Some("default".to_string());
+        }
+    }
+
+    /// Drop the logged-out `default` localhost:3000 entry that earlier releases seeded.
+    fn remove_localhost_placeholder(&mut self) {
+        let is_placeholder = self.servers.get("default").is_some_and(|server| {
+            server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
+        });
+        if !is_placeholder {
+            return;
+        }
+        self.servers.remove("default");
+        if self.default_server.as_deref() == Some("default") {
+            self.default_server = None;
         }
     }
 
@@ -203,7 +210,7 @@ impl Config {
         let available: Vec<&String> = self.servers.keys().collect();
         if available.is_empty() {
             anyhow::bail!(
-                "Server '{}' not found. No servers configured. Use 'ricochet server add' to add one.",
+                "Server '{}' not found. No servers configured. Run `ricochet login <URL>` to add one.",
                 server_str
             )
         } else {
@@ -240,7 +247,7 @@ impl Config {
             return Ok(self.apply_env_key_override(server_config.clone()));
         }
 
-        anyhow::bail!("No servers configured. Use 'ricochet server add' to add a server.")
+        anyhow::bail!("No servers configured. Run `ricochet login <URL>` to add one.")
     }
 
     /// Add or update a server
@@ -421,6 +428,31 @@ mod tests {
     fn test_parse_server_url_invalid_url() {
         let result = parse_server_url("http://");
         assert!(result.is_err());
+    }
+
+    // ==================== placeholder tests ====================
+
+    #[test]
+    fn test_remove_localhost_placeholder() {
+        let mut config = Config::for_test(Url::parse("http://localhost:3000").unwrap(), None);
+
+        config.remove_localhost_placeholder();
+
+        assert!(config.servers.is_empty());
+        assert_eq!(config.default_server, None);
+    }
+
+    #[test]
+    fn test_remove_localhost_placeholder_keeps_logged_in_server() {
+        let mut config = Config::for_test(
+            Url::parse("http://localhost:3000").unwrap(),
+            Some("rico_key".to_string()),
+        );
+
+        config.remove_localhost_placeholder();
+
+        assert!(config.servers.contains_key("default"));
+        assert_eq!(config.default_server, Some("default".to_string()));
     }
 
     // ==================== add_server tests ====================
