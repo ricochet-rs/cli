@@ -86,7 +86,7 @@ Ricochet CLI
 
   Possible values: `table`, `json`, `yaml`
 
-* `--debug` — Enable debug output
+* `--debug` — Enable debug output on stderr, including HTTP connection and proxy details (filter with RUST_LOG)
 * `-V`, `--version` — Print version
 
 

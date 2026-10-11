@@ -51,6 +51,8 @@ tar = "0.4"
 tempfile = "3.8"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "1.0"
 ulid = "3.0"
 unicode-icons = "2.0"
