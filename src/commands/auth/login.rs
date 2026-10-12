@@ -219,7 +219,7 @@ fn resolve_login_server(
         );
     }
 
-    if config_is_untouched_default(config) {
+    if config_is_unconfigured(config) {
         return Ok((
             crate::config::parse_server_url(HOSTED_TRIAL_SERVER)?,
             Some(HOSTED_TRIAL_PROFILE.to_string()),
@@ -237,12 +237,14 @@ fn resolve_login_server(
     ))
 }
 
-fn config_is_untouched_default(config: &Config) -> bool {
-    config.default_server() == Some("default")
-        && config.servers.len() == 1
-        && config.servers.get("default").is_some_and(|server| {
-            server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
-        })
+/// No servers, or only the logged-out localhost default that earlier releases saved.
+fn config_is_unconfigured(config: &Config) -> bool {
+    config.servers.is_empty()
+        || (config.default_server() == Some("default")
+            && config.servers.len() == 1
+            && config.servers.get("default").is_some_and(|server| {
+                server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
+            }))
 }
 
 async fn oauth_login_with_callback(
@@ -716,7 +718,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn bare_login_uses_hosted_trial_for_untouched_config() {
+    fn bare_login_uses_hosted_trial_without_servers() {
         let config = Config::default();
 
         let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
@@ -727,8 +729,25 @@ mod tests {
     }
 
     #[test]
-    fn explicit_server_preserves_untouched_local_default() {
-        let config = Config::default();
+    fn bare_login_uses_hosted_trial_for_legacy_localhost_default() {
+        let config = Config::for_test(
+            Url::parse("http://localhost:3000").expect("valid URL"),
+            None,
+        );
+
+        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+
+        assert_eq!(url.as_str(), "https://try.ricochet.rs/");
+        assert_eq!(profile.as_deref(), Some("try"));
+        assert_eq!(source, LoginServerSource::HostedTrialFallback);
+    }
+
+    #[test]
+    fn explicit_server_preserves_legacy_localhost_default() {
+        let config = Config::for_test(
+            Url::parse("http://localhost:3000").expect("valid URL"),
+            None,
+        );
 
         let (url, profile, source) =
             resolve_login_server(&config, Some("default")).expect("server resolves");
@@ -736,6 +755,44 @@ mod tests {
         assert_eq!(url.as_str(), "http://localhost:3000/");
         assert_eq!(profile.as_deref(), Some("default"));
         assert_eq!(source, LoginServerSource::Configured);
+    }
+
+    #[test]
+    fn first_login_by_url_becomes_default() {
+        let mut config = Config::default();
+        let url = Url::parse("https://ricochet.example.com").expect("valid URL");
+
+        let (resolved, profile, source) =
+            resolve_login_server(&config, Some(url.as_str())).expect("server resolves");
+        let name = store_login_credentials(
+            &mut config,
+            &resolved,
+            "rico_test".to_string(),
+            profile,
+            source,
+        )
+        .expect("credentials stored");
+
+        assert_eq!(name, "ricochet");
+        assert_eq!(config.default_server(), Some("ricochet"));
+    }
+
+    #[test]
+    fn later_login_keeps_existing_default() {
+        let mut config = Config::default();
+        for host in ["https://first.example.com", "https://second.example.com"] {
+            let url = Url::parse(host).expect("valid URL");
+            store_login_credentials(
+                &mut config,
+                &url,
+                "rico_test".to_string(),
+                None,
+                LoginServerSource::Configured,
+            )
+            .expect("credentials stored");
+        }
+
+        assert_eq!(config.default_server(), Some("first"));
     }
 
     #[test]
