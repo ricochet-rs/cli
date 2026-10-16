@@ -47,19 +47,11 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let mut servers = HashMap::new();
-        servers.insert(
-            "default".to_string(),
-            ServerConfig {
-                url: Url::parse("http://localhost:3000").unwrap(),
-                api_key: None,
-            },
-        );
         Self {
             server: None,
             api_key: None,
-            servers,
-            default_server: Some("default".to_string()),
+            servers: HashMap::new(),
+            default_server: None,
             default_format: Some("table".to_string()),
             skip_update_check: None,
         }
@@ -203,7 +195,7 @@ impl Config {
         let available: Vec<&String> = self.servers.keys().collect();
         if available.is_empty() {
             anyhow::bail!(
-                "Server '{}' not found. No servers configured. Use 'ricochet server add' to add one.",
+                "Server '{}' not found. No servers configured. Run `ricochet login <URL>` to add one.",
                 server_str
             )
         } else {
@@ -240,7 +232,7 @@ impl Config {
             return Ok(self.apply_env_key_override(server_config.clone()));
         }
 
-        anyhow::bail!("No servers configured. Use 'ricochet server add' to add a server.")
+        anyhow::bail!("No servers configured. Run `ricochet login <URL>` to add one.")
     }
 
     /// Add or update a server

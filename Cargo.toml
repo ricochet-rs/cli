@@ -22,12 +22,13 @@ clap = { version = "4.5", features = ["derive", "env"] }
 clap-markdown = "0.1"
 colored = "3.0"
 comfy-table = "8.0"
+console = "0.16"
 croner = "4.0"
 dialoguer = { version = "0.12", features = ["fuzzy-select"] }
 dirs = "7.0"
 flate2 = "1.0"
 globset = "0.4"
-html-escape = "0.2"
+html-escape = "0.3"
 indicatif = "0.18"
 prefixed-api-key = "0.3"
 regex = "1.11.3"
@@ -50,6 +51,8 @@ tar = "0.4"
 tempfile = "3.8"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "1.0"
 ulid = "3.0"
 unicode-icons = "2.0"

@@ -5,6 +5,7 @@ pub mod config;
 pub mod crypto;
 pub mod env_vars;
 pub mod item;
+pub(crate) mod log_stream;
 pub mod output;
 pub mod task;
 pub mod update;

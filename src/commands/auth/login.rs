@@ -79,6 +79,21 @@ pub async fn login(
 
     // Resolve which server to authenticate with
     let (server_url, server_name, server_source) = resolve_login_server(config, server_ref)?;
+    tracing::debug!(server = %server_url, profile = ?server_name, source = ?server_source, "resolved login server");
+    let proxy_vars: Vec<&str> = [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ]
+    .into_iter()
+    .filter(|name| std::env::var_os(name).is_some())
+    .collect();
+    tracing::debug!(?proxy_vars, "proxy environment variables set");
 
     eprintln!("Server: {}", server_url.as_str().bright_cyan());
     if let Some(ref name) = server_name {
@@ -99,7 +114,11 @@ pub async fn login(
         && let Some(ref existing_key) = sc.api_key
     {
         let client = RicochetClient::new_with_key(server_url.to_string(), existing_key.clone())?;
-        if client.validate_key().await.unwrap_or(false) {
+        let existing_key_valid = client.validate_key().await.unwrap_or_else(|err| {
+            tracing::debug!(error = format!("{err:#}"), "existing api key check failed");
+            false
+        });
+        if existing_key_valid {
             eprintln!(
                 "{}",
                 "Note: Ensure your API key hasn't expired (CLI keys expire after 8 hours)".dimmed()
@@ -200,7 +219,7 @@ fn resolve_login_server(
         );
     }
 
-    if config_is_untouched_default(config) {
+    if config_is_unconfigured(config) {
         return Ok((
             crate::config::parse_server_url(HOSTED_TRIAL_SERVER)?,
             Some(HOSTED_TRIAL_PROFILE.to_string()),
@@ -218,12 +237,14 @@ fn resolve_login_server(
     ))
 }
 
-fn config_is_untouched_default(config: &Config) -> bool {
-    config.default_server() == Some("default")
-        && config.servers.len() == 1
-        && config.servers.get("default").is_some_and(|server| {
-            server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
-        })
+/// No servers, or only the logged-out localhost default that earlier releases saved.
+fn config_is_unconfigured(config: &Config) -> bool {
+    config.servers.is_empty()
+        || (config.default_server() == Some("default")
+            && config.servers.len() == 1
+            && config.servers.get("default").is_some_and(|server| {
+                server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
+            }))
 }
 
 async fn oauth_login_with_callback(
@@ -433,6 +454,7 @@ async fn create_api_key_with_session(
         .send()
         .await?;
 
+    tracing::debug!(url = %api_key_url, status = %response.status(), "api key creation responded");
     if response.status().is_success() {
         let api_key_data: ApiKeyResponse = response.json().await?;
 
@@ -619,9 +641,7 @@ async fn validate_and_save_key(
         Ok(false) => {
             anyhow::bail!("Invalid API key. Please check and try again.")
         }
-        Err(e) => {
-            anyhow::bail!("Failed to validate credentials: {}", e)
-        }
+        Err(e) => Err(e.context("Failed to validate credentials")),
     }
 }
 
@@ -698,7 +718,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn bare_login_uses_hosted_trial_for_untouched_config() {
+    fn bare_login_uses_hosted_trial_without_servers() {
         let config = Config::default();
 
         let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
@@ -709,8 +729,25 @@ mod tests {
     }
 
     #[test]
-    fn explicit_server_preserves_untouched_local_default() {
-        let config = Config::default();
+    fn bare_login_uses_hosted_trial_for_legacy_localhost_default() {
+        let config = Config::for_test(
+            Url::parse("http://localhost:3000").expect("valid URL"),
+            None,
+        );
+
+        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+
+        assert_eq!(url.as_str(), "https://try.ricochet.rs/");
+        assert_eq!(profile.as_deref(), Some("try"));
+        assert_eq!(source, LoginServerSource::HostedTrialFallback);
+    }
+
+    #[test]
+    fn explicit_server_preserves_legacy_localhost_default() {
+        let config = Config::for_test(
+            Url::parse("http://localhost:3000").expect("valid URL"),
+            None,
+        );
 
         let (url, profile, source) =
             resolve_login_server(&config, Some("default")).expect("server resolves");
@@ -718,6 +755,44 @@ mod tests {
         assert_eq!(url.as_str(), "http://localhost:3000/");
         assert_eq!(profile.as_deref(), Some("default"));
         assert_eq!(source, LoginServerSource::Configured);
+    }
+
+    #[test]
+    fn first_login_by_url_becomes_default() {
+        let mut config = Config::default();
+        let url = Url::parse("https://ricochet.example.com").expect("valid URL");
+
+        let (resolved, profile, source) =
+            resolve_login_server(&config, Some(url.as_str())).expect("server resolves");
+        let name = store_login_credentials(
+            &mut config,
+            &resolved,
+            "rico_test".to_string(),
+            profile,
+            source,
+        )
+        .expect("credentials stored");
+
+        assert_eq!(name, "ricochet");
+        assert_eq!(config.default_server(), Some("ricochet"));
+    }
+
+    #[test]
+    fn later_login_keeps_existing_default() {
+        let mut config = Config::default();
+        for host in ["https://first.example.com", "https://second.example.com"] {
+            let url = Url::parse(host).expect("valid URL");
+            store_login_credentials(
+                &mut config,
+                &url,
+                "rico_test".to_string(),
+                None,
+                LoginServerSource::Configured,
+            )
+            .expect("credentials stored");
+        }
+
+        assert_eq!(config.default_server(), Some("first"));
     }
 
     #[test]

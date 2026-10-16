@@ -9,6 +9,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet logout`↴](#ricochet-logout)
 * [`ricochet deploy`↴](#ricochet-deploy)
 * [`ricochet delete`↴](#ricochet-delete)
+* [`ricochet log`↴](#ricochet-log)
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet detect`↴](#ricochet-detect)
 * [`ricochet init`↴](#ricochet-init)
@@ -66,6 +67,7 @@ Ricochet CLI
 * `logout` — Remove stored credentials
 * `deploy` — Deploy content to a Ricochet server
 * `delete` — Delete a content item
+* `log` — Stream a log
 * `config` — Show configuration
 * `detect` — Report deployable content in a directory without writing anything
 * `init` — Initialize a new Ricochet deployment
@@ -84,7 +86,7 @@ Ricochet CLI
 
   Possible values: `table`, `json`, `yaml`
 
-* `--debug` — Enable debug output
+* `--debug` — Enable debug output on stderr, including HTTP connection and proxy details (filter with RUST_LOG)
 * `-V`, `--version` — Print version
 
 
@@ -114,6 +116,8 @@ Remove stored credentials
 
 Deploy content to a Ricochet server
 
+Under `-F json`, deploy writes one JSON event per line. A local deploy reports `bundling` and then `uploading` as the bundle is sent. With `--follow`, the log lines follow as `ricochet log -F json` writes them, until the deployment settles. Every deploy ends with `done`, which carries the server's response, or with `error`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
+
 **Usage:** `ricochet deploy [OPTIONS] [PATH]`
 
 ###### **Arguments:**
@@ -128,6 +132,8 @@ Deploy content to a Ricochet server
 * `-d`, `--description <DESCRIPTION>` — Description for the deployment
 * `-e`, `--env <KEY[=VALUE]>` — Set an environment variable on the initial deployment. `KEY=VALUE` sets it directly; `KEY` alone resolves the value from .env, .Renviron, or the calling environment. Repeatable
 * `--dry-run` — List the files in a deployment bundle without deploying
+* `-f`, `--follow` — Stream the deployment's logs until it finishes
+* `--lines <LINES>` — Number of latest log lines to keep on screen, up to the terminal height, or `all` to print every line
 * `--git <GIT>` — Deploy from a Git repository instead of a local bundle
 * `--branch <BRANCH>` — Git branch to deploy (only with --git)
 * `--path <REPO_PATH>` — Subdirectory within the Git repo containing _ricochet.toml (only with --git)
@@ -149,6 +155,22 @@ Delete a content item
 ###### **Options:**
 
 * `-f`, `--force` — Skip confirmation
+
+
+
+## `ricochet log`
+
+Stream a log
+
+**Usage:** `ricochet log [OPTIONS] <ID>`
+
+###### **Arguments:**
+
+* `<ID>` — Log ID (ULID)
+
+###### **Options:**
+
+* `-n`, `--lines <LINES>` — Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
 
 
 
@@ -493,14 +515,15 @@ Fetch the remote _ricochet.toml for a task
 
 Invoke a task
 
-**Usage:** `ricochet task invoke [OPTIONS] <ID>`
+**Usage:** `ricochet task invoke [OPTIONS] [ID]`
 
 ###### **Arguments:**
 
-* `<ID>` — Content item ID (ULID)
+* `<ID>` — Content item ID (ULID). If not provided, will read from local _ricochet.toml
 
 ###### **Options:**
 
+* `-p`, `--path <PATH>` — Path to _ricochet.toml file
 * `-w`, `--wait` — Wait for the run to finish, and exit with an error unless it succeeds
 
 

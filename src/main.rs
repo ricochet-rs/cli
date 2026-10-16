@@ -37,7 +37,7 @@ struct Cli {
     )]
     format: OutputFormat,
 
-    /// Enable debug output
+    /// Enable debug output on stderr, including HTTP connection and proxy details (filter with RUST_LOG)
     #[arg(global = true, long, help_heading = "Global Options")]
     debug: bool,
 
@@ -60,6 +60,11 @@ enum Commands {
     /// Remove stored credentials
     Logout,
     /// Deploy content to a Ricochet server
+    ///
+    /// Under `-F json`, deploy writes one JSON event per line.
+    /// A local deploy reports `bundling` and then `uploading` as the bundle is sent.
+    /// With `--follow`, the log lines follow as `ricochet log -F json` writes them, until the deployment settles.
+    /// Every deploy ends with `done`, which carries the server's response, or with `error`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
     Deploy {
         /// Path to the content directory or bundle
         #[arg(default_value = ".")]
@@ -78,6 +83,12 @@ enum Commands {
         /// List the files in a deployment bundle without deploying
         #[arg(long, conflicts_with_all = ["git", "env"])]
         dry_run: bool,
+        /// Stream the deployment's logs until it finishes
+        #[arg(short = 'f', long, conflicts_with_all = ["git", "dry_run"])]
+        follow: bool,
+        /// Number of latest log lines to keep on screen, up to the terminal height, or `all` to print every line
+        #[arg(long, requires = "follow")]
+        lines: Option<commands::log::Lines>,
         /// Deploy from a Git repository instead of a local bundle
         #[arg(long)]
         git: Option<String>,
@@ -101,6 +112,14 @@ enum Commands {
         /// Skip confirmation
         #[arg(short = 'f', long)]
         force: bool,
+    },
+    /// Stream a log
+    Log {
+        /// Log ID (ULID)
+        id: String,
+        /// Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
+        #[arg(short = 'n', long)]
+        lines: Option<commands::log::Lines>,
     },
     /// Invoke a task (deprecated: use `ricochet task invoke` instead)
     #[command(hide = true)]
@@ -281,8 +300,11 @@ enum TaskCommands {
     },
     /// Invoke a task
     Invoke {
-        /// Content item ID (ULID)
-        id: String,
+        /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
+        id: Option<String>,
+        /// Path to _ricochet.toml file
+        #[arg(short = 'p', long)]
+        path: Option<std::path::PathBuf>,
         /// Wait for the run to finish, and exit with an error unless it succeeds
         #[arg(short = 'w', long)]
         wait: bool,
@@ -492,6 +514,19 @@ enum SelfCommands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    if cli.debug {
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            tracing_subscriber::EnvFilter::new(
+                "ricochet=debug,ricochet_cli=debug,reqwest=debug,hyper_util=debug",
+            )
+        });
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+            .init();
+    }
+
     // Handle version flag
     if cli.version {
         commands::update::print_version();
@@ -530,42 +565,56 @@ async fn main() -> Result<()> {
             description,
             env,
             dry_run,
+            follow,
+            lines,
             git,
             branch,
             repo_path,
             config_path,
             credential,
         }) => {
-            if let Some(git) = git {
-                commands::deploy::deploy_git(
-                    &config,
-                    cli.server.as_deref(),
-                    git,
-                    branch,
-                    repo_path,
-                    config_path,
-                    credential,
-                    cli.format,
-                )
-                .await?;
-            } else if dry_run {
+            if dry_run {
                 commands::deploy::deploy_dry_run(&path, cli.format)?;
             } else {
-                commands::deploy::deploy(
-                    &config,
-                    cli.server.as_deref(),
-                    path,
-                    name,
-                    description,
-                    env,
-                    cli.format,
-                    cli.debug,
-                )
-                .await?;
+                let deployed = if let Some(git) = git {
+                    commands::deploy::deploy_git(
+                        &config,
+                        cli.server.as_deref(),
+                        git,
+                        branch,
+                        repo_path,
+                        config_path,
+                        credential,
+                        cli.format,
+                    )
+                    .await
+                } else {
+                    commands::deploy::deploy(
+                        &config,
+                        cli.server.as_deref(),
+                        path,
+                        name,
+                        description,
+                        env,
+                        if follow {
+                            commands::deploy::AfterUpload::FollowLogs(lines)
+                        } else {
+                            commands::deploy::AfterUpload::Exit
+                        },
+                        cli.format,
+                        cli.debug,
+                    )
+                    .await
+                };
+                commands::deploy::emit_error_event(cli.format, deployed)?;
             }
         }
         Some(Commands::Delete { id, force }) => {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force, cli.format)
+                .await?;
+        }
+        Some(Commands::Log { id, lines }) => {
+            commands::log::follow_log(&config, cli.server.as_deref(), &id, lines, cli.format)
                 .await?;
         }
         Some(Commands::Invoke { id }) => {
@@ -785,7 +834,8 @@ async fn main() -> Result<()> {
             TaskCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
             }
-            TaskCommands::Invoke { id, wait } => {
+            TaskCommands::Invoke { id, path, wait } => {
+                let id = item::resolve_id(id.as_deref(), path.as_deref())?;
                 let follow = if wait {
                     item::invoke::Follow::UntilFinished
                 } else {
