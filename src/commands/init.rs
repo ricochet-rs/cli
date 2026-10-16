@@ -67,6 +67,7 @@ enum Prompting {
 }
 
 /// Every content type, in the order `init` offers them.
+// FIXME: replace with the const exported from ricochet-core
 const CONTENT_TYPES: [ContentType; 23] = [
     ContentType::R,
     ContentType::RService,
