@@ -531,19 +531,21 @@ fn determine_server_name(config: &Config, server_url: &Url, server_name: Option<
         }
     }
 
-    // Generate a name based on the hostname
-    if let Some(host) = server_url.host_str() {
-        if host == "localhost" || host == "127.0.0.1" {
-            return "local".to_string();
-        }
-        // Use first part of hostname
-        let parts: Vec<&str> = host.split('.').collect();
-        if !parts.is_empty() && parts[0] != "www" {
-            return parts[0].to_string();
-        }
-    }
+    let base = match server_url.host_str() {
+        Some("localhost" | "127.0.0.1") => "local",
+        Some(host) => host
+            .split('.')
+            .next()
+            .filter(|label| *label != "www")
+            .unwrap_or("default"),
+        None => "default",
+    };
 
-    "default".to_string()
+    // Suffix the generated name so a different server already saved under it is not overwritten
+    std::iter::once(base.to_string())
+        .chain((2..).map(|n| format!("{base}-{n}")))
+        .find(|name| !config.servers.contains_key(name))
+        .unwrap_or_else(|| base.to_string())
 }
 
 fn store_login_credentials(
@@ -793,6 +795,62 @@ mod tests {
         }
 
         assert_eq!(config.default_server(), Some("first"));
+    }
+
+    #[test]
+    fn login_to_new_server_does_not_overwrite_same_generated_name() {
+        let mut config = Config::default();
+        for (url, key) in [
+            ("http://localhost:3000", "rico_one"),
+            ("http://localhost:4000", "rico_two"),
+            ("http://127.0.0.1:5000", "rico_three"),
+        ] {
+            let url = Url::parse(url).expect("valid URL");
+            store_login_credentials(
+                &mut config,
+                &url,
+                key.to_string(),
+                None,
+                LoginServerSource::Configured,
+            )
+            .expect("credentials stored");
+        }
+
+        let saved = |name: &str| {
+            config
+                .servers
+                .get(name)
+                .map(|server| (server.url.port(), server.api_key.as_deref()))
+        };
+        assert_eq!(saved("local"), Some((Some(3000), Some("rico_one"))));
+        assert_eq!(saved("local-2"), Some((Some(4000), Some("rico_two"))));
+        assert_eq!(saved("local-3"), Some((Some(5000), Some("rico_three"))));
+        assert_eq!(config.default_server(), Some("local"));
+    }
+
+    #[test]
+    fn relogin_to_saved_server_reuses_its_name() {
+        let mut config = Config::default();
+        let url = Url::parse("https://ricochet.team-a.com").expect("valid URL");
+        for key in ["rico_old", "rico_new"] {
+            store_login_credentials(
+                &mut config,
+                &url,
+                key.to_string(),
+                None,
+                LoginServerSource::Configured,
+            )
+            .expect("credentials stored");
+        }
+
+        assert_eq!(config.servers.len(), 1);
+        assert_eq!(
+            config
+                .servers
+                .get("ricochet")
+                .and_then(|server| server.api_key.as_deref()),
+            Some("rico_new")
+        );
     }
 
     #[test]
