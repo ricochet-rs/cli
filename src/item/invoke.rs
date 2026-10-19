@@ -68,6 +68,13 @@ pub async fn invoke(
             run.print(format, server_config.url.as_str())?;
             run.require_success()
         }
-        Follow::Logs => follow_log(config, server_ref, &invoked.id, None, format).await,
+        Follow::Logs => follow_log(config, server_ref, &invoked.id, None, format)
+            .await
+            .with_context(|| {
+                format!(
+                    "Could not follow the logs of task run {run_id}. Check it later with `ricochet task invocation get {id} {run_id}`",
+                    run_id = invoked.id
+                )
+            }),
     }
 }
