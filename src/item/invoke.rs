@@ -1,3 +1,4 @@
+use crate::commands::log::follow_log;
 use crate::{OutputFormat, client::RicochetClient, config::Config, task::invocation};
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -17,6 +18,7 @@ pub struct Invoked {
 pub enum Follow {
     Detach,
     UntilFinished,
+    Logs,
 }
 
 pub async fn invoke(
@@ -66,5 +68,6 @@ pub async fn invoke(
             run.print(format, server_config.url.as_str())?;
             run.require_success()
         }
+        Follow::Logs => follow_log(config, server_ref, &invoked.id, None, format).await,
     }
 }

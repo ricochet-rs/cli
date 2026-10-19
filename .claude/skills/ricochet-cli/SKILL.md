@@ -148,12 +148,14 @@ Tasks are the content types that can be invoked rather than served: `r`, `rmd`, 
 ricochet task list
 ricochet task invoke <ID>
 ricochet task invoke <ID> --wait
+ricochet task invoke <ID> --follow
 ricochet task invocation get <ID> <INVOCATION_ID>
 ricochet task schedule <ID> "0 9 * * 1-5"
 ```
 
 `ricochet task invoke` starts a run and prints its invocation ID without waiting for it to finish.
 Add `--wait` to block until the run finishes.
+Add `--follow` to stream the run's logs until it finishes.
 The command then exits non-zero when the run fails or is cancelled, so a task can serve as a CI step.
 While waiting, it rides out about 30 seconds of an unreachable or failing server before giving up.
 `ricochet task invocation get` reads the status of one run, finished or not.
