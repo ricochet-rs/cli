@@ -309,7 +309,7 @@ enum TaskCommands {
         #[arg(short = 'w', long)]
         wait: bool,
         /// Stream the run's logs until it finishes
-        #[arg(short = 'f', long)]
+        #[arg(short = 'f', long, conflicts_with = "wait")]
         follow: bool,
     },
     /// Inspect runs of a task
