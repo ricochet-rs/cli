@@ -308,6 +308,9 @@ enum TaskCommands {
         /// Wait for the run to finish, and exit with an error unless it succeeds
         #[arg(short = 'w', long)]
         wait: bool,
+        /// Stream the run's logs until it finishes
+        #[arg(short = 'f', long, conflicts_with = "wait")]
+        follow: bool,
     },
     /// Inspect runs of a task
     Invocation {
@@ -834,9 +837,16 @@ async fn main() -> Result<()> {
             TaskCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
             }
-            TaskCommands::Invoke { id, path, wait } => {
+            TaskCommands::Invoke {
+                id,
+                path,
+                wait,
+                follow,
+            } => {
                 let id = item::resolve_id(id.as_deref(), path.as_deref())?;
-                let follow = if wait {
+                let follow = if follow {
+                    item::invoke::Follow::Logs
+                } else if wait {
                     item::invoke::Follow::UntilFinished
                 } else {
                     item::invoke::Follow::Detach

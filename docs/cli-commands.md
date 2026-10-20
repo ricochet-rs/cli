@@ -525,6 +525,7 @@ Invoke a task
 
 * `-p`, `--path <PATH>` — Path to _ricochet.toml file
 * `-w`, `--wait` — Wait for the run to finish, and exit with an error unless it succeeds
+* `-f`, `--follow` — Stream the run's logs until it finishes
 
 
 
