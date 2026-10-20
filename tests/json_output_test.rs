@@ -334,6 +334,14 @@ fn mock_api(server: &mut Server) {
         .with_status(200)
         .with_body(json!({"id": LOG_ID, "content_id": FOLLOWED_TASK_ID}).to_string())
         .create();
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{FOLLOWED_TASK_ID}/invocations/{LOG_ID}").as_str(),
+        )
+        .with_status(200)
+        .with_body(invocation(LOG_ID, "success").to_string())
+        .create();
 
     let flaky_path = format!("/api/v0/content/{FLAKY_TASK_ID}/invocations/{FLAKY_INVOCATION_ID}");
     server
