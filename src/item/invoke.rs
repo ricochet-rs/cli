@@ -70,6 +70,7 @@ pub async fn invoke(
             run.require_success()
         }
         Follow::Logs => {
+            eprintln!("Following task run {}", invoked.id.bright_cyan());
             let log_end = print_log(
                 &client,
                 server_ref,

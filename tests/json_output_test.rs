@@ -940,6 +940,10 @@ async fn task_invoke_follow_writes_one_json_object_per_log_line() {
         "task invoke --follow failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(LOG_ID),
+        "stderr does not name the run, so it cannot be looked up after Ctrl-C"
+    );
 
     let records: Vec<serde_json::Value> = stdout
         .lines()
