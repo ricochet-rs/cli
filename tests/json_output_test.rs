@@ -41,6 +41,9 @@ const LOG_ID: &str = "01KRBBBBBBBBBBBBBBBBBBBBBB";
 /// A task whose run is followed through its log, which shares the run's ID.
 const FOLLOWED_TASK_ID: &str = "01KRCCCCCCCCCCCCCCCCCCCCCC";
 
+/// A task whose followed run fails after its log closes.
+const FAILING_FOLLOWED_TASK_ID: &str = "01KRDDDDDDDDDDDDDDDDDDDDDD";
+
 /// Test-only RSA public key, served so the env-var commands can encrypt.
 const TEST_PUB_PEM: &str = "-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAr1XuDE4bFt7TnYqAtiRQ9RvC2sG3s8N8zUsCvhM+mZD7mGTN47bk
@@ -341,6 +344,23 @@ fn mock_api(server: &mut Server) {
         )
         .with_status(200)
         .with_body(invocation(LOG_ID, "success").to_string())
+        .create();
+
+    server
+        .mock(
+            "POST",
+            format!("/api/v0/content/{FAILING_FOLLOWED_TASK_ID}/invoke").as_str(),
+        )
+        .with_status(200)
+        .with_body(json!({"id": LOG_ID, "content_id": FAILING_FOLLOWED_TASK_ID}).to_string())
+        .create();
+    server
+        .mock(
+            "GET",
+            format!("/api/v0/content/{FAILING_FOLLOWED_TASK_ID}/invocations/{LOG_ID}").as_str(),
+        )
+        .with_status(200)
+        .with_body(invocation(LOG_ID, "failure").to_string())
         .create();
 
     let flaky_path = format!("/api/v0/content/{FLAKY_TASK_ID}/invocations/{FLAKY_INVOCATION_ID}");
@@ -959,6 +979,30 @@ async fn task_invoke_follow_writes_one_json_object_per_log_line() {
             "{\"not\": \"json\"}",
             "restore complete"
         ]
+    );
+}
+
+#[tokio::test]
+async fn task_invoke_follow_fails_when_the_run_fails() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&[
+            "task",
+            "invoke",
+            FAILING_FOLLOWED_TASK_ID,
+            "--follow",
+            "-F",
+            "json",
+        ])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "task invoke --follow succeeded for a failed run"
+    );
+    assert!(
+        stderr.contains("finished as failure"),
+        "stderr does not report the failed run: {stderr}"
     );
 }
 
