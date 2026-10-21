@@ -1,16 +1,17 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use colored::Colorize;
-use croner::{Cron, parser::CronParser};
+use croner::Cron;
+use ricochet_core::settings::CronSchedule;
 
 use crate::{OutputFormat, client::RicochetClient, config::Config};
 
-/// Parses a cron schedule with the shortcut step syntax the server accepts, such as `5/5`.
+/// Parses a cron schedule with the same rules the server applies.
 pub fn parse_schedule(schedule: &str) -> Result<Cron> {
-    CronParser::builder()
-        .sloppy_ranges(true)
-        .build()
-        .parse(schedule)
+    let schedule: CronSchedule = schedule.parse().context("parsing cron schedule")?;
+    schedule
+        .to_string()
+        .parse()
         .context("parsing cron schedule")
 }
 

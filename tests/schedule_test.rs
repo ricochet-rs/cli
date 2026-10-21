@@ -182,6 +182,7 @@ mod schedule_tests {
                 "0 0 * * *",    // daily at midnight
                 "0 0 1 * *",    // first of every month
                 "30 6 * * 1",   // monday at 6:30am
+                "@daily",       // nickname
             ];
 
             for expr in valid {
@@ -190,7 +191,7 @@ mod schedule_tests {
         }
 
         #[test]
-        fn test_shortcut_step_expressions_stay_valid() {
+        fn test_shortcut_step_expressions_are_rejected_like_the_server() {
             let shortcut = [
                 "5/5 * * * *",  // every 5 minutes starting at minute 5
                 "0/10 * * * *", // every 10 minutes starting at minute 0
@@ -198,7 +199,10 @@ mod schedule_tests {
             ];
 
             for expr in shortcut {
-                assert!(parse_schedule(expr).is_ok(), "Expected valid cron: {expr}");
+                assert!(
+                    parse_schedule(expr).is_err(),
+                    "Expected the server to reject cron: {expr}"
+                );
             }
         }
 
@@ -225,6 +229,27 @@ mod schedule_tests {
             let cron = parse_schedule("0 9 * * 1-5").unwrap();
             let next = cron.find_next_occurrence(&Utc::now(), false).unwrap();
             assert!(next > Utc::now());
+        }
+
+        #[test]
+        fn test_next_occurrence_matches_the_scheduled_time() {
+            use chrono::{TimeZone, Utc};
+
+            // a Thursday, half a minute past noon
+            let from = Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 30).unwrap();
+            let cases = [
+                ("0 9 * * 1-5", Utc.with_ymd_and_hms(2026, 1, 2, 9, 0, 0)),
+                ("*/15 * * * *", Utc.with_ymd_and_hms(2026, 1, 1, 12, 15, 0)),
+                ("@daily", Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0)),
+            ];
+
+            for (expr, expected) in cases {
+                let next = parse_schedule(expr)
+                    .unwrap()
+                    .find_next_occurrence(&from, false)
+                    .unwrap();
+                assert_eq!(next, expected.unwrap(), "Unexpected next run for {expr}");
+            }
         }
     }
 }
