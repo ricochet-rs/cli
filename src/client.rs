@@ -72,7 +72,7 @@ pub(crate) enum DeployFailure {
 }
 
 impl DeployFailure {
-    fn classify(error: &anyhow::Error) -> Self {
+    pub(crate) fn classify(error: &anyhow::Error) -> Self {
         for cause in error.chain() {
             if let Some(api) = cause.downcast_ref::<ApiError>() {
                 return match api {
@@ -597,8 +597,8 @@ impl RicochetClient {
             .send();
         let response = tokio::time::timeout(std::time::Duration::from_secs(30), request)
             .await
-            .with_context(|| {
-                format!("The server did not start sending log {log_id} within 30 seconds")
+            .map_err(|_| ApiError::Unreachable {
+                message: format!("The server did not start sending log {log_id} within 30 seconds"),
             })??;
 
         let response = Self::reject_error_status(response).await?;
@@ -664,9 +664,13 @@ impl RicochetClient {
 
         // The server records a run before returning its ID, so a fresh run is never missing.
         if response.status() == StatusCode::NOT_FOUND {
-            anyhow::bail!(
-                "Task run {invocation_id} of {id} was not found. If the ID is correct, update the Ricochet server to follow task runs from the CLI."
-            );
+            return Err(ApiError::Status {
+                status: StatusCode::NOT_FOUND,
+                message: format!(
+                    "Task run {invocation_id} of {id} was not found. If the ID is correct, update the Ricochet server to follow task runs from the CLI."
+                ),
+            }
+            .into());
         }
         // Raised as a `reqwest::Error` so `wait` can retry a passing server fault.
         if response.status().is_server_error() {

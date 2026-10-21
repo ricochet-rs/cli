@@ -415,6 +415,14 @@ fn mock_api(server: &mut Server) {
         .create();
 
     server
+        .mock(
+            "GET",
+            format!("/api/v0/content/logs/{UNREADABLE_INVOCATION_ID}").as_str(),
+        )
+        .with_status(200)
+        .with_body("")
+        .create();
+    server
         .mock("GET", format!("/api/v0/content/logs/{LOG_ID}").as_str())
         .with_status(200)
         .with_header("content-type", "text/plain; charset=utf-8")
@@ -969,9 +977,16 @@ async fn task_invoke_follow_writes_one_json_object_per_log_line() {
         .lines()
         .map(|line| serde_json::from_str(line).expect("each stdout line is JSON"))
         .collect();
+    let (first, rest) = records.split_first().expect("stdout has records");
+    let (last, logs) = rest
+        .split_last()
+        .expect("stdout ends with the finished run");
     assert_eq!(
-        records
-            .iter()
+        first,
+        &json!({"event": "invoked", "id": LOG_ID, "content_id": FOLLOWED_TASK_ID})
+    );
+    assert_eq!(
+        logs.iter()
             .map(|record| &record["line"])
             .collect::<Vec<_>>(),
         [
@@ -980,6 +995,10 @@ async fn task_invoke_follow_writes_one_json_object_per_log_line() {
             "restore complete"
         ]
     );
+    assert_eq!(last["event"], "done");
+    assert_eq!(last["id"], LOG_ID);
+    assert_eq!(last["status"], "success");
+    assert_eq!(last["started"], 1778106472);
 }
 
 #[tokio::test]
@@ -1003,6 +1022,49 @@ async fn task_invoke_follow_fails_when_the_run_fails() {
     assert!(
         stderr.contains("finished as failure"),
         "stderr does not report the failed run: {stderr}"
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let last: serde_json::Value =
+        serde_json::from_str(stdout.lines().last().expect("stdout has records"))
+            .expect("the last stdout line is JSON");
+    assert_eq!(last["event"], "done");
+    assert_eq!(last["status"], "failure");
+}
+
+#[tokio::test]
+async fn task_invoke_follow_ends_with_an_error_when_it_loses_the_run() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&[
+            "task",
+            "invoke",
+            UNREADABLE_TASK_ID,
+            "--follow",
+            "-F",
+            "json",
+        ])
+        .await;
+    assert!(
+        !output.status.success(),
+        "task invoke --follow succeeded without reading the run"
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let records: Vec<serde_json::Value> = stdout
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each stdout line is JSON"))
+        .collect();
+    let [invoked, error] = records.as_slice() else {
+        panic!("expected an invoked and an error record: {stdout}");
+    };
+    assert_eq!(invoked["event"], "invoked");
+    assert_eq!(error["event"], "error");
+    assert_eq!(error["kind"], "auth");
+    let message = error["message"].as_str().expect("the error has a message");
+    assert!(
+        message.contains(&format!(
+            "ricochet task invocation get {UNREADABLE_TASK_ID} {UNREADABLE_INVOCATION_ID}"
+        )),
+        "{message}"
     );
 }
 
