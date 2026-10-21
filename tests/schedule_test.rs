@@ -182,6 +182,7 @@ mod schedule_tests {
                 "0 0 * * *",    // daily at midnight
                 "0 0 1 * *",    // first of every month
                 "30 6 * * 1",   // monday at 6:30am
+                "@daily",       // nickname
             ];
 
             for expr in valid {
@@ -190,7 +191,7 @@ mod schedule_tests {
         }
 
         #[test]
-        fn test_shortcut_step_expressions_stay_valid() {
+        fn test_shortcut_step_expressions_are_rejected_like_the_server() {
             let shortcut = [
                 "5/5 * * * *",  // every 5 minutes starting at minute 5
                 "0/10 * * * *", // every 10 minutes starting at minute 0
@@ -198,7 +199,10 @@ mod schedule_tests {
             ];
 
             for expr in shortcut {
-                assert!(parse_schedule(expr).is_ok(), "Expected valid cron: {expr}");
+                assert!(
+                    parse_schedule(expr).is_err(),
+                    "Expected the server to reject cron: {expr}"
+                );
             }
         }
 
