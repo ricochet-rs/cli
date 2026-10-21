@@ -230,5 +230,26 @@ mod schedule_tests {
             let next = cron.find_next_occurrence(&Utc::now(), false).unwrap();
             assert!(next > Utc::now());
         }
+
+        #[test]
+        fn test_next_occurrence_matches_the_scheduled_time() {
+            use chrono::{TimeZone, Utc};
+
+            // a Thursday, half a minute past noon
+            let from = Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 30).unwrap();
+            let cases = [
+                ("0 9 * * 1-5", Utc.with_ymd_and_hms(2026, 1, 2, 9, 0, 0)),
+                ("*/15 * * * *", Utc.with_ymd_and_hms(2026, 1, 1, 12, 15, 0)),
+                ("@daily", Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0)),
+            ];
+
+            for (expr, expected) in cases {
+                let next = parse_schedule(expr)
+                    .unwrap()
+                    .find_next_occurrence(&from, false)
+                    .unwrap();
+                assert_eq!(next, expected.unwrap(), "Unexpected next run for {expr}");
+            }
+        }
     }
 }
