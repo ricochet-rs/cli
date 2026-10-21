@@ -162,7 +162,9 @@ Delete a content item
 
 Stream a log
 
-**Usage:** `ricochet log [OPTIONS] <ID>`
+With `--deployment`, the deployment's restore logs follow in turn, one per architecture, as `deploy --follow` writes them.
+
+**Usage:** `ricochet log [OPTIONS] [ID]`
 
 ###### **Arguments:**
 
@@ -170,6 +172,7 @@ Stream a log
 
 ###### **Options:**
 
+* `-d`, `--deployment <DEPLOYMENT_ID>` — Stream the restore logs of this deployment (ULID) instead of a single log
 * `-n`, `--lines <LINES>` — Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
 
 

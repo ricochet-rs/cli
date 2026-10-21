@@ -1,4 +1,4 @@
-use crate::commands::log::{Lines, LogEnd, print_log};
+use crate::commands::log::{Lines, LogEnd, follow_deployment_logs};
 use crate::utils::{Exclusion, classify_bundle, format_size};
 use crate::{
     OutputFormat,
@@ -7,13 +7,11 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
-use console::Term;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use ricochet_core::{
     config::git::GitRepo,
     content::{ContentItem, ContentType},
-    events::DeploymentStatus,
     kinds::ServerYml,
     language::Package,
 };
@@ -414,74 +412,6 @@ pub fn emit_error_event(format: OutputFormat, deployed: Result<()>) -> Result<()
         DeployProgress::emit_error(e)?;
     }
     deployed
-}
-
-/// Stream each of a deployment's restore logs in turn, one per architecture it builds for.
-///
-/// Returns `LogEnd::ReaderGone` when the reader of stdout stops watching, and `LogEnd::Closed` once the deployment settles.
-async fn follow_deployment_logs(
-    client: &RicochetClient,
-    server_ref: Option<&str>,
-    deployment_id: &str,
-    lines: Option<Lines>,
-    format: OutputFormat,
-) -> Result<LogEnd> {
-    // Headers are for a person, so a machine-readable format keeps them off stdout.
-    let status = match format {
-        OutputFormat::Table => Term::stdout(),
-        OutputFormat::Json | OutputFormat::Yaml => Term::stderr(),
-    };
-
-    let log_ids = client.deployment_logs(deployment_id).await?;
-    let log_term = Term::buffered_stdout();
-    let total = log_ids.len();
-    for (index, log_id) in log_ids.iter().enumerate() {
-        status.write_line("")?;
-        if total > 1 {
-            status.write_line(&format!("Log {} of {total}", index + 1).bold().to_string())?;
-        }
-        match print_log(client, server_ref, log_id, lines, format, &log_term).await? {
-            LogEnd::Closed => {}
-            LogEnd::ReaderGone => return Ok(LogEnd::ReaderGone),
-            // Ctrl-C is caught only to restore the scrollback, so exit as an uncaught interrupt would.
-            LogEnd::Interrupted => std::process::exit(130),
-        }
-    }
-
-    // A log ends when its process does, which says nothing of whether the restore worked.
-    let outcome = tokio::select! {
-        outcome = settled_status(client, deployment_id) => outcome?,
-        // `print_log` caught Ctrl-C, so it no longer ends the process by itself.
-        _ = tokio::signal::ctrl_c() => std::process::exit(130),
-    };
-    match outcome {
-        DeploymentStatus::Success => Ok(LogEnd::Closed),
-        DeploymentStatus::DependencyMismatch => {
-            eprintln!(
-                "{} Deployment {deployment_id} is running with packages that differ from the ones it asked for. Run `ricochet app deployment get {deployment_id}` to compare them.",
-                "Warning:".yellow()
-            );
-            Ok(LogEnd::Closed)
-        }
-        status => bail!("Deployment {deployment_id} finished with status {status}."),
-    }
-}
-
-/// How many times to look for a deployment to settle once its logs end, a second apart.
-const SETTLE_ATTEMPTS: usize = 30;
-
-/// Wait for a deployment to leave `Pending`, which it does shortly after its logs end.
-async fn settled_status(client: &RicochetClient, deployment_id: &str) -> Result<DeploymentStatus> {
-    for _ in 0..SETTLE_ATTEMPTS {
-        let deployment = client.get_deployment(deployment_id).await?;
-        if deployment.status != DeploymentStatus::Pending {
-            return Ok(deployment.status);
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-    bail!(
-        "Deployment {deployment_id} is still pending after its logs ended. Run `ricochet app deployment get {deployment_id}` to check on it."
-    )
 }
 
 /// A file `deploy --dry-run` reports, with the verdict a deploy would reach on it.

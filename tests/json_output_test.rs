@@ -1646,6 +1646,66 @@ async fn log_writes_one_json_object_per_line() {
 }
 
 #[tokio::test]
+async fn log_deployment_writes_each_restore_log_as_json_lines() {
+    let cli = Cli::new().await;
+    let output = cli
+        .run(&["log", "--deployment", DEPLOYMENT_ID, "-F", "json"])
+        .await;
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    assert!(
+        output.status.success(),
+        "log --deployment failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let lines: Vec<String> = stdout
+        .lines()
+        .map(|line| {
+            let record: serde_json::Value =
+                serde_json::from_str(line).expect("each stdout line is JSON");
+            record["line"]
+                .as_str()
+                .expect("each record has a line")
+                .to_string()
+        })
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Execution environment: host",
+            "{\"not\": \"json\"}",
+            "restore complete"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn log_deployment_reports_an_unknown_deployment_as_not_found() {
+    let cli = Cli::new().await;
+    let mut server = Server::new_async().await;
+    for path in [
+        format!("/api/v0/content/deployments/{DEPLOYMENT_ID}/logs"),
+        format!("/api/v0/content/deployments/{DEPLOYMENT_ID}"),
+    ] {
+        server
+            .mock("GET", path.as_str())
+            .with_status(404)
+            .with_body("deployment not found")
+            .create();
+    }
+    cli.use_server(&server.url());
+
+    let output = cli
+        .run(&["log", "--deployment", DEPLOYMENT_ID, "-F", "json"])
+        .await;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "stdout is not empty");
+    assert!(stderr.contains("deployment not found"), "{stderr}");
+    assert!(!stderr.contains("Update the server"), "{stderr}");
+}
+
+#[tokio::test]
 async fn log_writes_one_yaml_document_per_line() {
     let cli = Cli::new().await;
     let output = cli.run(&["log", LOG_ID, "-F", "yaml"]).await;

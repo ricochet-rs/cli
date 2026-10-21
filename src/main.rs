@@ -114,9 +114,15 @@ enum Commands {
         force: bool,
     },
     /// Stream a log
+    ///
+    /// With `--deployment`, the deployment's restore logs follow in turn, one per architecture, as `deploy --follow` writes them.
     Log {
         /// Log ID (ULID)
-        id: String,
+        #[arg(required_unless_present = "deployment", conflicts_with = "deployment")]
+        id: Option<String>,
+        /// Stream the restore logs of this deployment (ULID) instead of a single log
+        #[arg(short = 'd', long, value_name = "DEPLOYMENT_ID")]
+        deployment: Option<String>,
         /// Number of latest lines to keep on screen, up to the terminal height, or `all` to print every line
         #[arg(short = 'n', long)]
         lines: Option<commands::log::Lines>,
@@ -616,10 +622,27 @@ async fn main() -> Result<()> {
             commands::delete::delete(&config, cli.server.as_deref(), &id, force, cli.format)
                 .await?;
         }
-        Some(Commands::Log { id, lines }) => {
-            commands::log::follow_log(&config, cli.server.as_deref(), &id, lines, cli.format)
+        Some(Commands::Log {
+            id,
+            deployment,
+            lines,
+        }) => match (id, deployment) {
+            (Some(id), _) => {
+                commands::log::follow_log(&config, cli.server.as_deref(), &id, lines, cli.format)
+                    .await?;
+            }
+            (None, Some(deployment)) => {
+                commands::log::follow_deployment(
+                    &config,
+                    cli.server.as_deref(),
+                    &deployment,
+                    lines,
+                    cli.format,
+                )
                 .await?;
-        }
+            }
+            (None, None) => unreachable!("clap requires a log ID or --deployment"),
+        },
         Some(Commands::Invoke { id }) => {
             eprintln!(
                 "{} `ricochet invoke` is deprecated. Use `ricochet task invoke` instead.",
