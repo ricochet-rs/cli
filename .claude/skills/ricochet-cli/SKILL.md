@@ -125,6 +125,14 @@ ricochet user credentials
 ricochet deploy --git https://github.com/acme/reports --branch main --path dashboards --credential <CREDENTIAL_ID>
 ```
 
+Read the restore logs of any deployment, such as one that failed, by its ID from `ricochet app deployment list` or `ricochet task deployment list`:
+
+```sh
+ricochet log --deployment <DEPLOYMENT_ID>
+```
+
+It prints one log per architecture in turn, waits until the deployment settles, and exits non-zero when the deployment failed.
+
 ## Operate apps
 
 ```sh

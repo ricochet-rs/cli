@@ -573,10 +573,11 @@ impl RicochetClient {
             .send()
             .await?;
 
-        // Just after an upload the deployment exists, so a 404 means the route does not.
+        // A 404 means either the deployment or the route is missing, and only the deployment can be looked up elsewhere.
         if response.status() == StatusCode::NOT_FOUND {
+            self.get_deployment(deployment_id).await?;
             anyhow::bail!(
-                "This Ricochet server cannot stream deployment logs. Update the server to use `deploy --follow`."
+                "This Ricochet server cannot stream deployment logs. Update the server to follow a deployment's logs."
             );
         }
 
