@@ -305,6 +305,11 @@ enum TaskCommands {
         path: Option<std::path::PathBuf>,
     },
     /// Invoke a task
+    ///
+    /// With `--follow` under `-F json`, invoke writes one JSON record per line.
+    /// The first is `{"event":"invoked",...}` with the run's `id`, and the log lines follow as `ricochet log -F json` writes them.
+    /// The last is `{"event":"done",...}` with the finished run that `--wait` prints, including its `status`, `started` and `ended`.
+    /// When the run cannot be started or followed to its end, the last is `{"event":"error",...}`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
     Invoke {
         /// Content item ID (ULID). If not provided, will read from local _ricochet.toml
         id: Option<String>,
@@ -651,7 +656,8 @@ async fn main() -> Result<()> {
             item::invoke::invoke(
                 &config,
                 cli.server.as_deref(),
-                &id,
+                Some(&id),
+                None,
                 item::invoke::Follow::Detach,
                 cli.format,
             )
@@ -866,7 +872,6 @@ async fn main() -> Result<()> {
                 wait,
                 follow,
             } => {
-                let id = item::resolve_id(id.as_deref(), path.as_deref())?;
                 let follow = if follow {
                     item::invoke::Follow::Logs
                 } else if wait {
@@ -874,8 +879,15 @@ async fn main() -> Result<()> {
                 } else {
                     item::invoke::Follow::Detach
                 };
-                item::invoke::invoke(&config, cli.server.as_deref(), &id, follow, cli.format)
-                    .await?;
+                item::invoke::invoke(
+                    &config,
+                    cli.server.as_deref(),
+                    id.as_deref(),
+                    path.as_deref(),
+                    follow,
+                    cli.format,
+                )
+                .await?;
             }
             TaskCommands::Invocation {
                 command: InvocationCommands::Get { id, invocation_id },

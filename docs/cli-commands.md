@@ -518,6 +518,8 @@ Fetch the remote _ricochet.toml for a task
 
 Invoke a task
 
+With `--follow` under `-F json`, invoke writes one JSON record per line. The first is `{"event":"invoked",...}` with the run's `id`, and the log lines follow as `ricochet log -F json` writes them. The last is `{"event":"done",...}` with the finished run that `--wait` prints, including its `status`, `started` and `ended`. When the run cannot be started or followed to its end, the last is `{"event":"error",...}`, whose `kind` is `project`, `auth`, `network`, `rejected` or `server`.
+
 **Usage:** `ricochet task invoke [OPTIONS] [ID]`
 
 ###### **Arguments:**

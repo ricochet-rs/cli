@@ -98,6 +98,7 @@ Legacy single-server configs are automatically migrated to multi-server format.
 The CLI supports multiple output formats: `table` (default), `json`, and `yaml`.
 Under `json` and `yaml`, stdout carries the serialised payload and nothing else, so status lines, hints, prompts and links go to stderr.
 `deploy -F json` instead streams newline-delimited events through `DeployProgress` in `src/client.rs`, ending with `done` or `error`, so do not route its output through `OutputFormat::print`.
+`task invoke --follow -F json` likewise brackets its log records with `RunEvent` in `src/item/invoke.rs`, starting with `invoked` and ending with `done` or `error`.
 Raise a server failure as `ApiError` rather than `bail!`, because the `error` event's `kind` comes from downcasting it and a string error is reported as a `project` failure.
 Print command output through `OutputFormat::print` in `src/output.rs`, which serialises the payload for a machine reader and defers the human rendering to a closure that returns a `String`.
 Render each record of an open-ended stream, such as a followed log, through `OutputFormat::render_record`, which renders JSON as one line per record and YAML as one document per record.

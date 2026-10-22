@@ -166,6 +166,8 @@ Add `--wait` to block until the run finishes, or `--follow` to stream its logs u
 Either way, the command then exits non-zero when the run fails or is cancelled, so a task can serve as a CI step.
 While waiting with `--wait`, it rides out about 30 seconds of an unreachable or failing server before giving up.
 `--follow` gives up as soon as the log stream drops, and names the run on stderr so it can be checked with `ricochet task invocation get`.
+Under `-F json`, `--follow` writes `{"event":"invoked",...}` with the run `id` first and `{"event":"done",...}` with the finished run last, so read the `status`, `started` and `ended` from the last line.
+When the run cannot be started or followed to its end, the last line is `{"event":"error",...}` with the same `kind` values as `deploy`.
 `ricochet task invocation get` reads the status of one run, finished or not.
 Both need a server that can report a single run, and an older server answers that the run was not found.
 `ricochet task schedule` validates the cron expression locally, then prints the parsed description and the next run time in UTC.
