@@ -10,6 +10,7 @@ use colored::Colorize;
 use comfy_table::{Cell, Table, presets::UTF8_FULL};
 use console::Term;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// The run the server started.
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,12 +58,17 @@ pub enum Follow {
 pub async fn invoke(
     config: &Config,
     server_ref: Option<&str>,
-    id: &str,
+    id: Option<&str>,
+    path: Option<&Path>,
     follow: Follow,
     format: OutputFormat,
 ) -> Result<()> {
     let term = Term::buffered_stdout();
-    match report_run(config, server_ref, id, follow, format, &term).await {
+    let reported = async {
+        let id = crate::item::resolve_id(id, path)?;
+        report_run(config, server_ref, &id, follow, format, &term).await
+    };
+    match reported.await {
         Ok(Some(run)) => run.require_success(),
         Ok(None) => Ok(()),
         // A followed stream ends with `done` or `error`, and a failed run already ended with `done`.

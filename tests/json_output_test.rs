@@ -1069,6 +1069,32 @@ async fn task_invoke_follow_ends_with_an_error_when_it_loses_the_run() {
 }
 
 #[tokio::test]
+async fn task_invoke_follow_ends_with_an_error_without_a_task_id() {
+    let cli = Cli::new().await;
+    let missing = cli.home.path().join("missing").join("_ricochet.toml");
+    let output = cli
+        .run(&[
+            "task",
+            "invoke",
+            "-p",
+            missing.to_str().expect("the path is UTF-8"),
+            "--follow",
+            "-F",
+            "json",
+        ])
+        .await;
+    assert!(
+        !output.status.success(),
+        "task invoke --follow succeeded without a task ID"
+    );
+    let stdout = String::from_utf8(output.stdout).expect("stdout is valid UTF-8");
+    let error: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("stdout is one JSON record");
+    assert_eq!(error["event"], "error");
+    assert_eq!(error["kind"], "project");
+}
+
+#[tokio::test]
 async fn task_invocation_get_writes_json_alone() {
     let cli = Cli::new().await;
     let payload = cli

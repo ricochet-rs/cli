@@ -79,29 +79,30 @@ impl DeployFailure {
                     ApiError::Credentials { .. } => Self::Auth,
                     ApiError::Unreachable { .. } => Self::Network,
                     ApiError::Malformed { .. } => Self::Server { status: None },
-                    ApiError::Status { status, .. }
-                        if *status == StatusCode::UNAUTHORIZED
-                            || *status == StatusCode::FORBIDDEN =>
-                    {
-                        Self::Auth
-                    }
-                    ApiError::Status { status, .. } if status.is_server_error() => Self::Server {
-                        status: Some(status.as_u16()),
-                    },
-                    ApiError::Status { status, .. } => Self::Rejected {
-                        status: status.as_u16(),
-                    },
+                    ApiError::Status { status, .. } => Self::from_status(*status),
                 };
             }
             if let Some(request) = cause.downcast_ref::<reqwest::Error>() {
-                return if request.is_decode() {
-                    Self::Server { status: None }
-                } else {
-                    Self::Network
+                return match request.status() {
+                    Some(status) => Self::from_status(status),
+                    None if request.is_decode() => Self::Server { status: None },
+                    None => Self::Network,
                 };
             }
         }
         Self::Project
+    }
+
+    fn from_status(status: StatusCode) -> Self {
+        match status {
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Self::Auth,
+            status if status.is_server_error() => Self::Server {
+                status: Some(status.as_u16()),
+            },
+            status => Self::Rejected {
+                status: status.as_u16(),
+            },
+        }
     }
 }
 
@@ -1008,6 +1009,27 @@ mod tests {
             DeployFailure::classify(&wrapped),
             DeployFailure::Rejected { status: 422 }
         );
+    }
+
+    #[tokio::test]
+    async fn a_status_raised_by_reqwest_keeps_its_class() -> Result<()> {
+        let mut server = mockito::Server::new_async().await;
+        server
+            .mock("GET", "/")
+            .with_status(503)
+            .create_async()
+            .await;
+        let response = reqwest::get(server.url()).await?;
+        let error = anyhow::Error::from(
+            response
+                .error_for_status()
+                .expect_err("a 503 fails the status check"),
+        );
+        assert_eq!(
+            DeployFailure::classify(&error.context("Lost track of task run")),
+            DeployFailure::Server { status: Some(503) }
+        );
+        Ok(())
     }
 
     #[test]
