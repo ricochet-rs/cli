@@ -2380,10 +2380,11 @@ dependencies = [
 
 [[package]]
 name = "ricochet-core"
-version = "0.23.0"
-source = "git+https://github.com/ricochet-rs/ricochet?rev=v0.24.0#5324123d05be9f1e89c121d7ae446ce037c0f8c7"
+version = "0.24.0"
+source = "git+https://github.com/ricochet-rs/ricochet?rev=0370275223dfb0c78a5bb9276a119be42c240e5c#0370275223dfb0c78a5bb9276a119be42c240e5c"
 dependencies = [
  "anyhow",
+ "base64 0.23.0",
  "bytesize",
  "croner",
  "git-url-parse",

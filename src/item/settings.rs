@@ -1,6 +1,10 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
-use ricochet_core::content::ContentItem;
+use ricochet_core::{
+    content::ContentItem,
+    env_vars::EnvVarName,
+    integrations::{DeclaredSecret, IntegrationRef},
+};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 
@@ -334,6 +338,52 @@ pub fn compute_patch(
         );
     }
 
+    // integrations — the server never removes a variable, so send only new or repointed ones
+    if let Some(local_refs) = &local.integrations {
+        let remote_refs = remote.integrations.as_deref().unwrap_or_default();
+        let remote_source = |env_var: &EnvVarName| {
+            remote_refs.iter().find_map(|r| {
+                r.secrets
+                    .iter()
+                    .find(|s| &s.env_var == env_var)
+                    .map(|s| (r.integration.as_str(), s))
+            })
+        };
+        let mut changed: Vec<IntegrationRef> = Vec::new();
+        for local_ref in local_refs {
+            let secrets: Vec<DeclaredSecret> = local_ref
+                .secrets
+                .iter()
+                .filter(|s| {
+                    let from = remote_source(&s.env_var);
+                    let unchanged =
+                        from.is_some_and(|(name, r)| name == local_ref.integration && r == *s);
+                    if !unchanged {
+                        b.changes.push(FieldChange {
+                            field: format!("integrations.{}", s.env_var),
+                            from: from.map_or("(unset)".to_string(), |(name, r)| {
+                                format!("{name}: {}#{}", r.path, r.key)
+                            }),
+                            to: format!("{}: {}#{}", local_ref.integration, s.path, s.key),
+                        });
+                    }
+                    !unchanged
+                })
+                .cloned()
+                .collect();
+            if !secrets.is_empty() {
+                changed.push(IntegrationRef {
+                    integration: local_ref.integration.clone(),
+                    secrets,
+                });
+            }
+        }
+        if !changed.is_empty() {
+            b.patch
+                .insert("integrations".to_string(), serde_json::to_value(changed)?);
+        }
+    }
+
     Ok(b.finish())
 }
 
@@ -503,6 +553,58 @@ packages = "renv.lock"
             })
         );
         assert_eq!(changes.len(), 2);
+    }
+
+    const VAULT: &str = r#"
+[[integrations]]
+integration = "My Vault"
+secrets = [
+  { path = "myapp/db", key = "password", env_var = "DB_PASSWORD" },
+  { path = "myapp/api", key = "token", env_var = "API_TOKEN" },
+]
+"#;
+
+    #[test]
+    fn sends_only_new_or_repointed_integration_secrets() {
+        let remote = parse(&format!("{BASE}{VAULT}"));
+        let local = parse(&format!(
+            "{BASE}{}",
+            r#"
+[[integrations]]
+integration = "My Vault"
+secrets = [
+  { path = "myapp/db", key = "password", env_var = "DB_PASSWORD" },
+  { path = "myapp/api-v2", key = "token", env_var = "API_TOKEN" },
+  { path = "myapp/mail", key = "pass", env_var = "SMTP_PASSWORD" },
+]
+"#
+        ));
+        let (changes, patch) = compute_patch(&remote, &local).unwrap();
+        assert_eq!(
+            patch,
+            json!({"integrations": [{
+                "integration": "My Vault",
+                "secrets": [
+                    {"path": "myapp/api-v2", "key": "token", "env_var": "API_TOKEN"},
+                    {"path": "myapp/mail", "key": "pass", "env_var": "SMTP_PASSWORD"},
+                ],
+            }]})
+        );
+        let fields: Vec<&str> = changes.iter().map(|c| c.field.as_str()).collect();
+        assert_eq!(
+            fields,
+            ["integrations.API_TOKEN", "integrations.SMTP_PASSWORD"]
+        );
+        assert_eq!(changes[0].from, "My Vault: myapp/api#token");
+        assert_eq!(changes[1].from, "(unset)");
+    }
+
+    #[test]
+    fn integration_secrets_missing_locally_are_not_sent() {
+        let remote = parse(&format!("{BASE}{VAULT}"));
+        let (changes, patch) = compute_patch(&remote, &parse(BASE)).unwrap();
+        assert!(changes.is_empty());
+        assert_eq!(patch, json!({}));
     }
 
     #[test]
