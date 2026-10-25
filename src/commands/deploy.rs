@@ -319,7 +319,7 @@ pub async fn deploy(
                     let mut restore = RestoreProgress::default();
                     restore.report(&client, deployment_id).await?;
                     let log_ids = client.deployment_logs(deployment_id).await?;
-                    restore.report(&client, deployment_id).await?;
+                    restore.report_logs_opened(&client, deployment_id).await?;
                     if follow_deployment_logs(
                         &client,
                         server_ref,

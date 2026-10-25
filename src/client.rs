@@ -234,6 +234,25 @@ impl RestoreProgress {
         deployment_id: &str,
     ) -> Result<()> {
         let state = client.get_deployment(deployment_id).await?.restore_state;
+        self.write(state)
+    }
+
+    /// Report the phase once the restore logs have opened, which means the restore left the queue.
+    ///
+    /// A restore that already ended names no phase, so a deployment last reported as queued is reported as restoring.
+    pub(crate) async fn report_logs_opened(
+        &mut self,
+        client: &RicochetClient,
+        deployment_id: &str,
+    ) -> Result<()> {
+        let state = client.get_deployment(deployment_id).await?.restore_state;
+        self.write(match (state, self.reported) {
+            (None, Some(RestoreState::Queued)) => Some(RestoreState::Restoring),
+            (state, _) => state,
+        })
+    }
+
+    fn write(&mut self, state: Option<RestoreState>) -> Result<()> {
         if let Some(state) = state
             && self.reported != Some(state)
         {
