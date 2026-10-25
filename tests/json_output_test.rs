@@ -1186,6 +1186,47 @@ async fn deploy_follow_writes_the_log_between_the_upload_and_done() {
 }
 
 #[tokio::test]
+async fn deploy_follow_reports_each_restore_phase_before_the_log() {
+    let cli = Cli::new().await;
+    let mut server = Server::new_async().await;
+    // mockito serves each of these once, in order, before the settled deployment `mock_api` serves.
+    for restore_state in ["queued", "restoring"] {
+        let mut pending = deployment();
+        pending["status"] = "pending".into();
+        pending["restore_state"] = restore_state.into();
+        server
+            .mock(
+                "GET",
+                format!("/api/v0/content/deployments/{DEPLOYMENT_ID}").as_str(),
+            )
+            .with_status(200)
+            .with_body(pending.to_string())
+            .create();
+    }
+    mock_api(&mut server);
+    cli.use_server(&server.url());
+    let project = TempDir::new().unwrap();
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().unwrap(), "--follow"])
+        .await;
+    assert!(status.success(), "deploy --follow failed: {events:?}");
+
+    let names = events
+        .iter()
+        .filter_map(|event| event.get("event")?.as_str())
+        .filter(|name| !["bundling", "uploading"].contains(name))
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["queued", "restoring", "done"], "{events:?}");
+    let restoring = events
+        .iter()
+        .position(|event| event["event"] == "restoring")
+        .expect("a restoring event");
+    assert_eq!(events[restoring + 1]["line"], "Execution environment: host");
+}
+
+#[tokio::test]
 async fn deploy_names_new_and_updated_apps_and_tasks() {
     let cli = Cli::new().await;
     for (content_type, kind, label, route) in [

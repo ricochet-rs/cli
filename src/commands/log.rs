@@ -71,7 +71,8 @@ pub async fn follow_deployment(
 ) -> Result<()> {
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
-    follow_deployment_logs(&client, server_ref, deployment_id, lines, format).await?;
+    let log_ids = client.deployment_logs(deployment_id).await?;
+    follow_deployment_logs(&client, server_ref, deployment_id, &log_ids, lines, format).await?;
     Ok(())
 }
 
@@ -182,13 +183,14 @@ pub(crate) async fn print_log(
     outcome
 }
 
-/// Stream each of a deployment's restore logs in turn, one per architecture it builds for.
+/// Stream each of a deployment's restore logs `log_ids` in turn, one per architecture it builds for.
 ///
 /// Returns `LogEnd::ReaderGone` when the reader of stdout stops watching, and `LogEnd::Closed` once the deployment settles.
 pub(crate) async fn follow_deployment_logs(
     client: &RicochetClient,
     server_ref: Option<&str>,
     deployment_id: &str,
+    log_ids: &[String],
     lines: Option<Lines>,
     format: OutputFormat,
 ) -> Result<LogEnd> {
@@ -198,7 +200,6 @@ pub(crate) async fn follow_deployment_logs(
         OutputFormat::Json | OutputFormat::Yaml => Term::stderr(),
     };
 
-    let log_ids = client.deployment_logs(deployment_id).await?;
     let log_term = Term::buffered_stdout();
     let total = log_ids.len();
     for (index, log_id) in log_ids.iter().enumerate() {

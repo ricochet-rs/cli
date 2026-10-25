@@ -126,7 +126,7 @@ On a tagged release, the `binaries.yaml` pipeline:
 - Git hooks use **prek** (`prek.toml`), not pre-commit; hooks should mirror the checks in `.crow/lint.yaml`
 - Run `cargo check --all-targets` before committing so compile errors are caught locally, not in CI
 - Tests are in `tests/` directory and inline in source files (`#[cfg(test)]`)
-- mockito answers with the first mock that matches, so a test needing a different response from an endpoint `mock_api` already serves must point the CLI at its own server with `Cli::use_server`
+- mockito answers with the first matching mock that has not reached its expected hits (one by default), then with the last matching one, so a test needing a different response from an endpoint `mock_api` already serves must create its mocks on its own server before calling `mock_api` on it and point the CLI there with `Cli::use_server`
 - Run tests with `cargo test --all-features` (use `--test-threads=1` for env var tests)
 - The project uses tokio for async runtime
 - HTTP client uses reqwest with 5-minute timeout

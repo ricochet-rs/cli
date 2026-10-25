@@ -2,7 +2,7 @@ use crate::commands::log::{Lines, LogEnd, follow_deployment_logs};
 use crate::utils::{Exclusion, classify_bundle, format_size};
 use crate::{
     OutputFormat,
-    client::{DeployProgress, RicochetClient},
+    client::{DeployProgress, RestoreProgress, RicochetClient},
     config::Config,
 };
 use anyhow::{Context, Result, bail};
@@ -313,12 +313,26 @@ pub async fn deploy(
 
             if let DeployProgress::Events = progress {
                 // `done` ends the stream, so under `--follow` it comes after the log records, once the deployment settles.
-                if let Some(lines) = follow
-                    && follow_deployment_logs(&client, server_ref, followable()?, lines, format)
-                        .await?
+                if let Some(lines) = follow {
+                    let deployment_id = followable()?;
+                    // The logs open once the restore leaves the queue, so the phase is read on either side of that wait.
+                    let mut restore = RestoreProgress::default();
+                    restore.report(&client, deployment_id).await?;
+                    let log_ids = client.deployment_logs(deployment_id).await?;
+                    restore.report(&client, deployment_id).await?;
+                    if follow_deployment_logs(
+                        &client,
+                        server_ref,
+                        deployment_id,
+                        &log_ids,
+                        lines,
+                        format,
+                    )
+                    .await?
                         == LogEnd::ReaderGone
-                {
-                    return Ok(());
+                    {
+                        return Ok(());
+                    }
                 }
                 DeployProgress::emit_done(&response);
                 return Ok(());
@@ -346,7 +360,10 @@ pub async fn deploy(
             };
             // The log records that follow need the payload as a record too, so stdout stays one record per line.
             println!("{}", format.render_record(&response, table)?);
-            follow_deployment_logs(&client, server_ref, followable()?, lines, format).await?;
+            let deployment_id = followable()?;
+            let log_ids = client.deployment_logs(deployment_id).await?;
+            follow_deployment_logs(&client, server_ref, deployment_id, &log_ids, lines, format)
+                .await?;
             Ok(())
         }
         Err(e) => {
