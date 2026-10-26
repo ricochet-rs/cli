@@ -3,7 +3,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
-use ricochet_core::events::DeploymentStatus;
+use ricochet_core::events::{DeploymentStatus, RestoreState};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,6 +17,9 @@ pub struct DeploymentRow {
     pub requested_ver: Option<String>,
     pub matched_ver: Option<String>,
     pub git_hash: Option<String>,
+    /// Where a pending restore stands, absent from servers that predate it and from the deployment list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restore_state: Option<RestoreState>,
 }
 
 const DEFAULT_FIELDS: &[&str] = &["id", "status", "deployed_at"];

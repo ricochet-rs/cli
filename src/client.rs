@@ -5,6 +5,7 @@ use reqwest::{Client, Response, StatusCode};
 use ricochet_core::{
     config::git::{GitCredential, GitProtocol, GitRepo},
     content::{ContentItem, OwnershipScope},
+    events::RestoreState,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::json;
@@ -117,11 +118,24 @@ enum DeployEvent {
         bytes_sent: u64,
         bytes_total: u64,
     },
+    Queued,
+    Restoring,
+    Cancelling,
     Error {
         #[serde(flatten)]
         failure: DeployFailure,
         message: String,
     },
+}
+
+impl From<RestoreState> for DeployEvent {
+    fn from(state: RestoreState) -> Self {
+        match state {
+            RestoreState::Queued => Self::Queued,
+            RestoreState::Restoring => Self::Restoring,
+            RestoreState::Cancelling => Self::Cancelling,
+        }
+    }
 }
 
 impl DeployEvent {
@@ -200,6 +214,51 @@ impl DeployProgress {
             message: console::strip_ansi_codes(&error.to_string()).into_owned(),
         }
         .emit()?;
+        Ok(())
+    }
+}
+
+/// The restore phase `deploy -F json --follow` last reported, so each phase is written once.
+#[derive(Default)]
+pub(crate) struct RestoreProgress {
+    reported: Option<RestoreState>,
+}
+
+impl RestoreProgress {
+    /// Write an event for the phase a deployment's restore is in, when it differs from the last one.
+    ///
+    /// A server that predates `restore_state` names no phase, so nothing is written.
+    pub(crate) async fn report(
+        &mut self,
+        client: &RicochetClient,
+        deployment_id: &str,
+    ) -> Result<()> {
+        let state = client.get_deployment(deployment_id).await?.restore_state;
+        self.write(state)
+    }
+
+    /// Report the phase once the restore logs have opened, which means the restore left the queue.
+    ///
+    /// A restore that already ended names no phase, so a deployment last reported as queued is reported as restoring.
+    pub(crate) async fn report_logs_opened(
+        &mut self,
+        client: &RicochetClient,
+        deployment_id: &str,
+    ) -> Result<()> {
+        let state = client.get_deployment(deployment_id).await?.restore_state;
+        self.write(match (state, self.reported) {
+            (None, Some(RestoreState::Queued)) => Some(RestoreState::Restoring),
+            (state, _) => state,
+        })
+    }
+
+    fn write(&mut self, state: Option<RestoreState>) -> Result<()> {
+        if let Some(state) = state
+            && self.reported != Some(state)
+        {
+            DeployEvent::from(state).emit()?;
+            self.reported = Some(state);
+        }
         Ok(())
     }
 }

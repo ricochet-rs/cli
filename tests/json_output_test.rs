@@ -1185,6 +1185,87 @@ async fn deploy_follow_writes_the_log_between_the_upload_and_done() {
     );
 }
 
+/// Deploy with `--follow -F json` against a server that answers each read of the deployment with the next of `reads`.
+async fn deploy_following_restore(reads: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    let cli = Cli::new().await;
+    let mut server = Server::new_async().await;
+    // mockito serves each of these once, in order, before the settled deployment `mock_api` serves.
+    for read in reads {
+        server
+            .mock(
+                "GET",
+                format!("/api/v0/content/deployments/{DEPLOYMENT_ID}").as_str(),
+            )
+            .with_status(200)
+            .with_body(read.to_string())
+            .create();
+    }
+    mock_api(&mut server);
+    cli.use_server(&server.url());
+    let project = TempDir::new().unwrap();
+    write_project(project.path(), LOCAL_TOML);
+
+    let (status, events) = cli
+        .deploy_events(&[project.path().to_str().unwrap(), "--follow"])
+        .await;
+    assert!(status.success(), "deploy --follow failed: {events:?}");
+    events
+}
+
+/// A deployment whose restore is `restore_state`, or settled when that is `null`.
+fn deployment_restoring(restore_state: serde_json::Value) -> serde_json::Value {
+    let mut deployment = deployment();
+    if !restore_state.is_null() {
+        deployment["status"] = "pending".into();
+    }
+    deployment["restore_state"] = restore_state;
+    deployment
+}
+
+/// The names of the events between the upload and the end of the stream.
+fn phase_names(events: &[serde_json::Value]) -> Vec<&str> {
+    events
+        .iter()
+        .filter_map(|event| event.get("event")?.as_str())
+        .filter(|name| !["bundling", "uploading"].contains(name))
+        .collect()
+}
+
+#[tokio::test]
+async fn deploy_follow_reports_each_restore_phase_before_the_log() {
+    let events = deploy_following_restore(&[
+        deployment_restoring("queued".into()),
+        deployment_restoring("restoring".into()),
+    ])
+    .await;
+
+    assert_eq!(
+        phase_names(&events),
+        ["queued", "restoring", "done"],
+        "{events:?}"
+    );
+    let restoring = events
+        .iter()
+        .position(|event| event["event"] == "restoring")
+        .expect("a restoring event");
+    assert_eq!(events[restoring + 1]["line"], "Execution environment: host");
+}
+
+#[tokio::test]
+async fn deploy_follow_reports_a_restore_that_ended_before_it_was_read() {
+    let events = deploy_following_restore(&[
+        deployment_restoring("queued".into()),
+        deployment_restoring(serde_json::Value::Null),
+    ])
+    .await;
+
+    assert_eq!(
+        phase_names(&events),
+        ["queued", "restoring", "done"],
+        "{events:?}"
+    );
+}
+
 #[tokio::test]
 async fn deploy_names_new_and_updated_apps_and_tasks() {
     let cli = Cli::new().await;

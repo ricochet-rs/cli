@@ -38,6 +38,8 @@ Under `-F json` and `-F yaml` stdout carries the serialised payload and nothing 
 That line is `{"event":"done",...}` with the server's response, which holds the content `id` and, for a local deploy, the `deployment_id`.
 On failure it is `{"event":"error",...}` with a `kind` of `project`, `auth`, `network`, `rejected` or `server`.
 With `--follow`, the deployment's log lines come before that last line, which waits until the deployment settles.
+A server that reports restore progress adds `{"event":"queued"}` while the restore waits its turn and `{"event":"restoring"}` once it starts, before the log lines.
+Older servers send neither, so never wait for one.
 Pass `--debug` to surface the underlying request and response when a command fails.
 
 ## Connect to a server
