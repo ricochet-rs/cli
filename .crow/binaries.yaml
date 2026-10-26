@@ -157,7 +157,7 @@ steps:
       target: /
 
   changelog:
-    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:3.0.5
+    image: reg.ricochet.rs/docker.io/thegeeklab/git-sv:3.0.6
     depends_on:
       - 'Push bump and tag'
     commands:
@@ -170,7 +170,7 @@ steps:
       event: tag
 
   'Create release':
-    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-release:0.3.2
+    image: reg.ricochet.rs/docker.io/woodpeckerci/plugin-release:0.3.3
     depends_on:
       - changelog
     settings:
