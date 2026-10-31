@@ -2381,7 +2381,7 @@ dependencies = [
 [[package]]
 name = "ricochet-core"
 version = "0.24.0"
-source = "git+https://github.com/ricochet-rs/ricochet?rev=0370275223dfb0c78a5bb9276a119be42c240e5c#0370275223dfb0c78a5bb9276a119be42c240e5c"
+source = "git+https://github.com/ricochet-rs/ricochet?rev=b6f678e61521aa09d61e462c8769b9025b4ce7ed#b6f678e61521aa09d61e462c8769b9025b4ce7ed"
 dependencies = [
  "anyhow",
  "base64 0.23.0",
@@ -2398,6 +2398,7 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
+ "ulid",
  "url",
  "yaml_serde",
 ]

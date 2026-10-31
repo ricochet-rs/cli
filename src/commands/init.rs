@@ -245,6 +245,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         }
         ContentType::Python
         | ContentType::PythonService
+        | ContentType::PythonApp
         | ContentType::FastApi
         | ContentType::Flask
         | ContentType::Streamlit
