@@ -219,7 +219,9 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         }
         ContentType::Shiny => choose_shiny_entrypoint(dir),
         ContentType::Rmd | ContentType::RmdShiny => find_candidate_entrypoints("Rmd", dir),
-        ContentType::Julia | ContentType::JuliaService => find_candidate_entrypoints("jl", dir),
+        ContentType::Julia | ContentType::JuliaService | ContentType::Genie => {
+            find_candidate_entrypoints("jl", dir)
+        }
         ContentType::QuartoR
         | ContentType::QuartoRShiny
         | ContentType::QuartoJl
@@ -243,6 +245,7 @@ fn choose_entrypoint(content_type: &ContentType, dir: &Path) -> anyhow::Result<P
         }
         ContentType::Python
         | ContentType::PythonService
+        | ContentType::PythonApp
         | ContentType::FastApi
         | ContentType::Flask
         | ContentType::Streamlit
@@ -503,6 +506,7 @@ pub fn init_rico_toml(
         resources: None,
         repositories: None,
         retention: None,
+        integrations: None,
     };
 
     // ricochet-core checks for a Shiny directory entrypoint relative to the working directory, so validate the entrypoint where it lives.
