@@ -1,8 +1,12 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
-use ricochet_core::content::ContentItem;
+use ricochet_core::{
+    content::ContentItem,
+    env_vars::EnvVarName,
+    integrations::{AzureKeyVaultSecrets, Integrations, VaultSecrets},
+};
 use serde_json::{Map, Value, json};
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use crate::{OutputFormat, client::RicochetClient, config::Config, item::load_local, utils};
 
@@ -334,6 +338,80 @@ pub fn compute_patch(
         );
     }
 
+    // integrations — the server never removes a variable, so send only new or repointed ones
+    if let Some(local_integrations) = &local.integrations {
+        let mut remote_sources: HashMap<String, String> = HashMap::new();
+        for r in remote.integrations.iter().flat_map(|i| &i.vault) {
+            for s in &r.secrets {
+                remote_sources.insert(
+                    s.env_var.to_string(),
+                    format!("{}: {}#{}", r.integration, s.path, s.key),
+                );
+            }
+        }
+        for r in remote.integrations.iter().flat_map(|i| &i.azure_key_vault) {
+            for s in &r.secrets {
+                remote_sources.insert(
+                    s.env_var.to_string(),
+                    format!("{}: {}", r.integration, s.name),
+                );
+            }
+        }
+        // Records the change and returns true when the variable is new or repointed.
+        let mut is_changed = |env_var: &EnvVarName, to: String| {
+            let from = remote_sources.get(&env_var.to_string());
+            if from == Some(&to) {
+                return false;
+            }
+            b.changes.push(FieldChange {
+                field: format!("integrations.{env_var}"),
+                from: from.cloned().unwrap_or_else(|| "(unset)".to_string()),
+                to,
+            });
+            true
+        };
+        let mut changed = Integrations::default();
+        for local_ref in &local_integrations.vault {
+            let secrets: Vec<_> = local_ref
+                .secrets
+                .iter()
+                .filter(|s| {
+                    is_changed(
+                        &s.env_var,
+                        format!("{}: {}#{}", local_ref.integration, s.path, s.key),
+                    )
+                })
+                .cloned()
+                .collect();
+            if !secrets.is_empty() {
+                changed.vault.push(VaultSecrets {
+                    integration: local_ref.integration.clone(),
+                    secrets,
+                });
+            }
+        }
+        for local_ref in &local_integrations.azure_key_vault {
+            let secrets: Vec<_> = local_ref
+                .secrets
+                .iter()
+                .filter(|s| {
+                    is_changed(&s.env_var, format!("{}: {}", local_ref.integration, s.name))
+                })
+                .cloned()
+                .collect();
+            if !secrets.is_empty() {
+                changed.azure_key_vault.push(AzureKeyVaultSecrets {
+                    integration: local_ref.integration.clone(),
+                    secrets,
+                });
+            }
+        }
+        if !changed.is_empty() {
+            b.patch
+                .insert("integrations".to_string(), serde_json::to_value(changed)?);
+        }
+    }
+
     Ok(b.finish())
 }
 
@@ -503,6 +581,93 @@ packages = "renv.lock"
             })
         );
         assert_eq!(changes.len(), 2);
+    }
+
+    const VAULT: &str = r#"
+[[integrations.vault]]
+integration = "My Vault"
+secrets = [
+  { path = "myapp/db", key = "password", env_var = "DB_PASSWORD" },
+  { path = "myapp/api", key = "token", env_var = "API_TOKEN" },
+]
+
+[[integrations.azure_key_vault]]
+integration = "My Key Vault"
+secrets = [{ name = "smtp-password", env_var = "SMTP_PASSWORD" }]
+"#;
+
+    #[test]
+    fn sends_only_new_or_repointed_integration_secrets() {
+        let remote = parse(&format!("{BASE}{VAULT}"));
+        let local = parse(&format!(
+            "{BASE}{}",
+            r#"
+[[integrations.vault]]
+integration = "My Vault"
+secrets = [
+  { path = "myapp/db", key = "password", env_var = "DB_PASSWORD" },
+  { path = "myapp/api-v2", key = "token", env_var = "API_TOKEN" },
+  { path = "myapp/mail", key = "user", env_var = "SMTP_USER" },
+]
+
+[[integrations.azure_key_vault]]
+integration = "My Key Vault"
+secrets = [
+  { name = "smtp-password-v2", env_var = "SMTP_PASSWORD" },
+  { name = "signing-key", env_var = "SIGNING_KEY" },
+]
+"#
+        ));
+        let (changes, patch) = compute_patch(&remote, &local).unwrap();
+        assert_eq!(
+            patch,
+            json!({"integrations": {
+                "vault": [{
+                    "integration": "My Vault",
+                    "secrets": [
+                        {"path": "myapp/api-v2", "key": "token", "env_var": "API_TOKEN"},
+                        {"path": "myapp/mail", "key": "user", "env_var": "SMTP_USER"},
+                    ],
+                }],
+                "azure_key_vault": [{
+                    "integration": "My Key Vault",
+                    "secrets": [
+                        {"name": "smtp-password-v2", "env_var": "SMTP_PASSWORD"},
+                        {"name": "signing-key", "env_var": "SIGNING_KEY"},
+                    ],
+                }],
+            }})
+        );
+        let fields: Vec<&str> = changes.iter().map(|c| c.field.as_str()).collect();
+        assert_eq!(
+            fields,
+            [
+                "integrations.API_TOKEN",
+                "integrations.SMTP_USER",
+                "integrations.SMTP_PASSWORD",
+                "integrations.SIGNING_KEY",
+            ]
+        );
+        assert_eq!(changes[0].from, "My Vault: myapp/api#token");
+        assert_eq!(changes[1].from, "(unset)");
+        assert_eq!(changes[2].from, "My Key Vault: smtp-password");
+        assert_eq!(changes[2].to, "My Key Vault: smtp-password-v2");
+    }
+
+    #[test]
+    fn omits_an_integration_kind_with_no_changes() {
+        let remote = parse(&format!("{BASE}{VAULT}"));
+        let (changes, patch) = compute_patch(&remote, &remote).unwrap();
+        assert!(changes.is_empty());
+        assert_eq!(patch, json!({}));
+    }
+
+    #[test]
+    fn integration_secrets_missing_locally_are_not_sent() {
+        let remote = parse(&format!("{BASE}{VAULT}"));
+        let (changes, patch) = compute_patch(&remote, &parse(BASE)).unwrap();
+        assert!(changes.is_empty());
+        assert_eq!(patch, json!({}));
     }
 
     #[test]
