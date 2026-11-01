@@ -8,6 +8,11 @@ when:
 labels:
   agent: thumper
 
+cache:
+  - key: cargo-v1-{{ checksum "Cargo.lock" }}
+    restore_keys: ['cargo-v1-']
+    paths: [.cache/cargo/registry/index, .cache/cargo/registry/cache, .cache/cargo/git/db]
+
 steps:
   cache:
     image: codefloe.com/crow-plugins/sccache:0.3.3
@@ -32,6 +37,7 @@ steps:
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
+      CARGO_HOME: ${CI_WORKSPACE}/.cache/cargo
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:

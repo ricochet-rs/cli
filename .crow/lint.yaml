@@ -8,12 +8,21 @@ when:
 labels:
   type: static
 
+cache:
+  - key: prek-v1-{{ arch }}-{{ checksum "prek.toml" }}
+    restore_keys: ['prek-v1-{{ arch }}-']
+    paths: [.cache/prek]
+  - key: cargo-v1-{{ checksum "Cargo.lock" }}
+    restore_keys: ['cargo-v1-']
+    paths: [.cache/cargo/registry/index, .cache/cargo/registry/cache, .cache/cargo/git/db]
+
 steps:
   prek:
     image: reg.ricochet.rs/docker.io/library/alpine:3.24
     depends_on: []
     environment:
       PREK_VERSION: v0.3.9
+      PREK_HOME: ${CI_WORKSPACE}/.cache/prek
       # cargo-fmt is a local-only auto-fix hook that needs the Rust toolchain,
       # which is absent in this minimal alpine image. The rust-lint step below
       # runs the equivalent `cargo fmt --check` with the real toolchain.
@@ -46,6 +55,7 @@ steps:
     depends_on: cache
     environment:
       SQLX_OFFLINE: true
+      CARGO_HOME: ${CI_WORKSPACE}/.cache/cargo
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
@@ -64,6 +74,7 @@ steps:
     image: reg.ricochet.rs/docker.io/library/rust:1.99
     depends_on: cache
     environment:
+      CARGO_HOME: ${CI_WORKSPACE}/.cache/cargo
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
