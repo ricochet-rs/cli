@@ -5,12 +5,20 @@ when:
 labels:
   agent: thumper
 
+# Release runs restore the default branch's cargo cache but never save, since no later run reads a tag's cache.
+cache:
+  - key: cargo-v1-{{ checksum "Cargo.lock" }}
+    restore_keys: ['cargo-v1-']
+    paths: [.cache/cargo/registry/index, .cache/cargo/registry/cache, .cache/cargo/git/db]
+    save: never
+
 steps:
   bump:
     image: reg.ricochet.rs/docker.io/library/rust:1.99-slim
     when:
       event: tag
     environment:
+      CARGO_HOME: ${CI_WORKSPACE}/.cache/cargo
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
@@ -47,6 +55,7 @@ steps:
     depends_on:
       - bump
     environment:
+      CARGO_HOME: ${CI_WORKSPACE}/.cache/cargo
       GITHUB_TOKEN:
         from_secret: ricochet_bot_token
     commands:
