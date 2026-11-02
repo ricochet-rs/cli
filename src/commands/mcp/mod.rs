@@ -2,7 +2,9 @@
 //!
 //! The server's own tools come from its MCP endpoint, connected once at startup with the CLI's
 //! stored profile. When that fails, `ricochet mcp` still serves, without them.
+//! Beside them, `ricochet mcp` offers its own tools for a project on the local disk.
 
+mod local;
 mod remote;
 
 use rmcp::model::{
@@ -12,6 +14,7 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
 
+use crate::commands::mcp::local::{LocalTool, LocalToolArgs};
 use crate::commands::mcp::remote::RemoteTools;
 use crate::config::Config;
 
@@ -37,17 +40,22 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
             None
         }
     };
-    McpServer { remote }
-        .serve(rmcp::transport::stdio())
-        .await?
-        .waiting()
-        .await?;
+    McpServer {
+        remote,
+        server_ref: server_ref.map(str::to_owned),
+    }
+    .serve(rmcp::transport::stdio())
+    .await?
+    .waiting()
+    .await?;
     Ok(())
 }
 
-/// The tools `ricochet mcp` offers: the server's, forwarded by name.
+/// The tools `ricochet mcp` offers: the server's, forwarded by name, and its own local ones.
 struct McpServer {
     remote: Option<RemoteTools>,
+    /// The `--server` that `ricochet mcp` was started with, passed on to a local deploy.
+    server_ref: Option<String>,
 }
 
 impl ServerHandler for McpServer {
@@ -61,11 +69,15 @@ impl ServerHandler for McpServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
+        // A local tool answers to its name first, so a server tool of the same name is unreachable.
         let tools = self
             .remote
-            .as_ref()
-            .map(|remote| remote.tools.clone())
-            .unwrap_or_default();
+            .iter()
+            .flat_map(|remote| remote.tools.iter())
+            .filter(|tool| LocalTool::from_name(&tool.name).is_none())
+            .cloned()
+            .chain(LocalTool::ALL.map(LocalTool::definition))
+            .collect();
         Ok(ListToolsResult::with_all_items(tools))
     }
 
@@ -74,6 +86,16 @@ impl ServerHandler for McpServer {
         request: CallToolRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
+        if let Some(tool) = LocalTool::from_name(&request.name) {
+            let arguments = serde_json::Value::Object(request.arguments.unwrap_or_default());
+            let args: LocalToolArgs = serde_json::from_value(arguments).map_err(|error| {
+                McpError::invalid_params(
+                    format!("invalid arguments for {}: {error}", request.name),
+                    None,
+                )
+            })?;
+            return Ok(tool.call(args, self.server_ref.as_deref()).await.into());
+        }
         match &self.remote {
             Some(remote) if remote.offers(&request.name) => remote.call(request).await,
             _ => Err(McpError::invalid_params(
