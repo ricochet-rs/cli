@@ -175,6 +175,8 @@ enum Commands {
     },
     /// Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
     Lsp,
+    /// Offer the server's tools to an editor's AI agent, as an MCP server over stdio
+    Mcp,
     /// Manage deployed app items
     App {
         #[command(subcommand)]
@@ -531,12 +533,17 @@ enum SelfCommands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    if cli.debug {
-        let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            tracing_subscriber::EnvFilter::new(
-                "ricochet=debug,ricochet_cli=debug,reqwest=debug,hyper_util=debug",
-            )
-        });
+    // `mcp` reports why it serves without the server's tools on stderr, since stdout is its protocol.
+    let default_filter = if cli.debug {
+        Some("ricochet=debug,ricochet_cli=debug,reqwest=debug,hyper_util=debug")
+    } else if matches!(cli.command, Some(Commands::Mcp)) {
+        Some("warn")
+    } else {
+        None
+    };
+    if let Some(default_filter) = default_filter {
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_filter));
         tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_writer(std::io::stderr)
@@ -695,6 +702,9 @@ async fn main() -> Result<()> {
         }
 
         Some(Commands::Lsp) => unreachable!("lsp is served before the config loads"),
+        Some(Commands::Mcp) => {
+            return commands::mcp::serve_mcp(&config, cli.server.as_deref()).await;
+        }
         Some(Commands::App { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
