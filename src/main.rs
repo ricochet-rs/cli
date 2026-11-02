@@ -550,6 +550,10 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    if matches!(cli.command, Some(Commands::Lsp)) {
+        return commands::lsp::serve_lsp();
+    }
+
     // Load or initialize config
     let mut config = Config::load()?;
 
@@ -690,7 +694,7 @@ async fn main() -> Result<()> {
             commands::init::init_rico_toml(&path, overwrite, dry_run, answers, cli.format)?;
         }
 
-        Some(Commands::Lsp) => return commands::lsp::serve_lsp(),
+        Some(Commands::Lsp) => unreachable!("lsp is served before the config loads"),
         Some(Commands::App { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;

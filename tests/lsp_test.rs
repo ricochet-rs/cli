@@ -31,7 +31,11 @@ struct LspSession {
 
 impl LspSession {
     fn start() -> Self {
-        let home = TempDir::new().expect("temp home");
+        Self::start_in(TempDir::new().expect("temp home"))
+    }
+
+    /// Start the server with `home` as its HOME and XDG config root.
+    fn start_in(home: TempDir) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_ricochet"))
             .arg("lsp")
             .env("HOME", home.path())
@@ -203,5 +207,19 @@ fn lsp_ignores_other_toml_files() {
         .filter(|message| message["method"] == "textDocument/publishDiagnostics")
         .collect();
     assert!(published.is_empty(), "{published:?}");
+    assert!(session.exit().success());
+}
+
+#[test]
+fn lsp_starts_with_a_broken_config_file() {
+    let home = TempDir::new().expect("temp home");
+    let config_dir = home.path().join(".config").join("ricochet");
+    std::fs::create_dir_all(&config_dir).expect("create config dir");
+    std::fs::write(config_dir.join("config.toml"), "garbage = [").expect("write config");
+
+    let mut session = LspSession::start_in(home);
+    session.initialize();
+    let received = session.shutdown();
+    assert_eq!(received.len(), 1, "unexpected extra messages: {received:?}");
     assert!(session.exit().success());
 }
