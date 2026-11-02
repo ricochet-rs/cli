@@ -7,6 +7,7 @@ pub mod init;
 pub mod list;
 pub mod log;
 pub mod lsp;
+pub mod mcp;
 pub mod server;
 pub mod update;
 pub mod user;

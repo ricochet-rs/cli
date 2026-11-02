@@ -14,6 +14,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet detect`↴](#ricochet-detect)
 * [`ricochet init`↴](#ricochet-init)
 * [`ricochet lsp`↴](#ricochet-lsp)
+* [`ricochet mcp`↴](#ricochet-mcp)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
 * [`ricochet app list`↴](#ricochet-app-list)
@@ -73,6 +74,7 @@ Ricochet CLI
 * `detect` — Report deployable content in a directory without writing anything
 * `init` — Initialize a new Ricochet deployment
 * `lsp` — Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
+* `mcp` — Offer the server's tools to an editor's AI agent, as an MCP server over stdio
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
 * `server` — Manage configured Ricochet servers
@@ -235,6 +237,14 @@ Prompts for each setting not given as a flag. With `--content-type`, `--entrypoi
 Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
 
 **Usage:** `ricochet lsp`
+
+
+
+## `ricochet mcp`
+
+Offer the server's tools to an editor's AI agent, as an MCP server over stdio
+
+**Usage:** `ricochet mcp`
 
 
 
