@@ -6,6 +6,7 @@ pub mod detect;
 pub mod init;
 pub mod list;
 pub mod log;
+pub mod lsp;
 pub mod server;
 pub mod update;
 pub mod user;

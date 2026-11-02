@@ -173,6 +173,8 @@ enum Commands {
         #[arg(long, value_parser = commands::init::parse_toml_value::<ricochet_core::content::AccessType>)]
         access_type: Option<ricochet_core::content::AccessType>,
     },
+    /// Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
+    Lsp,
     /// Manage deployed app items
     App {
         #[command(subcommand)]
@@ -688,6 +690,7 @@ async fn main() -> Result<()> {
             commands::init::init_rico_toml(&path, overwrite, dry_run, answers, cli.format)?;
         }
 
+        Some(Commands::Lsp) => return commands::lsp::serve_lsp(),
         Some(Commands::App { command }) => match command {
             ItemCommands::Toml { id, path } => {
                 item::toml::get_toml(&config, cli.server.as_deref(), id, path, cli.format).await?;
