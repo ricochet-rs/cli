@@ -14,6 +14,7 @@ use lsp_types::{
     TextDocumentSyncCapability, TextDocumentSyncKind, Uri,
 };
 use ricochet_core::content::{ContentError, ContentItem};
+use serde::de::DeserializeOwned;
 use toml::de::DeTable;
 
 const RICOCHET_TOML: &str = "_ricochet.toml";
@@ -39,36 +40,9 @@ pub fn serve_lsp() -> anyhow::Result<()> {
                     message,
                 )))?;
             }
-            Message::Notification(notification) => match notification.method.as_str() {
-                DidOpenTextDocument::METHOD => {
-                    let params: DidOpenTextDocumentParams =
-                        serde_json::from_value(notification.params)?;
-                    let document = params.text_document;
-                    if let Some(dir) = ricochet_toml_dir(&document.uri) {
-                        publish(&connection, document.uri, diagnose(&document.text, &dir))?;
-                    }
-                }
-                DidChangeTextDocument::METHOD => {
-                    let params: DidChangeTextDocumentParams =
-                        serde_json::from_value(notification.params)?;
-                    let uri = params.text_document.uri;
-                    if let (Some(dir), Some(change)) =
-                        (ricochet_toml_dir(&uri), params.content_changes.last())
-                    {
-                        let diagnostics = diagnose(&change.text, &dir);
-                        publish(&connection, uri, diagnostics)?;
-                    }
-                }
-                DidCloseTextDocument::METHOD => {
-                    let params: DidCloseTextDocumentParams =
-                        serde_json::from_value(notification.params)?;
-                    let uri = params.text_document.uri;
-                    if ricochet_toml_dir(&uri).is_some() {
-                        publish(&connection, uri, Vec::new())?;
-                    }
-                }
-                _ => {}
-            },
+            Message::Notification(notification) => {
+                handle_notification(&connection, notification)?;
+            }
             Message::Response(_) => {}
         }
     }
@@ -76,6 +50,56 @@ pub fn serve_lsp() -> anyhow::Result<()> {
     drop(connection);
     io_threads.join()?;
     Ok(())
+}
+
+/// Publish diagnostics for a document event, ignoring a notification whose params do not parse.
+fn handle_notification(
+    connection: &Connection,
+    notification: lsp_server::Notification,
+) -> anyhow::Result<()> {
+    match notification.method.as_str() {
+        DidOpenTextDocument::METHOD => {
+            let Some(params) = parse_params::<DidOpenTextDocumentParams>(notification) else {
+                return Ok(());
+            };
+            let document = params.text_document;
+            if let Some(dir) = ricochet_toml_dir(&document.uri) {
+                publish(connection, document.uri, diagnose(&document.text, &dir))?;
+            }
+        }
+        DidChangeTextDocument::METHOD => {
+            let Some(params) = parse_params::<DidChangeTextDocumentParams>(notification) else {
+                return Ok(());
+            };
+            let uri = params.text_document.uri;
+            if let (Some(dir), Some(change)) =
+                (ricochet_toml_dir(&uri), params.content_changes.last())
+            {
+                let diagnostics = diagnose(&change.text, &dir);
+                publish(connection, uri, diagnostics)?;
+            }
+        }
+        DidCloseTextDocument::METHOD => {
+            let Some(params) = parse_params::<DidCloseTextDocumentParams>(notification) else {
+                return Ok(());
+            };
+            let uri = params.text_document.uri;
+            if ricochet_toml_dir(&uri).is_some() {
+                publish(connection, uri, Vec::new())?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// The notification's params, or `None` with a warning when the client sent params that do not parse.
+fn parse_params<P: DeserializeOwned>(notification: lsp_server::Notification) -> Option<P> {
+    serde_json::from_value(notification.params)
+        .inspect_err(|error| {
+            tracing::warn!(method = %notification.method, %error, "ignoring malformed notification");
+        })
+        .ok()
 }
 
 /// The directory holding the document when it is a local `_ricochet.toml`.
@@ -287,5 +311,34 @@ packages = "renv.lock"
     fn diagnose_returns_empty_for_valid_file() {
         let text = format!("{}{SERVE}", item("shiny", "app.R"));
         assert!(diagnose(&text, Path::new(".")).is_empty());
+    }
+
+    #[test]
+    fn handle_notification_ignores_malformed_params() {
+        let (server, client) = Connection::memory();
+        let notification = lsp_server::Notification::new(
+            DidOpenTextDocument::METHOD.to_owned(),
+            serde_json::json!({"textDocument": {"uri": "not a uri", "text": "[content\n"}}),
+        );
+        handle_notification(&server, notification).expect("malformed params are not an error");
+        assert!(client.receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn handle_notification_publishes_for_ricochet_toml() {
+        let (server, client) = Connection::memory();
+        let dir = tempfile::tempdir().expect("temp dir");
+        let uri = url::Url::from_file_path(dir.path().join(RICOCHET_TOML)).expect("file url");
+        let notification = lsp_server::Notification::new(
+            DidOpenTextDocument::METHOD.to_owned(),
+            serde_json::json!({"textDocument": {
+                "uri": uri.as_str(), "languageId": "toml", "version": 1, "text": "[content\n"
+            }}),
+        );
+        handle_notification(&server, notification).expect("valid params");
+        let Ok(Message::Notification(published)) = client.receiver.try_recv() else {
+            panic!("expected a published diagnostic");
+        };
+        assert_eq!(published.method, PublishDiagnostics::METHOD);
     }
 }
