@@ -310,15 +310,32 @@ fn replace_executable_with_sudo(new_executable: &Path, exe: &Path) -> Result<()>
         "Writing to {} requires elevated permissions, running sudo...",
         exe.display()
     );
-    // `install` unlinks the target before copying, so the running binary's inode stays intact.
-    let status = std::process::Command::new("sudo")
-        .arg("install")
-        .args(["-m", "755"])
-        .arg(new_executable)
-        .arg(exe)
-        .status()
-        .context("Failed to run sudo")?;
-    if !status.success() {
+    let staged = exe.with_file_name(format!(".ricochet.__update__{}", std::process::id()));
+    let run_sudo = |args: &[&std::ffi::OsStr]| -> Result<bool> {
+        let status = std::process::Command::new("sudo")
+            .args(args)
+            .status()
+            .context("Failed to run sudo")?;
+        Ok(status.success())
+    };
+
+    // Stage beside the target first so a failed copy never removes the working binary.
+    let copied = run_sudo(&[
+        "install".as_ref(),
+        "-m".as_ref(),
+        "755".as_ref(),
+        new_executable.as_os_str(),
+        staged.as_os_str(),
+    ])?;
+    let renamed = copied
+        && run_sudo(&[
+            "mv".as_ref(),
+            "-f".as_ref(),
+            staged.as_os_str(),
+            exe.as_os_str(),
+        ])?;
+    if !renamed {
+        run_sudo(&["rm".as_ref(), "-f".as_ref(), staged.as_os_str()]).ok();
         anyhow::bail!(
             "sudo failed to replace the ricochet binary at {}.\n  {manual_hint}",
             exe.display()
@@ -457,9 +474,13 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn replace_executable_reports_permission_denied_for_readonly_dir() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
         let dir = tempfile::tempdir().unwrap();
+        if std::fs::metadata(dir.path()).unwrap().uid() == 0 {
+            eprintln!("skipping: root ignores directory permissions");
+            return;
+        }
         let exe = dir.path().join("ricochet");
         std::fs::write(&exe, b"old").unwrap();
         let new_dir = tempfile::tempdir().unwrap();
@@ -470,10 +491,9 @@ mod tests {
         let result = replace_executable(&new_executable, &exe);
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
 
-        // Root ignores directory permissions, so only assert when the write was refused.
-        if let Err(err) = result {
-            assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
-        }
+        let err = result.expect_err("a read-only directory must refuse the replacement");
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(std::fs::read(&exe).unwrap(), b"old");
     }
 
     #[test]
