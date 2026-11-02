@@ -134,6 +134,7 @@ On a tagged release, the `binaries.yaml` pipeline:
 - Uses ULID for unique identifiers
 - `ContentItem::validate_config` resolves a relative entrypoint against the process working directory, so validate a copy whose entrypoint is joined to the project directory or a Shiny directory entrypoint is rejected
 - `diagnose` in `src/commands/lsp.rs` matches each `ContentError` variant to its `_ricochet.toml` key path, so give a new variant its own path rather than a catch-all arm, or the editor shows its diagnostic on line 0
+- `ricochet mcp` runs its local tools `preview_bundle` and `deploy` by spawning the CLI itself, so never call a command function that prints from a tool, because stdout is the MCP channel and any stray output corrupts the protocol
 - Validate input with the `ricochet-core` type the server parses it with, such as `CronSchedule`, rather than a local parser, or the CLI accepts values the server rejects with a 400
 - The CLI ships independently of the server; a new API query parameter is silently ignored by servers that predate it, so detect support from a field in the response rather than assuming the request was honored
 - Exercise `install.ps1` in the `mcr.microsoft.com/powershell` container with `PROCESSOR_ARCHITECTURE` and `RICOCHET_INSTALL_DIR` set; the registry and PATH writes are unavailable on Linux, so that run covers only the fallback branch
