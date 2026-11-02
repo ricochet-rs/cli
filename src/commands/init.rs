@@ -66,36 +66,8 @@ enum Prompting {
     Skip,
 }
 
-/// Every content type, in the order `init` offers them.
-// FIXME: replace with the const exported from ricochet-core
-const CONTENT_TYPES: [ContentType; 23] = [
-    ContentType::R,
-    ContentType::RService,
-    ContentType::Plumber,
-    ContentType::RServer,
-    ContentType::Ambiorix,
-    ContentType::Shiny,
-    ContentType::Rmd,
-    ContentType::RmdShiny,
-    ContentType::ServerlessR,
-    ContentType::QuartoR,
-    ContentType::QuartoRShiny,
-    ContentType::Julia,
-    ContentType::JuliaService,
-    ContentType::QuartoJl,
-    ContentType::Python,
-    ContentType::PythonService,
-    ContentType::QuartoPy,
-    ContentType::Jupyter,
-    ContentType::FastApi,
-    ContentType::Flask,
-    ContentType::Streamlit,
-    ContentType::ShinyPy,
-    ContentType::Dash,
-];
-
 pub fn choose_content_type(language: &Language) -> anyhow::Result<ContentType> {
-    let opts: Vec<ContentType> = CONTENT_TYPES
+    let opts: Vec<ContentType> = ContentType::ALL
         .into_iter()
         .filter(|content_type| Language::from(content_type) == *language)
         .collect();
