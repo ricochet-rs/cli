@@ -135,12 +135,14 @@ impl LocalTool {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let failure = || {
-            let reason = stderr
-                .lines()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-                .map_or_else(|| output.status.to_string(), str::to_owned);
-            Outcome::Failure(format!("ricochet deploy failed: {reason}"))
+            let stderr = stderr.trim();
+            let reason = stderr.strip_prefix("Error: ").unwrap_or(stderr);
+            Outcome::Failure(match (output.status.success(), reason.is_empty()) {
+                (true, true) => "ricochet deploy exited without a result".to_owned(),
+                (true, false) => format!("ricochet deploy exited without a result: {reason}"),
+                (false, true) => format!("ricochet deploy failed: {}", output.status),
+                (false, false) => format!("ricochet deploy failed: {reason}"),
+            })
         };
 
         Ok(match self {

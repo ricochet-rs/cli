@@ -403,6 +403,32 @@ async fn mcp_preview_bundle_lists_files() {
 }
 
 #[tokio::test]
+async fn mcp_preview_bundle_reports_the_whole_toml_error() {
+    let mocks = DeployMocks::start(Upload::Accepted).await;
+    let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
+    let project = TempDir::new().expect("temp project");
+    write_project(project.path());
+    std::fs::write(
+        project.path().join("_ricochet.toml"),
+        "[content]\nname = \"mcp-app\nentrypoint = \"app.R\"\n",
+    )
+    .expect("writing _ricochet.toml");
+
+    let (result, text) = session
+        .call_text(
+            "preview_bundle",
+            project.path().to_str().expect("UTF-8 path"),
+        )
+        .await;
+    assert_eq!(result.is_error, Some(true), "{text}");
+    assert!(text.contains("line 2, column 16"), "{text}");
+    assert!(text.contains(r#"name = "mcp-app"#), "{text}");
+    assert!(!text.contains("Error: "), "{text}");
+    mocks.assert_untouched().await;
+    session.finish().await;
+}
+
+#[tokio::test]
 async fn mcp_deploy_returns_done_event() {
     let mocks = DeployMocks::start(Upload::Accepted).await;
     let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
