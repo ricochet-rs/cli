@@ -176,6 +176,9 @@ enum Commands {
     /// Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
     Lsp,
     /// Offer the server's tools to an editor's AI agent, as an MCP server over stdio
+    ///
+    /// It uses the server named by `RICOCHET_SERVER`, else by the global `--server` flag, else the default server profile.
+    /// `RICOCHET_API_KEY`, when set, replaces that server's stored API key.
     Mcp,
     /// Manage deployed app items
     App {
@@ -533,11 +536,11 @@ enum SelfCommands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // `mcp` reports why it serves without the server's tools on stderr, since stdout is its protocol.
+    // `mcp` and `lsp` report the problems they work around on stderr, since stdout is their protocol.
     let default_filter = if cli.debug {
         Some("ricochet=debug,ricochet_cli=debug,reqwest=debug,hyper_util=debug")
-    } else if matches!(cli.command, Some(Commands::Mcp)) {
-        Some("warn")
+    } else if matches!(cli.command, Some(Commands::Mcp | Commands::Lsp)) {
+        Some("ricochet_cli=warn")
     } else {
         None
     };
