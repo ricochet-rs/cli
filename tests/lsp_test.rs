@@ -105,6 +105,37 @@ impl LspSession {
         }));
     }
 
+    fn change(&mut self, uri: &str, version: i32, text: &str) {
+        self.send(&json!({
+            "jsonrpc": "2.0", "method": "textDocument/didChange",
+            "params": {
+                "textDocument": {"uri": uri, "version": version},
+                "contentChanges": [{"text": text}]
+            }
+        }));
+    }
+
+    fn close(&mut self, uri: &str) {
+        self.send(&json!({
+            "jsonrpc": "2.0", "method": "textDocument/didClose",
+            "params": {"textDocument": {"uri": uri}}
+        }));
+    }
+
+    /// Wait for the next published diagnostics for `uri` and return them.
+    fn diagnostics(&self, uri: &str) -> Vec<Value> {
+        let published = self.recv();
+        assert_eq!(
+            published["method"], "textDocument/publishDiagnostics",
+            "{published}"
+        );
+        assert_eq!(published["params"]["uri"], uri, "{published}");
+        published["params"]["diagnostics"]
+            .as_array()
+            .expect("diagnostics array")
+            .clone()
+    }
+
     /// Send `shutdown` and return every message received up to and including its response.
     fn shutdown(&mut self) -> Vec<Value> {
         self.send(&json!({"jsonrpc": "2.0", "id": 2, "method": "shutdown", "params": null}));
@@ -186,6 +217,32 @@ fn lsp_publishes_diagnostics_for_ricochet_toml() {
         .expect("diagnostics array");
     assert_eq!(diagnostics.len(), 1, "{published}");
     assert_eq!(diagnostics[0]["source"], "ricochet", "{published}");
+
+    let received = session.shutdown();
+    assert_eq!(received.len(), 1, "unexpected extra messages: {received:?}");
+    assert!(session.exit().success());
+}
+
+#[test]
+fn lsp_clears_diagnostics_after_a_fix_and_on_close() {
+    let dir = TempDir::new().expect("temp dir");
+    let uri = file_uri(&dir, "_ricochet.toml");
+    let mut session = LspSession::start();
+    session.initialize();
+
+    session.open(&uri, INVALID_ITEM);
+    assert_eq!(session.diagnostics(&uri).len(), 1);
+
+    session.change(&uri, 2, &INVALID_ITEM.replace("app.py", "app.R"));
+    let fixed = session.diagnostics(&uri);
+    assert!(fixed.is_empty(), "{fixed:?}");
+
+    session.change(&uri, 3, INVALID_ITEM);
+    assert_eq!(session.diagnostics(&uri).len(), 1);
+
+    session.close(&uri);
+    let closed = session.diagnostics(&uri);
+    assert!(closed.is_empty(), "{closed:?}");
 
     let received = session.shutdown();
     assert_eq!(received.len(), 1, "unexpected extra messages: {received:?}");
