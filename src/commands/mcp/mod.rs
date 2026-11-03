@@ -14,14 +14,15 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
 
-use crate::commands::mcp::local::{LocalTool, LocalToolArgs};
+use crate::commands::mcp::local::{DeployTarget, LocalTool, LocalToolArgs};
 use crate::commands::mcp::remote::RemoteTools;
 use crate::config::Config;
 
 /// Serve MCP over stdio until the client closes stdin.
 pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Result<()> {
-    let remote = match config.resolve_server(server_ref) {
-        Ok(server) => match RemoteTools::connect(&server).await {
+    let target = config.resolve_server(server_ref);
+    let remote = match &target {
+        Ok(server) => match RemoteTools::connect(server).await {
             Ok(remote) => Some(remote),
             Err(error) => {
                 tracing::warn!(
@@ -40,22 +41,24 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
             None
         }
     };
-    McpServer {
-        remote,
-        server_ref: server_ref.map(str::to_owned),
-    }
-    .serve(rmcp::transport::stdio())
-    .await?
-    .waiting()
-    .await?;
+    // A deploy targets the server resolved here, so that changing the default profile while the
+    // editor runs cannot send it somewhere the remote tools do not read from.
+    let target = match target {
+        Ok(server) => DeployTarget::Server(server),
+        Err(_) => DeployTarget::Unresolved(server_ref.map(str::to_owned)),
+    };
+    McpServer { remote, target }
+        .serve(rmcp::transport::stdio())
+        .await?
+        .waiting()
+        .await?;
     Ok(())
 }
 
 /// The tools `ricochet mcp` offers: the server's, forwarded by name, and its own local ones.
 struct McpServer {
     remote: Option<RemoteTools>,
-    /// The `--server` that `ricochet mcp` was started with, passed on to a local deploy.
-    server_ref: Option<String>,
+    target: DeployTarget,
 }
 
 impl ServerHandler for McpServer {
@@ -94,7 +97,7 @@ impl ServerHandler for McpServer {
                     None,
                 )
             })?;
-            return Ok(tool.call(args, self.server_ref.as_deref()).await.into());
+            return Ok(tool.call(args, &self.target).await.into());
         }
         match &self.remote {
             Some(remote) if remote.offers(&request.name) => remote.call(request).await,
