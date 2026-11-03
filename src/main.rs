@@ -551,7 +551,7 @@ async fn main() -> Result<()> {
     }
 
     if matches!(cli.command, Some(Commands::Lsp)) {
-        return commands::lsp::serve_lsp();
+        return commands::lsp::RicochetLsp::default().spawn();
     }
 
     // Load or initialize config

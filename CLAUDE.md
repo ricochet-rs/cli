@@ -133,7 +133,7 @@ On a tagged release, the `binaries.yaml` pipeline:
 - File uploads support both individual files and directory bundling (creates tar.gz)
 - Uses ULID for unique identifiers
 - `ContentItem::validate_config` resolves a relative entrypoint against the process working directory, so validate a copy whose entrypoint is joined to the project directory or a Shiny directory entrypoint is rejected
-- `lsp` maps each `ContentError` variant to a key in `ContentErrorKey` (`src/commands/lsp.rs`) to place its diagnostic, so give a new variant its own key rather than a catch-all arm, or its diagnostic lands on line 0
+- `diagnose` in `src/commands/lsp.rs` matches each `ContentError` variant to its `_ricochet.toml` key path, so give a new variant its own path rather than a catch-all arm, or the editor shows its diagnostic on line 0
 - Validate input with the `ricochet-core` type the server parses it with, such as `CronSchedule`, rather than a local parser, or the CLI accepts values the server rejects with a 400
 - The CLI ships independently of the server; a new API query parameter is silently ignored by servers that predate it, so detect support from a field in the response rather than assuming the request was honored
 - Exercise `install.ps1` in the `mcr.microsoft.com/powershell` container with `PROCESSOR_ARCHITECTURE` and `RICOCHET_INSTALL_DIR` set; the registry and PATH writes are unavailable on Linux, so that run covers only the fallback branch

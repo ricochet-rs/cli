@@ -250,6 +250,24 @@ fn lsp_clears_diagnostics_after_a_fix_and_on_close() {
 }
 
 #[test]
+fn lsp_keeps_serving_after_a_malformed_notification() {
+    let dir = TempDir::new().expect("temp dir");
+    let uri = file_uri(&dir, "_ricochet.toml");
+    let mut session = LspSession::start();
+    session.initialize();
+    session.send(&json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": {"textDocument": {"uri": uri, "text": INVALID_ITEM}}
+    }));
+    session.open(&uri, INVALID_ITEM);
+    assert_eq!(session.diagnostics(&uri).len(), 1);
+
+    let received = session.shutdown();
+    assert_eq!(received.len(), 1, "unexpected extra messages: {received:?}");
+    assert!(session.exit().success());
+}
+
+#[test]
 fn lsp_ignores_other_toml_files() {
     let dir = TempDir::new().expect("temp dir");
     let mut session = LspSession::start();
