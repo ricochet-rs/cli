@@ -133,17 +133,25 @@ struct McpSession {
 
 impl McpSession {
     async fn start(server_url: &str, key: Key) -> Self {
-        let home = TempDir::new().expect("temp home");
+        Self::start_in(TempDir::new().expect("temp home"), Some(server_url), key).await
+    }
+
+    /// Start the server with `home` as its HOME, choosing the server by `RICOCHET_SERVER`
+    /// when `server_url` is set and by the profiles in `home` otherwise.
+    async fn start_in(home: TempDir, server_url: Option<&str>, key: Key) -> Self {
         let mut command = Command::new(env!("CARGO_BIN_EXE_ricochet"));
         command
             .arg("mcp")
             .current_dir(home.path())
             .env("HOME", home.path())
             .env("XDG_CONFIG_HOME", home.path().join(".config"))
-            .env("RICOCHET_SERVER", server_url)
             .env("RICOCHET_NO_UPDATE_CHECK", "1")
             .env("NO_COLOR", "1")
             .env_remove("RUST_LOG");
+        match server_url {
+            Some(url) => command.env("RICOCHET_SERVER", url),
+            None => command.env_remove("RICOCHET_SERVER"),
+        };
         match key {
             Key::Configured => command.env("RICOCHET_API_KEY", API_KEY),
             Key::Refused => command.env("RICOCHET_API_KEY", "refused_key"),
@@ -439,11 +447,56 @@ async fn mcp_deploy_returns_done_event() {
         .call_text("deploy", project.path().to_str().expect("UTF-8 path"))
         .await;
     assert_ne!(result.is_error, Some(true), "{text}");
+    // The `done` event comes first, followed by whatever the deploy reported on stderr.
+    let first_line = text.lines().next().unwrap_or_default();
     let done: serde_json::Value =
-        serde_json::from_str(&text).unwrap_or_else(|error| panic!("{error}: {text}"));
+        serde_json::from_str(first_line).unwrap_or_else(|error| panic!("{error}: {text}"));
     assert_eq!(done["event"], "done");
     assert_eq!(done["deployment_id"], DEPLOYMENT_ID);
     mocks.upload.assert_async().await;
+    session.finish().await;
+}
+
+/// Write a CLI config with a profile per `(name, url)`, each with `API_KEY`, and `default` as the default.
+fn write_profiles(home: &Path, default: &str, profiles: &[(&str, &str)]) {
+    let config_dir = home.join(".config").join("ricochet");
+    std::fs::create_dir_all(&config_dir).expect("creating the config directory");
+    let mut config = format!("default_server = \"{default}\"\n");
+    for (name, url) in profiles {
+        config.push_str(&format!(
+            "\n[servers.{name}]\nurl = \"{url}\"\napi_key = \"{API_KEY}\"\n"
+        ));
+    }
+    std::fs::write(config_dir.join("config.toml"), config).expect("writing the config");
+}
+
+#[tokio::test]
+async fn mcp_deploy_keeps_the_server_it_started_with() {
+    let first = DeployMocks::start(Upload::Accepted).await;
+    let second = DeployMocks::start(Upload::Accepted).await;
+    let profiles = [
+        ("first", first.server.url()),
+        ("second", second.server.url()),
+    ];
+    let profiles: Vec<(&str, &str)> = profiles
+        .iter()
+        .map(|(name, url)| (*name, url.as_str()))
+        .collect();
+    let home = TempDir::new().expect("temp home");
+    write_profiles(home.path(), "first", &profiles);
+    let session = McpSession::start_in(home, None, Key::Absent).await;
+
+    // Another terminal changes the default profile while the editor keeps this server running.
+    write_profiles(session.home.path(), "second", &profiles);
+    let project = TempDir::new().expect("temp project");
+    write_project(project.path());
+
+    let (result, text) = session
+        .call_text("deploy", project.path().to_str().expect("UTF-8 path"))
+        .await;
+    assert_ne!(result.is_error, Some(true), "{text}");
+    first.upload.assert_async().await;
+    second.assert_untouched().await;
     session.finish().await;
 }
 

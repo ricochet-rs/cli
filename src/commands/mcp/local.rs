@@ -13,6 +13,8 @@ use rmcp::model::{CallToolResult, ContentBlock, Tool, ToolAnnotations};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 
+use crate::config::ServerConfig;
+
 /// How long listing a bundle may take, since it reads only the local disk.
 ///
 /// A deploy has no limit, since an upload takes as long as the bundle and the link need, and every
@@ -32,6 +34,14 @@ pub(crate) enum LocalTool {
 pub(crate) struct LocalToolArgs {
     /// The absolute path of the directory holding `_ricochet.toml`.
     path: PathBuf,
+}
+
+/// The server a local tool deploys to.
+pub(crate) enum DeployTarget {
+    /// The server `ricochet mcp` resolved at startup, pinned by URL and key.
+    Server(ServerConfig),
+    /// No server resolved at startup, so the child resolves `--server`, if any, itself and reports why it fails.
+    Unresolved(Option<String>),
 }
 
 /// The `event` of one line of `deploy -F json`, naming only the two that end the stream.
@@ -77,19 +87,15 @@ impl LocalTool {
     }
 
     /// Run the tool on `args.path`, reporting any failure as a tool error the agent can read.
-    pub(crate) async fn call(
-        self,
-        args: LocalToolArgs,
-        server_ref: Option<&str>,
-    ) -> CallToolResult {
-        match self.run(&args.path, server_ref).await {
+    pub(crate) async fn call(self, args: LocalToolArgs, target: &DeployTarget) -> CallToolResult {
+        match self.run(&args.path, target).await {
             Ok(Outcome::Success(text)) => CallToolResult::success(vec![ContentBlock::text(text)]),
             Ok(Outcome::Failure(text)) => CallToolResult::error(vec![ContentBlock::text(text)]),
             Err(error) => CallToolResult::error(vec![ContentBlock::text(format!("{error:#}"))]),
         }
     }
 
-    async fn run(self, path: &Path, server_ref: Option<&str>) -> anyhow::Result<Outcome> {
+    async fn run(self, path: &Path, target: &DeployTarget) -> anyhow::Result<Outcome> {
         // A relative path would resolve against wherever the editor started this server, not the project.
         if !path.is_absolute() {
             anyhow::bail!(
@@ -106,8 +112,18 @@ impl LocalTool {
 
         let exe = std::env::current_exe().context("cannot locate the ricochet binary")?;
         let mut command = tokio::process::Command::new(exe);
-        if let Some(server_ref) = server_ref {
-            command.args(["--server", server_ref]);
+        match target {
+            DeployTarget::Server(server) => {
+                command.env("RICOCHET_SERVER", server.url.as_str());
+                match &server.api_key {
+                    Some(key) => command.env("RICOCHET_API_KEY", key),
+                    None => command.env_remove("RICOCHET_API_KEY"),
+                };
+            }
+            DeployTarget::Unresolved(Some(server_ref)) => {
+                command.args(["--server", server_ref]);
+            }
+            DeployTarget::Unresolved(None) => {}
         }
         command.arg("deploy").arg(path).args(["-F", "json"]);
         if let Self::PreviewBundle = self {
@@ -152,12 +168,23 @@ impl LocalTool {
                 .lines()
                 .rev()
                 .find_map(|line| match serde_json::from_str(line) {
-                    Ok(DeployEnd::Done) => Some(Outcome::Success(line.to_owned())),
+                    Ok(DeployEnd::Done) => Some(Outcome::Success(with_notes(line, &stderr))),
                     Ok(DeployEnd::Error) => Some(Outcome::Failure(line.to_owned())),
                     Ok(DeployEnd::Progress) | Err(_) => None,
                 })
                 .unwrap_or_else(failure),
         })
+    }
+}
+
+/// Append what a successful deploy wrote to stderr, since it carries warnings the agent must act on,
+/// such as an ID that could not be recorded in `_ricochet.toml`.
+fn with_notes(result: &str, stderr: &str) -> String {
+    let stderr = stderr.trim();
+    if stderr.is_empty() {
+        result.to_owned()
+    } else {
+        format!("{result}\n\nricochet deploy also reported:\n{stderr}")
     }
 }
 
@@ -195,6 +222,18 @@ mod tests {
         assert_eq!(deploy.read_only_hint, Some(false));
         assert_eq!(deploy.destructive_hint, Some(true));
         assert_eq!(deploy.open_world_hint, Some(true));
+    }
+
+    #[test]
+    fn a_deploy_result_keeps_its_warnings() {
+        let done = r#"{"event":"done"}"#;
+        assert_eq!(with_notes(done, " \n"), done);
+        let noted = with_notes(done, "⚠ Deployed, but could not record the ID\n");
+        assert!(noted.starts_with(done), "{noted}");
+        assert!(
+            noted.ends_with("⚠ Deployed, but could not record the ID"),
+            "{noted}"
+        );
     }
 
     #[test]
