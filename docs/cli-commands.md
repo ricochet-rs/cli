@@ -13,6 +13,7 @@ This document contains the help content for the `ricochet` command-line program.
 * [`ricochet config`↴](#ricochet-config)
 * [`ricochet detect`↴](#ricochet-detect)
 * [`ricochet init`↴](#ricochet-init)
+* [`ricochet lsp`↴](#ricochet-lsp)
 * [`ricochet app`↴](#ricochet-app)
 * [`ricochet app toml`↴](#ricochet-app-toml)
 * [`ricochet app list`↴](#ricochet-app-list)
@@ -71,6 +72,7 @@ Ricochet CLI
 * `config` — Show configuration
 * `detect` — Report deployable content in a directory without writing anything
 * `init` — Initialize a new Ricochet deployment
+* `lsp` — Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
 * `server` — Manage configured Ricochet servers
@@ -225,6 +227,14 @@ Prompts for each setting not given as a flag. With `--content-type`, `--entrypoi
 * `--entrypoint <ENTRYPOINT>` — Entrypoint, relative to the directory
 * `--name <NAME>` — Content item name
 * `--access-type <ACCESS_TYPE>` — Who can open the item: `private`, `internal` or `external`
+
+
+
+## `ricochet lsp`
+
+Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
+
+**Usage:** `ricochet lsp`
 
 
 
