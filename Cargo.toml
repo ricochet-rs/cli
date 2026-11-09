@@ -33,6 +33,12 @@ indicatif = "0.18"
 prefixed-api-key = "0.3"
 regex = "1.11.3"
 rsa = { version = "0.9", features = ["getrandom", "sha2"] }
+rmcp = { version = "3.7", default-features = false, features = [
+  "client",
+  "server",
+  "transport-io",
+  "transport-streamable-http-client-reqwest"
+] }
 reqwest = { version = "0.13", default-features = false, features = [
   "cookies",
   "hickory-dns",
@@ -65,6 +71,10 @@ webbrowser = "1.0"
 
 [dev-dependencies]
 mockito = "1.5"
+rmcp = { version = "3.7", default-features = false, features = [
+  "transport-child-process",
+  "transport-streamable-http-server"
+] }
 serial_test = "4"
 tokio-test = "0.4"
 
