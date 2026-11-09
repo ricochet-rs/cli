@@ -32,7 +32,7 @@ html-escape = "0.3"
 indicatif = "0.18"
 prefixed-api-key = "0.3"
 regex = "1.11.3"
-rsa = { version = "0.9", features = ["getrandom", "sha2"] }
+rsa = { version = "0.10", features = ["getrandom", "sha2"] }
 reqwest = { version = "0.13", default-features = false, features = [
   "cookies",
   "hickory-dns",
