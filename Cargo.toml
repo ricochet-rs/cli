@@ -32,7 +32,7 @@ html-escape = "0.3"
 indicatif = "0.18"
 prefixed-api-key = "0.3"
 regex = "1.11.3"
-rsa = { version = "0.9", features = ["getrandom", "sha2"] }
+rsa = "0.10"
 reqwest = { version = "0.13", default-features = false, features = [
   "cookies",
   "hickory-dns",
@@ -64,6 +64,7 @@ walkdir = "2.5"
 webbrowser = "1.0"
 
 [dev-dependencies]
+getrandom = { version = "0.4", features = ["sys_rng"] }
 mockito = "1.5"
 serial_test = "4"
 tokio-test = "0.4"
