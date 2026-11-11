@@ -45,7 +45,6 @@ jiff = { version = "0.2", features = ["serde"] }
 lsp-server = "0.10"
 lsp-types = "0.97"
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", rev = "b6f678e61521aa09d61e462c8769b9025b4ce7ed", default-features = false }
-self-replace = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
@@ -62,6 +61,9 @@ url = { version = "2.5", features = ["serde"] }
 urlencoding = "2.1"
 walkdir = "2.5"
 webbrowser = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+self-replace = "1"
 
 [dev-dependencies]
 mockito = "1.5"
