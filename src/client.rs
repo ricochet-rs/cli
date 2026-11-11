@@ -383,7 +383,7 @@ impl RicochetClient {
     }
 
     /// Fetch the server's RSA public key (PKCS#1 PEM) used to encrypt env vars.
-    pub async fn get_public_key(&self) -> Result<rsa::RsaPublicKey> {
+    pub async fn get_public_key(&self) -> Result<rsa::PublicKey> {
         let mut url = self.base_url.clone();
         url.set_path("/api/v0/public-key");
         let response = self.client.get(url).send().await?;

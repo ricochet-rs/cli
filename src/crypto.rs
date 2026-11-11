@@ -1,10 +1,10 @@
 use anyhow::{Result, bail};
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use rsa::PublicKey;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::sha2::{Digest, Sha256};
 use rsa::traits::PublicKeyParts;
-use rsa::{Oaep, RsaPublicKey};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -13,25 +13,23 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize)]
 pub struct RsaEncryptedEnvVars(pub HashMap<String, String>);
 
-pub fn parse_public_key_pem(pem: &str) -> Result<RsaPublicKey> {
-    Ok(RsaPublicKey::from_pkcs1_pem(pem.trim())?)
+pub fn parse_public_key_pem(pem: &str) -> Result<PublicKey> {
+    Ok(PublicKey::from_pkcs1_pem(pem.trim())?)
 }
 
 /// The largest plaintext RSA-OAEP with SHA-256 can encrypt under `pub_key`.
 /// 190 bytes for the 2048-bit keys the server issues.
-pub fn max_plaintext_len(pub_key: &RsaPublicKey) -> usize {
+pub fn max_plaintext_len(pub_key: &PublicKey) -> usize {
     pub_key
         .size()
         .saturating_sub(2 * <Sha256 as Digest>::output_size() + 2)
 }
 
 pub fn encrypt_env_vars(
-    pub_key: &RsaPublicKey,
+    pub_key: &PublicKey,
     vars: &HashMap<String, String>,
 ) -> Result<RsaEncryptedEnvVars> {
-    use rsa::rand_core::OsRng;
     let max_len = max_plaintext_len(pub_key);
-    let mut rng = OsRng;
     let mut out = HashMap::new();
     for (name, value) in vars {
         let name_len = name.len();
@@ -46,8 +44,8 @@ pub fn encrypt_env_vars(
                 "value for environment variable `{name}` is {value_len} bytes; the server's public key can encrypt at most {max_len} bytes"
             );
         }
-        let enc_name = pub_key.encrypt(&mut rng, Oaep::new::<Sha256>(), name.as_bytes())?;
-        let enc_value = pub_key.encrypt(&mut rng, Oaep::new::<Sha256>(), value.as_bytes())?;
+        let enc_name = pub_key.oaep_encrypt::<Sha256>(name.as_bytes())?;
+        let enc_value = pub_key.oaep_encrypt::<Sha256>(value.as_bytes())?;
         out.insert(
             BASE64_STANDARD.encode(enc_name),
             BASE64_STANDARD.encode(enc_value),
@@ -59,11 +57,9 @@ pub fn encrypt_env_vars(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rsa::Oaep;
+    use getrandom::SysRng;
+    use rsa::PrivateKey;
     use rsa::pkcs1::EncodeRsaPublicKey;
-    use rsa::rand_core::OsRng;
-    use rsa::sha2::Sha256;
-    use rsa::{RsaPrivateKey, RsaPublicKey};
 
     #[test]
     fn parse_rejects_garbage() {
@@ -73,9 +69,8 @@ mod tests {
     #[test]
     fn encrypt_round_trips_through_private_key() {
         // Generate a keypair in-test and serialize the public half to PKCS#1 PEM.
-        let mut rng = OsRng;
-        let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
-        let pub_key = RsaPublicKey::from(&priv_key);
+        let priv_key = PrivateKey::new(&mut SysRng, 2048).unwrap();
+        let pub_key = priv_key.to_public_key();
         let pem = pub_key.to_pkcs1_pem(rsa::pkcs8::LineEnding::LF).unwrap();
 
         let parsed = parse_public_key_pem(&pem).unwrap();
@@ -93,11 +88,9 @@ mod tests {
             let name_ct = BASE64_STANDARD.decode(enc_name).unwrap();
             let value_ct = BASE64_STANDARD.decode(enc_value).unwrap();
             let name =
-                String::from_utf8(priv_key.decrypt(Oaep::new::<Sha256>(), &name_ct).unwrap())
-                    .unwrap();
+                String::from_utf8(priv_key.oaep_decrypt::<Sha256>(&name_ct).unwrap()).unwrap();
             let value =
-                String::from_utf8(priv_key.decrypt(Oaep::new::<Sha256>(), &value_ct).unwrap())
-                    .unwrap();
+                String::from_utf8(priv_key.oaep_decrypt::<Sha256>(&value_ct).unwrap()).unwrap();
             recovered.insert(name, value);
         }
         assert_eq!(recovered, vars);
@@ -105,9 +98,8 @@ mod tests {
 
     #[test]
     fn oversized_value_names_the_variable_and_the_limit() {
-        let mut rng = OsRng;
-        let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
-        let pub_key = RsaPublicKey::from(&priv_key);
+        let priv_key = PrivateKey::new(&mut SysRng, 2048).unwrap();
+        let pub_key = priv_key.to_public_key();
         let max_len = max_plaintext_len(&pub_key);
         assert_eq!(max_len, 190);
 
