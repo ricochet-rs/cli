@@ -90,7 +90,10 @@ enum Commands {
         /// Number of latest log lines to keep on screen, up to the terminal height, or `all` to print every line
         #[arg(long, requires = "follow")]
         lines: Option<commands::log::Lines>,
-        /// Deploy from a Git repository instead of a local bundle
+        /// Deploy from a Git repository instead of a local bundle.
+        /// Accepts `https://host/owner/repo`, `ssh://git@host/owner/repo` or `git@host:owner/repo`,
+        /// and a GitHub, GitLab or Forgejo folder URL such as `https://github.com/owner/repo/tree/main/app`,
+        /// which also sets the branch and path.
         #[arg(long)]
         git: Option<String>,
         /// Git branch to deploy (only with --git)
