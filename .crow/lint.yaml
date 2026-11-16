@@ -34,6 +34,7 @@ steps:
 
   cache:
     image: codefloe.com/crow-plugins/sccache:0.4.0
+    depends_on: []
     settings:
       s3-endpoint: https://s3.eu-central-003.backblazeb2.com
       s3-bucket: ricochet-sccache
@@ -103,5 +104,6 @@ steps:
       - event: pull_request
       - event: pull_request_edited
     image: reg.ricochet.rs/docker.io/commitlint/commitlint:21.2.3
+    depends_on: []
     commands:
       - echo $${CI_COMMIT_PULL_REQUEST_TITLE} | commitlint
