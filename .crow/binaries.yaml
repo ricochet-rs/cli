@@ -14,7 +14,7 @@ cache:
 
 steps:
   bump:
-    image: reg.ricochet.rs/docker.io/library/rust:1.99-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.100-slim
     when:
       event: tag
     environment:
@@ -51,7 +51,7 @@ steps:
         fi
 
   build:
-    image: reg.ricochet.rs/docker.io/library/rust:1.99-slim
+    image: reg.ricochet.rs/docker.io/library/rust:1.100-slim
     depends_on:
       - bump
     environment:
