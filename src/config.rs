@@ -287,13 +287,7 @@ impl Config {
         if std::env::var("CI").is_ok() {
             return true;
         }
-        if let Ok(exe) = std::env::current_exe()
-            && let Some(parent) = exe.parent()
-            && parent.starts_with("/opt/homebrew")
-        {
-            return true;
-        }
-        false
+        crate::update::PackageManager::detect_current().is_some()
     }
 
     /// Disable automatic update checks after repeated failures, and notify the user via stderr.
@@ -306,7 +300,7 @@ impl Config {
             "notice:".yellow().bold(),
             failure_count,
             "skip_update_check = false".bright_cyan(),
-            "ricochet self-update".bright_cyan(),
+            "ricochet self update".bright_cyan(),
         );
     }
 

@@ -4,6 +4,7 @@ use colored::Colorize;
 use flate2::read::GzDecoder;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::io::Read;
+use std::path::Path;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -105,6 +106,17 @@ pub fn print_version() {
 }
 
 pub async fn self_update(force: bool, dry_run: bool) -> Result<()> {
+    let package_manager = update::PackageManager::detect_current();
+    if let Some(package_manager) = package_manager
+        && !dry_run
+    {
+        anyhow::bail!(
+            "ricochet was installed with {}, so it cannot update itself.\n  Update with: {}",
+            package_manager.name(),
+            package_manager.upgrade_hint()
+        );
+    }
+
     println!("Checking for updates...");
 
     let latest = update::fetch_latest_version()
@@ -128,7 +140,9 @@ pub async fn self_update(force: bool, dry_run: bool) -> Result<()> {
                 "  Release notes: {}",
                 update::release_notes_url(&latest).bright_cyan()
             );
-            println!("\nRun {} to update.", "ricochet self update".bright_cyan());
+            let update_command = package_manager
+                .map_or("ricochet self update", update::PackageManager::upgrade_hint);
+            println!("\nRun {} to update.", update_command.bright_cyan());
         } else {
             println!("\n{} Already on the latest version.", "✓".green().bold());
         }
@@ -192,8 +206,6 @@ pub async fn self_update(force: bool, dry_run: bool) -> Result<()> {
     let extracted_bytes = extract_binary_from_tarball(&tarball_bytes, &binary_path)
         .with_context(|| format!("Failed to extract '{}' from tarball", binary_path))?;
 
-    // Write extracted binary to a temp file, then use self_replace to atomically swap it in.
-    // self_replace handles platform quirks like Windows locking the running executable.
     let tmp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
     let tmp_path = tmp_dir.path().join("ricochet-new");
     std::fs::write(&tmp_path, &extracted_bytes)
@@ -206,8 +218,7 @@ pub async fn self_update(force: bool, dry_run: bool) -> Result<()> {
             .context("Failed to set executable permissions")?;
     }
 
-    self_replace::self_replace(&tmp_path)
-        .context("Failed to replace the ricochet binary. You may need elevated permissions.")?;
+    replace_current_executable(&tmp_path)?;
 
     // Update the cache: reset failure counter and record the new version
     let _ = update::UpdateCache::for_version(latest.clone()).save();
@@ -229,6 +240,107 @@ pub async fn self_update(force: bool, dry_run: bool) -> Result<()> {
         update::release_notes_url(&latest).bright_cyan()
     );
 
+    Ok(())
+}
+
+/// Swap the running binary for `new_executable`, using `self_replace` for Windows's locked executable.
+#[cfg(windows)]
+fn replace_current_executable(new_executable: &Path) -> Result<()> {
+    self_replace::self_replace(new_executable).context(
+        "Failed to replace the ricochet binary. Run the terminal as administrator and try again.",
+    )
+}
+
+/// Swap the running binary for `new_executable`, asking for `sudo` when its directory is not writable.
+///
+/// The path is resolved first because macOS reports the unresolved symlink as the executable,
+/// and a Homebrew-style relative link target would otherwise be read against the working directory.
+#[cfg(unix)]
+fn replace_current_executable(new_executable: &Path) -> Result<()> {
+    let exe = std::env::current_exe()
+        .and_then(|exe| exe.canonicalize())
+        .context("Failed to locate the running ricochet binary")?;
+
+    match replace_executable(new_executable, &exe) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => {
+            replace_executable_with_sudo(new_executable, &exe)
+        }
+        Err(err) => Err(err)
+            .with_context(|| format!("Failed to replace the ricochet binary at {}", exe.display())),
+    }
+}
+
+/// Atomically rename a copy of `new_executable` over `exe` within the same directory.
+#[cfg(unix)]
+fn replace_executable(new_executable: &Path, exe: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = exe.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "executable has no parent directory",
+        )
+    })?;
+    let staged = tempfile::Builder::new()
+        .prefix(".ricochet.__update__")
+        .tempfile_in(dir)?;
+    std::fs::copy(new_executable, staged.path())?;
+    std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(0o755))?;
+    staged.persist(exe).map_err(|err| err.error)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn replace_executable_with_sudo(new_executable: &Path, exe: &Path) -> Result<()> {
+    use std::io::IsTerminal;
+
+    let manual_hint = format!(
+        "Run {} or reinstall into a directory you can write to.",
+        "sudo ricochet self update".bright_cyan()
+    );
+    if !std::io::stdin().is_terminal() {
+        anyhow::bail!(
+            "Writing to {} requires elevated permissions.\n  {manual_hint}",
+            exe.display()
+        );
+    }
+
+    println!(
+        "Writing to {} requires elevated permissions, running sudo...",
+        exe.display()
+    );
+    let staged = exe.with_file_name(format!(".ricochet.__update__{}", std::process::id()));
+    let run_sudo = |args: &[&std::ffi::OsStr]| -> Result<bool> {
+        let status = std::process::Command::new("sudo")
+            .args(args)
+            .status()
+            .context("Failed to run sudo")?;
+        Ok(status.success())
+    };
+
+    // Stage beside the target first so a failed copy never removes the working binary.
+    let copied = run_sudo(&[
+        "install".as_ref(),
+        "-m".as_ref(),
+        "755".as_ref(),
+        new_executable.as_os_str(),
+        staged.as_os_str(),
+    ])?;
+    let renamed = copied
+        && run_sudo(&[
+            "mv".as_ref(),
+            "-f".as_ref(),
+            staged.as_os_str(),
+            exe.as_os_str(),
+        ])?;
+    if !renamed {
+        run_sudo(&["rm".as_ref(), "-f".as_ref(), staged.as_os_str()]).ok();
+        anyhow::bail!(
+            "sudo failed to replace the ricochet binary at {}.\n  {manual_hint}",
+            exe.display()
+        );
+    }
     Ok(())
 }
 
@@ -337,6 +449,51 @@ mod tests {
 
         let result = extract_binary_from_tarball(&tarball, "ricochet-0.5.0-linux-x86_64").unwrap();
         assert_eq!(result, content);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_executable_swaps_file_contents() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("ricochet");
+        let new_executable = dir.path().join("ricochet-new");
+        std::fs::write(&exe, b"old").unwrap();
+        std::fs::write(&new_executable, b"new").unwrap();
+
+        replace_executable(&new_executable, &exe).unwrap();
+
+        assert_eq!(std::fs::read(&exe).unwrap(), b"new");
+        let mode = std::fs::metadata(&exe).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path()).unwrap().collect();
+        assert_eq!(leftovers.len(), 2);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replace_executable_reports_permission_denied_for_readonly_dir() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+        let dir = tempfile::tempdir().unwrap();
+        if std::fs::metadata(dir.path()).unwrap().uid() == 0 {
+            eprintln!("skipping: root ignores directory permissions");
+            return;
+        }
+        let exe = dir.path().join("ricochet");
+        std::fs::write(&exe, b"old").unwrap();
+        let new_dir = tempfile::tempdir().unwrap();
+        let new_executable = new_dir.path().join("ricochet-new");
+        std::fs::write(&new_executable, b"new").unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let result = replace_executable(&new_executable, &exe);
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let err = result.expect_err("a read-only directory must refuse the replacement");
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(std::fs::read(&exe).unwrap(), b"old");
     }
 
     #[test]

@@ -1,13 +1,13 @@
 //! Background update checking and notification.
 //!
 //! Checks for new CLI versions via the GitHub Releases API every 24 hours and
-//! notifies the user via stderr. Skipped when the binary lives in /opt/homebrew/bin
-//! (Homebrew manages updates there), when RICOCHET_NO_UPDATE_CHECK is set, or when
+//! notifies the user via stderr. Skipped when a package manager such as Homebrew
+//! installed the binary (it manages updates there), when RICOCHET_NO_UPDATE_CHECK is set, or when
 //! skip_update_check is set in the config (auto-set after repeated GitHub API failures).
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 
@@ -16,6 +16,51 @@ const GITHUB_API_URL: &str = "https://api.github.com/repos/ricochet-rs/cli/relea
 const RELEASE_NOTES_BASE: &str = "https://github.com/ricochet-rs/cli/releases/tag";
 const CHECK_INTERVAL_SECS: u64 = 60 * 60 * 24; // 24 hours
 const MAX_CONSECUTIVE_FAILURES: u32 = 3;
+
+/// A package manager that owns the installed binary and therefore its updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PackageManager {
+    Homebrew,
+    Nix,
+}
+
+impl PackageManager {
+    /// Detect the package manager owning the binary at `exe`, which must be fully resolved.
+    pub(crate) fn detect(exe: &Path) -> Option<Self> {
+        if exe.starts_with("/nix/store") {
+            return Some(Self::Nix);
+        }
+        if exe.starts_with("/opt/homebrew")
+            || exe
+                .components()
+                .any(|component| component.as_os_str() == "Cellar")
+        {
+            return Some(Self::Homebrew);
+        }
+        None
+    }
+
+    /// Detect the package manager owning the running binary.
+    pub(crate) fn detect_current() -> Option<Self> {
+        let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+        Self::detect(&exe)
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Homebrew => "Homebrew",
+            Self::Nix => "Nix",
+        }
+    }
+
+    /// The command that updates the binary through this package manager.
+    pub(crate) fn upgrade_hint(self) -> &'static str {
+        match self {
+            Self::Homebrew => "brew upgrade ricochet",
+            Self::Nix => "update the ricochet package through Nix",
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateCache {
@@ -199,6 +244,33 @@ fn is_newer(current: &str, candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detect_package_manager_from_resolved_path() {
+        let cases = [
+            (
+                "/opt/homebrew/Cellar/ricochet/1.3.0/bin/ricochet",
+                Some(PackageManager::Homebrew),
+            ),
+            (
+                "/usr/local/Cellar/ricochet/1.3.0/bin/ricochet",
+                Some(PackageManager::Homebrew),
+            ),
+            (
+                "/home/linuxbrew/.linuxbrew/Cellar/ricochet/1.3.0/bin/ricochet",
+                Some(PackageManager::Homebrew),
+            ),
+            (
+                "/nix/store/abc-ricochet-1.3.0/bin/ricochet",
+                Some(PackageManager::Nix),
+            ),
+            ("/usr/local/bin/ricochet", None),
+            ("/home/user/.local/bin/ricochet", None),
+        ];
+        for (path, expected) in cases {
+            assert_eq!(PackageManager::detect(Path::new(path)), expected, "{path}");
+        }
+    }
 
     #[test]
     fn test_is_newer_basic() {
