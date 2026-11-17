@@ -136,7 +136,7 @@ Under `-F json`, deploy writes one JSON event per line. A local deploy reports `
 * `--dry-run` — List the files in a deployment bundle without deploying
 * `-f`, `--follow` — Stream the deployment's logs until it finishes
 * `--lines <LINES>` — Number of latest log lines to keep on screen, up to the terminal height, or `all` to print every line
-* `--git <GIT>` — Deploy from a Git repository instead of a local bundle
+* `--git <GIT>` — Deploy from a Git repository instead of a local bundle. Accepts `https://host/owner/repo`, `ssh://git@host/owner/repo` or `git@host:owner/repo`, and a GitHub, GitLab or Forgejo folder URL such as `https://github.com/owner/repo/tree/main/app`, which also sets the branch and path
 * `--branch <BRANCH>` — Git branch to deploy (only with --git)
 * `--path <REPO_PATH>` — Subdirectory within the Git repo containing _ricochet.toml (only with --git)
 * `--config <CONFIG_PATH>` — Path to a local _ricochet.toml to use instead of the one in the repo (only with --git)

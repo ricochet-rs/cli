@@ -145,3 +145,93 @@ async fn test_deploy_git_forbidden() {
     assert!(result.is_err());
     _m.assert_async().await;
 }
+
+#[tokio::test]
+async fn a_folder_url_sends_its_branch_and_path() {
+    let mut server = Server::new_async().await;
+    let _key_mock = mock_valid_key(&mut server);
+
+    let _m = server
+        .mock("POST", "/api/v0/deploy/git")
+        .match_body(Matcher::AllOf(vec![
+            Matcher::Regex("\"url\":\"https://github.com/org/repo\"".to_string()),
+            Matcher::Regex("\"branch\":\"main\"".to_string()),
+            Matcher::Regex("\"path\":\"apps/dashboard\"".to_string()),
+        ]))
+        .with_status(200)
+        .with_body(json!({"id": "01K66JV2Q123456789ABCDEF"}).to_string())
+        .create();
+
+    let config = test_config(&server);
+    let result = ricochet_cli::commands::deploy::deploy_git(
+        &config,
+        None,
+        "https://github.com/org/repo/tree/main/apps/dashboard".to_string(),
+        None,
+        None,
+        None,
+        None,
+        OutputFormat::Table,
+    )
+    .await;
+
+    assert!(result.is_ok(), "expected success, got {result:?}");
+    _m.assert_async().await;
+}
+
+#[tokio::test]
+async fn branch_and_path_flags_override_a_folder_url() {
+    let mut server = Server::new_async().await;
+    let _key_mock = mock_valid_key(&mut server);
+
+    let _m = server
+        .mock("POST", "/api/v0/deploy/git")
+        .match_body(Matcher::AllOf(vec![
+            Matcher::Regex("\"url\":\"https://github.com/org/repo\"".to_string()),
+            Matcher::Regex("\"branch\":\"dev\"".to_string()),
+            Matcher::Regex("\"path\":\"apps/other\"".to_string()),
+        ]))
+        .with_status(200)
+        .with_body(json!({"id": "01K66JV2Q123456789ABCDEF"}).to_string())
+        .create();
+
+    let config = test_config(&server);
+    let result = ricochet_cli::commands::deploy::deploy_git(
+        &config,
+        None,
+        "https://github.com/org/repo/tree/main/apps/dashboard".to_string(),
+        Some("dev".to_string()),
+        Some("apps/other".to_string()),
+        None,
+        None,
+        OutputFormat::Table,
+    )
+    .await;
+
+    assert!(result.is_ok(), "expected success, got {result:?}");
+    _m.assert_async().await;
+}
+
+#[tokio::test]
+async fn an_http_url_with_a_credential_is_rejected_before_the_upload() {
+    let mut server = Server::new_async().await;
+    let _key_mock = mock_valid_key(&mut server);
+
+    let _m = server.mock("POST", "/api/v0/deploy/git").expect(0).create();
+
+    let config = test_config(&server);
+    let result = ricochet_cli::commands::deploy::deploy_git(
+        &config,
+        None,
+        "http://git.example.com/org/repo".to_string(),
+        None,
+        None,
+        None,
+        Some("cred_123".to_string()),
+        OutputFormat::Table,
+    )
+    .await;
+
+    assert!(result.is_err());
+    _m.assert_async().await;
+}
