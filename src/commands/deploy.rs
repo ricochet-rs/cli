@@ -579,6 +579,29 @@ pub fn deploy_dry_run(path: &Path, format: OutputFormat) -> Result<()> {
     format.print(&report, || Ok(report.render_table()))
 }
 
+/// The Git URL formats the server can clone, listed in errors and warnings.
+const GIT_URL_FORMATS: &str =
+    "`https://host/owner/repo`, `ssh://git@host/owner/repo` or `git@host:owner/repo`";
+
+/// Reject a Git URL the server cannot clone with a credential, and warn about one it may fail to clone.
+fn check_git_url(repo: &GitRepo, credential: Option<&str>) -> Result<Vec<String>> {
+    let url = &repo.url;
+    let mut warnings = Vec::new();
+
+    if repo.detect_protocol().is_err() {
+        if credential.is_some() {
+            bail!(
+                "ricochet cannot clone `{url}` with embedded credential. Use one of the following formats {GIT_URL_FORMATS}."
+            );
+        }
+        warnings.push(format!(
+            "ricochet supports Git URLs in the formats {GIT_URL_FORMATS}, so cloning `{url}` may fail."
+        ));
+    }
+
+    Ok(warnings)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn deploy_git(
     config: &Config,
@@ -590,15 +613,16 @@ pub async fn deploy_git(
     credential: Option<String>,
     format: OutputFormat,
 ) -> Result<()> {
+    let mut repo = GitRepo::from(git.as_str());
+    repo.branch = branch.or(repo.branch);
+    repo.path = repo_path.or(repo.path);
+    for warning in check_git_url(&repo, credential.as_deref())? {
+        eprintln!("{} {warning}", "⚠".yellow());
+    }
+
     let server_config = config.resolve_server(server_ref)?;
     let client = RicochetClient::new(&server_config)?;
     client.preflight_key_check().await?;
-
-    let repo = GitRepo {
-        url: git,
-        branch,
-        path: repo_path,
-    };
 
     let toml_content = match config_path {
         Some(path) => Some(tokio::fs::read_to_string(path).await?),
@@ -667,6 +691,35 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         std::fs::write(dir.path().join(SERVER_YML), contents).expect("write _server.yml");
         dir
+    }
+
+    #[test]
+    fn https_ssh_and_scp_like_git_urls_pass_without_warnings() {
+        for url in [
+            "https://github.com/org/repo",
+            "ssh://git@github.com/org/repo.git",
+            "git@github.com:org/repo.git",
+        ] {
+            let warnings = check_git_url(&GitRepo::from(url), Some("cred")).expect(url);
+            assert!(warnings.is_empty(), "{url}: {warnings:?}");
+        }
+    }
+
+    #[test]
+    fn an_unsupported_scheme_with_a_credential_is_rejected() {
+        let err = check_git_url(
+            &GitRepo::from("http://git.example.com/org/repo"),
+            Some("cred"),
+        )
+        .expect_err("http with a credential");
+        assert!(err.to_string().contains("cannot clone"));
+    }
+
+    #[test]
+    fn an_unsupported_scheme_without_a_credential_warns() {
+        let warnings = check_git_url(&GitRepo::from("git://git.example.com/org/repo"), None)
+            .expect("no credential");
+        assert_eq!(warnings.len(), 1);
     }
 
     #[test]
