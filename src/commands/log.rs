@@ -270,15 +270,18 @@ fn screen_text(text: &str) -> String {
     row
 }
 
-/// Render a line as `HH:MM:SS stream text`, with the time in the viewer's zone.
+/// Render a line as `HH:MM:SS stream text`, or `HH:MM:SS text` without a stream, with the time in the viewer's zone.
 fn render_line(line: &LogLine, timezone: &TimeZone) -> String {
-    let (Some(timestamp), Some(stream)) = (&line.timestamp, &line.stream) else {
+    let Some(timestamp) = &line.timestamp else {
         return line.line.clone();
     };
     let time = timestamp
         .to_zoned(timezone.clone())
         .strftime("%H:%M:%S")
         .to_string();
+    let Some(stream) = &line.stream else {
+        return format!("{} {}", time.dimmed(), line.line);
+    };
     let label = match stream {
         Stream::Stdout => "stdout".cyan(),
         Stream::Stderr => "stderr".yellow(),
