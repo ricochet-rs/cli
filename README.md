@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<h1 align="center">ricochet cross-platform cli</h1>
+<h1 align="center">ricochet CLI</h1>
 
 <p align="center">
   Interact with ricochet from the command line.
