@@ -102,12 +102,13 @@ MD030:
 # MD033/no-inline-html - Inline HTML
 MD033:
   # Allowed elements
-  allowed_elements: [details, summary, img, a, br, p]
+  # h1, picture and source carry the README's centered header.
+  allowed_elements: [details, summary, img, a, br, p, h1, picture, source]
 
 # MD035/hr-style - Horizontal rule style
 MD035:
   # Horizontal rule style
-  style: '----------------------------------------------'
+  style: '---'
 
 # MD036/no-emphasis-as-heading/no-emphasis-as-header - Emphasis used instead of a heading
 MD036:
@@ -120,6 +121,8 @@ MD041:
   level: 1
   # RegExp for matching title in front matter
   front_matter_title: "^\\s*title\\s*[:=]"
+  # The README opens with its centered logo
+  allow_preamble: true
 
 # MD044/proper-names - Proper names should have the correct capitalization
 MD044:
