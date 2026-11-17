@@ -1,4 +1,27 @@
-# cli
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" width="128" height="128" alt="The ricochet bunny">
+  </picture>
+</p>
+
+<h1 align="center">ricochet cross-platform cli</h1>
+
+<p align="center">
+  Interact with ricochet from the command line.
+</p>
+
+<p align="center">
+  <a href="https://docs.ricochet.rs">Docs</a>
+  ·
+  <a href="https://ricochet.rs">Website</a>
+  ·
+  <a href="docs/cli-commands.md">Commands</a>
+  ·
+  <a href="https://github.com/ricochet-rs/cli/releases/latest">Releases</a>
+</p>
+
+---
 
 ## Installation
 
