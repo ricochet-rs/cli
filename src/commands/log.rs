@@ -308,6 +308,17 @@ mod tests {
     }
 
     #[test]
+    fn a_line_without_a_stream_renders_its_time_and_text() {
+        let line = LogLine {
+            line: "> x <- 1".into(),
+            timestamp: "2026-10-09T13:48:06.643970Z".parse().ok(),
+            stream: None,
+        };
+        let rendered = render_line(&line, &TimeZone::UTC);
+        assert_eq!(console::strip_ansi_codes(&rendered), "13:48:06 > x <- 1");
+    }
+
+    #[test]
     fn lines_rejects_zero_and_words() {
         for value in ["0", "inf", "-3"] {
             assert!(value.parse::<Lines>().is_err(), "{value}");
