@@ -579,28 +579,23 @@ pub fn deploy_dry_run(path: &Path, format: OutputFormat) -> Result<()> {
     format.print(&report, || Ok(report.render_table()))
 }
 
-/// The Git URL forms the server can clone, named in errors and warnings.
-const GIT_URL_FORMS: &str =
+/// The Git URL formats the server can clone, listed in errors and warnings.
+const GIT_URL_FORMATS: &str =
     "`https://host/owner/repo`, `ssh://git@host/owner/repo` or `git@host:owner/repo`";
 
-/// Reject a Git URL the server cannot clone with a credential, and warn about one it alters before cloning.
+/// Reject a Git URL the server cannot clone with a credential, and warn about one it may fail to clone.
 fn check_git_url(repo: &GitRepo, credential: Option<&str>) -> Result<Vec<String>> {
     let url = &repo.url;
     let mut warnings = Vec::new();
 
     if repo.detect_protocol().is_err() {
         if credential.is_some() {
-            bail!("Ricochet cannot clone `{url}` with a credential. Use {GIT_URL_FORMS}.");
+            bail!(
+                "ricochet cannot clone `{url}` with embedded credential. Use one of the following formats {GIT_URL_FORMATS}."
+            );
         }
         warnings.push(format!(
-            "Ricochet supports Git URLs of the form {GIT_URL_FORMS}, so cloning `{url}` may fail."
-        ));
-    }
-
-    let port = url::Url::parse(url).ok().and_then(|parsed| parsed.port());
-    if let (Some(port), Some(_)) = (port, credential) {
-        warnings.push(format!(
-            "Ricochet keeps port {port} only when the credential matches the URL, an SSH credential with `ssh://` or an HTTPS credential with `https://`. Otherwise it clones from the default port."
+            "ricochet supports Git URLs in the formats {GIT_URL_FORMATS}, so cloning `{url}` may fail."
         ));
     }
 
@@ -698,10 +693,6 @@ mod tests {
         dir
     }
 
-    fn repo(url: &str) -> GitRepo {
-        GitRepo::from(url)
-    }
-
     #[test]
     fn https_ssh_and_scp_like_git_urls_pass_without_warnings() {
         for url in [
@@ -709,41 +700,26 @@ mod tests {
             "ssh://git@github.com/org/repo.git",
             "git@github.com:org/repo.git",
         ] {
-            let warnings = check_git_url(&repo(url), Some("cred")).expect(url);
+            let warnings = check_git_url(&GitRepo::from(url), Some("cred")).expect(url);
             assert!(warnings.is_empty(), "{url}: {warnings:?}");
         }
     }
 
     #[test]
     fn an_unsupported_scheme_with_a_credential_is_rejected() {
-        let err = check_git_url(&repo("http://git.example.com/org/repo"), Some("cred"))
-            .expect_err("http with a credential");
+        let err = check_git_url(
+            &GitRepo::from("http://git.example.com/org/repo"),
+            Some("cred"),
+        )
+        .expect_err("http with a credential");
         assert!(err.to_string().contains("cannot clone"));
     }
 
     #[test]
     fn an_unsupported_scheme_without_a_credential_warns() {
-        let warnings =
-            check_git_url(&repo("git://git.example.com/org/repo"), None).expect("no credential");
+        let warnings = check_git_url(&GitRepo::from("git://git.example.com/org/repo"), None)
+            .expect("no credential");
         assert_eq!(warnings.len(), 1);
-    }
-
-    #[test]
-    fn a_custom_port_with_a_credential_warns() {
-        let warnings = check_git_url(
-            &repo("ssh://git@git.example.com:2222/org/repo.git"),
-            Some("cred"),
-        )
-        .expect("ssh with a port");
-        assert_eq!(warnings.len(), 1);
-        assert!(warnings[0].contains("port 2222"));
-    }
-
-    #[test]
-    fn a_custom_port_without_a_credential_passes() {
-        let warnings =
-            check_git_url(&repo("https://git.example.com:8443/org/repo"), None).expect("https");
-        assert!(warnings.is_empty());
     }
 
     #[test]
