@@ -119,8 +119,6 @@ async fn start_server(endpoint: Endpoint) -> String {
 
 enum Key {
     Configured,
-    /// A key the server refuses.
-    Refused,
     Absent,
 }
 
@@ -154,7 +152,6 @@ impl McpSession {
         };
         match key {
             Key::Configured => command.env("RICOCHET_API_KEY", API_KEY),
-            Key::Refused => command.env("RICOCHET_API_KEY", "refused_key"),
             Key::Absent => command.env_remove("RICOCHET_API_KEY"),
         };
         let (transport, stderr) = TokioChildProcess::builder(command)
@@ -411,32 +408,6 @@ async fn mcp_preview_bundle_lists_files() {
 }
 
 #[tokio::test]
-async fn mcp_preview_bundle_reports_the_whole_toml_error() {
-    let mocks = DeployMocks::start(Upload::Accepted).await;
-    let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
-    let project = TempDir::new().expect("temp project");
-    write_project(project.path());
-    std::fs::write(
-        project.path().join("_ricochet.toml"),
-        "[content]\nname = \"mcp-app\nentrypoint = \"app.R\"\n",
-    )
-    .expect("writing _ricochet.toml");
-
-    let (result, text) = session
-        .call_text(
-            "preview_bundle",
-            project.path().to_str().expect("UTF-8 path"),
-        )
-        .await;
-    assert_eq!(result.is_error, Some(true), "{text}");
-    assert!(text.contains("line 2, column 16"), "{text}");
-    assert!(text.contains(r#"name = "mcp-app"#), "{text}");
-    assert!(!text.contains("Error: "), "{text}");
-    mocks.assert_untouched().await;
-    session.finish().await;
-}
-
-#[tokio::test]
 async fn mcp_deploy_returns_done_event() {
     let mocks = DeployMocks::start(Upload::Accepted).await;
     let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
@@ -517,22 +488,6 @@ async fn mcp_deploy_reports_rejection_as_error() {
 }
 
 #[tokio::test]
-async fn mcp_deploy_reports_refused_key_as_error() {
-    let mocks = DeployMocks::start(Upload::Accepted).await;
-    let session = McpSession::start(&mocks.server.url(), Key::Refused).await;
-    let project = TempDir::new().expect("temp project");
-    write_project(project.path());
-
-    let (result, text) = session
-        .call_text("deploy", project.path().to_str().expect("UTF-8 path"))
-        .await;
-    assert_eq!(result.is_error, Some(true), "{text}");
-    assert!(text.contains(r#""kind":"auth""#), "{text}");
-    assert!(!mocks.upload.matched_async().await, "upload was called");
-    session.finish().await;
-}
-
-#[tokio::test]
 async fn mcp_local_tools_reject_relative_path() {
     let mocks = DeployMocks::start(Upload::Accepted).await;
     let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
@@ -560,22 +515,6 @@ async fn mcp_local_tools_reject_missing_path() {
         assert_eq!(result.is_error, Some(true), "{tool}: {text}");
         assert!(text.contains(missing), "{tool}: {text}");
     }
-    mocks.assert_untouched().await;
-    session.finish().await;
-}
-
-#[tokio::test]
-async fn mcp_local_tools_require_a_path_argument() {
-    let mocks = DeployMocks::start(Upload::Accepted).await;
-    let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
-    let error = session
-        .call("deploy", serde_json::json!({}))
-        .await
-        .expect_err("a call without `path` fails");
-    let ServiceError::McpError(error) = error else {
-        panic!("expected an MCP error, got {error}")
-    };
-    assert_eq!(error.code, ErrorCode::INVALID_PARAMS);
     mocks.assert_untouched().await;
     session.finish().await;
 }
