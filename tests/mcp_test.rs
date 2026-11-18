@@ -1,30 +1,36 @@
 //! Drives `ricochet mcp` over stdio the way an editor's agent does, against a fake Ricochet server.
 
-use axum::Router;
-use axum::extract::Request;
-use axum::http::{StatusCode, header};
-use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
-use mockito::{Matcher, Mock, ServerGuard};
-use rmcp::model::ErrorCode;
-use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
-    PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+use std::{path::Path, process::Stdio, sync::Arc, time::Duration};
+
+use axum::{
+    Router,
+    extract::Request,
+    http::{StatusCode, header},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
 };
-use rmcp::service::{RequestContext, RunningService, ServiceError};
-use rmcp::transport::TokioChildProcess;
-use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
-use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
-use rmcp::{ErrorData as McpError, RoleClient, RoleServer, ServerHandler, ServiceExt};
-use std::path::Path;
-use std::process::Stdio;
-use std::sync::Arc;
-use std::time::Duration;
+use mockito::{Matcher, Mock, ServerGuard};
+use rmcp::{
+    ErrorData as McpError, RoleClient, RoleServer, ServerHandler, ServiceExt,
+    model::{
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorCode,
+        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+    },
+    service::{RequestContext, RunningService, ServiceError},
+    transport::{
+        TokioChildProcess,
+        streamable_http_server::{
+            StreamableHttpServerConfig, StreamableHttpService, session::never::NeverSessionManager,
+        },
+    },
+};
 use tempfile::TempDir;
-use tokio::io::AsyncReadExt;
-use tokio::net::TcpListener;
-use tokio::process::{ChildStderr, Command};
-use tokio::time::timeout;
+use tokio::{
+    io::AsyncReadExt,
+    net::TcpListener,
+    process::{ChildStderr, Command},
+    time::timeout,
+};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 const API_KEY: &str = "test_key";

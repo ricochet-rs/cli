@@ -3,8 +3,7 @@
 //! Each runs the CLI's own `deploy` as a child process, so that deploy's stdout and prompts never
 //! reach the MCP channel, which owns this process's stdout.
 
-use std::path::PathBuf;
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;

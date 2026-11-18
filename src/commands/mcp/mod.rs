@@ -6,25 +6,28 @@
 
 mod local;
 
-use std::collections::HashMap;
-use std::process::Stdio;
-use std::time::Duration;
+use std::{collections::HashMap, process::Stdio, time::Duration};
 
 use anyhow::Context;
 use reqwest::header::{AUTHORIZATION, HeaderValue};
-use rmcp::handler::server::common::schema_for_type;
-use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
-    ToolAnnotations,
+use rmcp::{
+    ErrorData as McpError, RoleClient, RoleServer, ServerHandler, ServiceExt,
+    handler::server::common::schema_for_type,
+    model::{
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+        ToolAnnotations,
+    },
+    service::{RequestContext, RunningService, ServiceError},
+    transport::{
+        StreamableHttpClientTransport, streamable_http_client::StreamableHttpClientTransportConfig,
+    },
 };
-use rmcp::service::{RequestContext, RunningService, ServiceError};
-use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-use rmcp::{ErrorData as McpError, RoleClient, RoleServer, ServerHandler, ServiceExt};
 
-use crate::commands::mcp::local::{DeployTarget, LocalTool, LocalToolArgs, PREVIEW_TIMEOUT};
-use crate::config::Config;
+use crate::{
+    commands::mcp::local::{DeployTarget, LocalTool, LocalToolArgs, PREVIEW_TIMEOUT},
+    config::Config,
+};
 
 /// How long the server may take to accept a connection and answer the handshake and tool list.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
