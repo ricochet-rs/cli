@@ -40,8 +40,9 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
                     .context("no API key configured, run `ricochet login` to add one")?;
                 let mut url = server.url.clone();
                 url.set_path("/api/v0/mcp");
-                let authorization = HeaderValue::from_str(&format!("Key {api_key}"))
-                    .context("the API key is not a valid header value")?;
+                let authorization = HeaderValue::from_str(&format!("Key {api_key}")).context(
+                    "invalid character in the API key, run `ricochet login` to set a new API key",
+                )?;
                 let client = reqwest::Client::builder()
                     .connect_timeout(CONNECT_TIMEOUT)
                     .build()?;
@@ -56,7 +57,9 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
                     anyhow::Ok(RemoteTools { tools, peer })
                 })
                 .await
-                .with_context(|| format!("{url} did not answer within {CONNECT_TIMEOUT:?}"))?
+                .with_context(|| {
+                    format!("ricochet got no answer from {url} within {CONNECT_TIMEOUT:?}")
+                })?
             }
             .await;
             match connected {
@@ -65,7 +68,7 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
                     tracing::warn!(
                         server = %server.url,
                         error = format!("{error:#}"),
-                        "serving without the server's tools, its MCP endpoint is unavailable"
+                        "could not reach the server's MCP endpoint, serving local tools only"
                     );
                     None
                 }
@@ -74,7 +77,7 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
         Err(error) => {
             tracing::warn!(
                 error = format!("{error:#}"),
-                "serving without the server's tools, no server is configured"
+                "found no server, serving local tools only"
             );
             None
         }
@@ -121,11 +124,11 @@ impl ServerHandler for McpServer {
             .chain(LocalTool::ALL.map(|tool| {
                 let (description, annotations) = match tool {
                     LocalTool::PreviewBundle => (
-                        "List the files a deploy of a local project directory would bundle and the ones it would leave out, without contacting a server. `path` is the absolute path of the directory holding `_ricochet.toml`.",
+                        "Preview the bundle for a local project.",
                         ToolAnnotations::new().read_only(true),
                     ),
                     LocalTool::Deploy => (
-                        "Deploy a local project directory to the ricochet server and wait until the server accepts the bundle. `path` is the absolute path of the directory holding `_ricochet.toml`.",
+                        "Deploy to ricochet",
                         ToolAnnotations::new()
                             .read_only(false)
                             .destructive(true)
@@ -155,16 +158,13 @@ impl ServerHandler for McpServer {
             let path = args.path.as_path();
             let result = async {
                 if !path.is_absolute() {
-                    anyhow::bail!(
-                        "`path` must be an absolute path, but {} is relative",
-                        path.display()
-                    );
+                    anyhow::bail!("use an absolute path instead of {}", path.display());
                 }
                 let metadata = tokio::fs::metadata(path)
                     .await
                     .with_context(|| format!("cannot read {}", path.display()))?;
                 if !metadata.is_dir() {
-                    anyhow::bail!("{} is not a directory", path.display());
+                    anyhow::bail!("expected a directory at {}", path.display());
                 }
 
                 let exe = std::env::current_exe().context("cannot locate the ricochet binary")?;
@@ -206,7 +206,7 @@ impl ServerHandler for McpServer {
                     }
                     LocalTool::Deploy => command.output().await,
                 }
-                .context("cannot run ricochet deploy")?;
+                .context("cannot run `ricochet deploy`")?;
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let stderr = stderr.trim();
@@ -221,7 +221,7 @@ impl ServerHandler for McpServer {
                         let text = if stderr.is_empty() {
                             done.to_owned()
                         } else {
-                            format!("{done}\n\nricochet deploy also reported:\n{stderr}")
+                            format!("{done}\n\nwarnings:\n{stderr}")
                         };
                         CallToolResult::success(vec![ContentBlock::text(text)])
                     }

@@ -16,7 +16,7 @@ pub(crate) enum LocalTool {
 #[derive(Deserialize, JsonSchema)]
 #[schemars(crate = "rmcp::schemars")]
 pub(crate) struct LocalToolArgs {
-    /// The absolute path of the directory holding `_ricochet.toml`.
+    /// Absolute path containing the `_ricochet.toml`.
     pub(crate) path: PathBuf,
 }
 
