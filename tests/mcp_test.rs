@@ -1,5 +1,3 @@
-//! Drives `ricochet mcp` over stdio the way an editor's agent does, against a fake Ricochet server.
-
 use std::{path::Path, process::Stdio, sync::Arc, time::Duration};
 
 use axum::{
@@ -39,7 +37,6 @@ const CONTENT_ID: &str = "01K66JV2Q123456789ABCDEF";
 const DEPLOYMENT_ID: &str = "01KQZPF4Y5SRHES967VZEYY765";
 const REJECTION: &str = "entrypoint app.R is not allowed";
 
-/// A stand-in for the server's MCP endpoint with a single read-only tool.
 #[derive(Clone)]
 struct FakeServer;
 
@@ -95,7 +92,6 @@ enum Endpoint {
     Missing,
 }
 
-/// Serve a fake Ricochet server on a local port and return its URL.
 async fn start_server(endpoint: Endpoint) -> String {
     let router = match endpoint {
         Endpoint::Mcp => {
@@ -131,7 +127,6 @@ enum Key {
 struct McpSession {
     client: RunningService<RoleClient, ()>,
     stderr: ChildStderr,
-    /// The child's HOME and working directory.
     home: TempDir,
 }
 
@@ -140,8 +135,6 @@ impl McpSession {
         Self::start_in(TempDir::new().expect("temp home"), Some(server_url), key).await
     }
 
-    /// Start the server with `home` as its HOME, choosing the server by `RICOCHET_SERVER`
-    /// when `server_url` is set and by the profiles in `home` otherwise.
     async fn start_in(home: TempDir, server_url: Option<&str>, key: Key) -> Self {
         let mut command = Command::new(env!("CARGO_BIN_EXE_ricochet"));
         command
@@ -185,7 +178,6 @@ impl McpSession {
             .collect()
     }
 
-    /// Call a tool with `arguments` and return the server's answer.
     async fn call(
         &self,
         name: &'static str,
@@ -203,7 +195,6 @@ impl McpSession {
         .expect("call within the timeout")
     }
 
-    /// Call a tool that must answer with a result, and return it with its text.
     async fn call_text(&self, name: &'static str, path: &str) -> (CallToolResult, String) {
         let result = self
             .call(name, serde_json::json!({ "path": path }))
@@ -218,7 +209,6 @@ impl McpSession {
         (result, text)
     }
 
-    /// Close the session and return everything the child wrote to stderr.
     async fn finish(mut self) -> String {
         timeout(TIMEOUT, self.client.cancel())
             .await
@@ -296,7 +286,6 @@ async fn mcp_starts_without_api_key() {
     assert!(stderr.contains(&server), "stderr: {stderr}");
 }
 
-/// A deployable project directory: `_ricochet.toml`, package file and entrypoint.
 fn write_project(dir: &Path) {
     std::fs::create_dir_all(dir).expect("creating the project directory");
     std::fs::write(
@@ -310,13 +299,11 @@ fn write_project(dir: &Path) {
     std::fs::write(dir.join("app.R"), "shiny::shinyApp(ui, server)").expect("writing app.R");
 }
 
-/// How the fake server answers an upload.
 enum Upload {
     Accepted,
     Rejected,
 }
 
-/// The endpoints a local deploy touches, returned so a test can count the requests that reached them.
 struct DeployMocks {
     server: ServerGuard,
     check_key: Mock,
@@ -332,7 +319,6 @@ impl DeployMocks {
             .with_status(200)
             .create_async()
             .await;
-        // mockito tries mocks in the order they were created, so only a key other than `API_KEY` reaches this one.
         server
             .mock("GET", "/api/v0/check_key")
             .with_status(401)
@@ -366,7 +352,6 @@ impl DeployMocks {
         }
     }
 
-    /// Require that no request reached the server.
     async fn assert_untouched(&self) {
         assert!(
             !self.check_key.matched_async().await,
@@ -424,7 +409,6 @@ async fn mcp_deploy_returns_done_event() {
         .call_text("deploy", project.path().to_str().expect("UTF-8 path"))
         .await;
     assert_ne!(result.is_error, Some(true), "{text}");
-    // The `done` event comes first, followed by whatever the deploy reported on stderr.
     let first_line = text.lines().next().unwrap_or_default();
     let done: serde_json::Value =
         serde_json::from_str(first_line).unwrap_or_else(|error| panic!("{error}: {text}"));
@@ -434,7 +418,6 @@ async fn mcp_deploy_returns_done_event() {
     session.finish().await;
 }
 
-/// Write a CLI config with a profile per `(name, url)`, each with `API_KEY`, and `default` as the default.
 fn write_profiles(home: &Path, default: &str, profiles: &[(&str, &str)]) {
     let config_dir = home.join(".config").join("ricochet");
     std::fs::create_dir_all(&config_dir).expect("creating the config directory");
@@ -463,7 +446,6 @@ async fn mcp_deploy_keeps_the_server_it_started_with() {
     write_profiles(home.path(), "first", &profiles);
     let session = McpSession::start_in(home, None, Key::Absent).await;
 
-    // Another terminal changes the default profile while the editor keeps this server running.
     write_profiles(session.home.path(), "second", &profiles);
     let project = TempDir::new().expect("temp project");
     write_project(project.path());
@@ -497,7 +479,6 @@ async fn mcp_deploy_reports_rejection_as_error() {
 async fn mcp_local_tools_reject_relative_path() {
     let mocks = DeployMocks::start(Upload::Accepted).await;
     let session = McpSession::start(&mocks.server.url(), Key::Configured).await;
-    // A deployable `proj` beside the server's working directory must still not be deployed.
     write_project(&session.home.path().join("proj"));
 
     for tool in ["preview_bundle", "deploy"] {

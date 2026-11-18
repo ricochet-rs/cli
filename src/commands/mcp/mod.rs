@@ -27,15 +27,12 @@ use crate::{
     config::Config,
 };
 
-/// How long the server may take to accept a connection and answer the handshake and tool list.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Serve MCP over stdio until the client closes stdin.
 pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Result<()> {
     let target = config.resolve_server(server_ref);
     let remote = match &target {
         Ok(server) => {
-            // Connect to `{server}/api/v0/mcp` with the server's API key and fetch its tool list.
             let connected = async {
                 let api_key = server
                     .api_key
@@ -82,8 +79,6 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
             None
         }
     };
-    // A deploy targets the server resolved here, so that changing the default profile while the
-    // editor runs cannot send it somewhere the remote tools do not read from.
     let target = match target {
         Ok(server) => DeployTarget::Server(server),
         Err(_) => DeployTarget::Unresolved(server_ref.map(str::to_owned)),
@@ -96,13 +91,11 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
     Ok(())
 }
 
-/// The tools the server's MCP endpoint offers, and the session that calls them.
 struct RemoteTools {
     tools: Vec<Tool>,
     peer: RunningService<RoleClient, ()>,
 }
 
-/// The tools `ricochet mcp` offers: the server's, forwarded by name, and its own local ones.
 struct McpServer {
     remote: Option<RemoteTools>,
     target: DeployTarget,
@@ -119,7 +112,6 @@ impl ServerHandler for McpServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
-        // A local tool answers to its name first, so a server tool of the same name is unreachable.
         let tools = self
             .remote
             .iter()
@@ -162,7 +154,6 @@ impl ServerHandler for McpServer {
             })?;
             let path = args.path.as_path();
             let result = async {
-                // A relative path would resolve against wherever the editor started this server, not the project.
                 if !path.is_absolute() {
                     anyhow::bail!(
                         "`path` must be an absolute path, but {} is relative",
@@ -219,7 +210,6 @@ impl ServerHandler for McpServer {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let stderr = stderr.trim();
-                // `deploy -F json` ends its stdout with a `done` or `error` event.
                 let last_line = stdout.lines().last();
 
                 Ok(match (output.status.success(), tool) {
@@ -228,8 +218,6 @@ impl ServerHandler for McpServer {
                     }
                     (true, LocalTool::Deploy) => {
                         let done = last_line.unwrap_or_default();
-                        // A successful deploy's stderr carries warnings the agent must act on,
-                        // such as an ID that could not be recorded in `_ricochet.toml`.
                         let text = if stderr.is_empty() {
                             done.to_owned()
                         } else {
@@ -251,7 +239,6 @@ impl ServerHandler for McpServer {
                 })
             }
             .await;
-            // Report any failure as a tool error the agent can read.
             let result = result.unwrap_or_else(|error| {
                 CallToolResult::error(vec![ContentBlock::text(format!("{error:#}"))])
             });

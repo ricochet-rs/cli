@@ -536,7 +536,6 @@ enum SelfCommands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // `mcp` and `lsp` report the problems they work around on stderr, since stdout is their protocol.
     let default_filter = if cli.debug {
         Some("ricochet=debug,ricochet_cli=debug,reqwest=debug,hyper_util=debug")
     } else if matches!(cli.command, Some(Commands::Mcp | Commands::Lsp)) {
