@@ -1,8 +1,6 @@
-//! An MCP server over stdio that lets an editor's agent use the Ricochet server's tools.
+//! Serve the CLI as an MCP server over stdio.
 //!
-//! The server's own tools come from its MCP endpoint, connected once at startup with the CLI's
-//! stored profile. When that fails, `ricochet mcp` still serves, without them.
-//! Beside them, `ricochet mcp` offers its own tools for a project on the local disk.
+//! At startup, ricochet connects to the server's MCP endpoint with your stored profile.
 
 mod local;
 

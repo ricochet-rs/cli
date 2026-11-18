@@ -178,10 +178,7 @@ enum Commands {
     },
     /// Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
     Lsp,
-    /// Offer the server's tools to an editor's AI agent, as an MCP server over stdio
-    ///
-    /// It uses the server named by `RICOCHET_SERVER`, else by the global `--server` flag, else the default server profile.
-    /// `RICOCHET_API_KEY`, when set, replaces that server's stored API key.
+    /// Serve the CLI as an MCP server
     Mcp,
     /// Manage deployed app items
     App {

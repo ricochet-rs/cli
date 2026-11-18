@@ -74,7 +74,7 @@ Ricochet CLI
 * `detect` — Report deployable content in a directory without writing anything
 * `init` — Initialize a new Ricochet deployment
 * `lsp` — Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdio
-* `mcp` — Offer the server's tools to an editor's AI agent, as an MCP server over stdio
+* `mcp` — Serve the CLI as an MCP server
 * `app` — Manage deployed app items
 * `task` — Manage deployed task items
 * `server` — Manage configured Ricochet servers
@@ -242,9 +242,7 @@ Check `_ricochet.toml` in an editor, as a language server speaking LSP over stdi
 
 ## `ricochet mcp`
 
-Offer the server's tools to an editor's AI agent, as an MCP server over stdio
-
-It uses the server named by `RICOCHET_SERVER`, else by the global `--server` flag, else the default server profile. `RICOCHET_API_KEY`, when set, replaces that server's stored API key.
+Serve the CLI as an MCP server
 
 **Usage:** `ricochet mcp`
 
