@@ -16,7 +16,7 @@ pub(crate) enum Stream {
     Other(String),
 }
 
-/// One line of a log, split from its `[timestamp stream]` prefix when it has one.
+/// One line of a log, split from its `[timestamp stream]` or `[timestamp]` prefix when it has one.
 #[derive(Debug, PartialEq, Serialize)]
 pub(crate) struct LogLine {
     pub(crate) line: String,
@@ -36,7 +36,11 @@ impl LogLine {
             .strip_prefix('[')
             .and_then(|rest| rest.split_once(']'))
             .and_then(|(prefix, text)| {
-                let (timestamp, stream) = prefix.split_once(' ')?;
+                // Kubernetes merges stdout and stderr, so the server writes its worker lines without a stream.
+                let (timestamp, stream) = match prefix.split_once(' ') {
+                    Some((timestamp, stream)) => (timestamp, Some(stream)),
+                    None => (prefix, None),
+                };
                 Some((timestamp.parse::<Timestamp>().ok()?, stream, text))
             });
 
@@ -47,15 +51,15 @@ impl LogLine {
                 stream: None,
             };
         };
-        let stream = match stream {
+        let stream = stream.map(|stream| match stream {
             "stdout" => Stream::Stdout,
             "stderr" => Stream::Stderr,
             other => Stream::Other(other.to_string()),
-        };
+        });
         Self {
             line: text.strip_prefix(' ').unwrap_or(text).to_string(),
             timestamp: Some(timestamp),
-            stream: Some(stream),
+            stream,
         }
     }
 }
@@ -130,6 +134,19 @@ mod tests {
     }
 
     #[test]
+    fn an_untagged_prefix_keeps_its_timestamp() {
+        let line = LogLine::parse("[2026-10-09T13:48:06.643970Z] > x <- 1".into());
+        assert_eq!(
+            line,
+            LogLine {
+                line: "> x <- 1".into(),
+                timestamp: "2026-10-09T13:48:06.643970Z".parse().ok(),
+                stream: None,
+            }
+        );
+    }
+
+    #[test]
     fn a_crlf_line_drops_its_carriage_return() {
         let line = LogLine::from_bytes(b"[2026-10-09T13:48:06Z stdout] windows line\r");
         assert_eq!(line.line, "windows line");
@@ -140,6 +157,7 @@ mod tests {
         for raw in [
             "Execution environment: host",
             "[not a timestamp stdout] text",
+            "[1] 5",
         ] {
             let line = LogLine::parse(raw.into());
             assert_eq!(line.line, raw);

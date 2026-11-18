@@ -270,15 +270,18 @@ fn screen_text(text: &str) -> String {
     row
 }
 
-/// Render a line as `HH:MM:SS stream text`, with the time in the viewer's zone.
+/// Render a line as `HH:MM:SS stream text`, or `HH:MM:SS text` without a stream, with the time in the viewer's zone.
 fn render_line(line: &LogLine, timezone: &TimeZone) -> String {
-    let (Some(timestamp), Some(stream)) = (&line.timestamp, &line.stream) else {
+    let Some(timestamp) = &line.timestamp else {
         return line.line.clone();
     };
     let time = timestamp
         .to_zoned(timezone.clone())
         .strftime("%H:%M:%S")
         .to_string();
+    let Some(stream) = &line.stream else {
+        return format!("{} {}", time.dimmed(), line.line);
+    };
     let label = match stream {
         Stream::Stdout => "stdout".cyan(),
         Stream::Stderr => "stderr".yellow(),
@@ -302,6 +305,17 @@ mod tests {
         assert_eq!(screen_text("10%\r55%\r100%"), "100%");
         assert_eq!(screen_text("done\r"), "done");
         assert_eq!(screen_text("a\tbc\td"), "a       bc      d");
+    }
+
+    #[test]
+    fn a_line_without_a_stream_renders_its_time_and_text() {
+        let line = LogLine {
+            line: "> x <- 1".into(),
+            timestamp: "2026-10-09T13:48:06.643970Z".parse().ok(),
+            stream: None,
+        };
+        let rendered = render_line(&line, &TimeZone::UTC);
+        assert_eq!(console::strip_ansi_codes(&rendered), "13:48:06 > x <- 1");
     }
 
     #[test]
