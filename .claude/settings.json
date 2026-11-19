@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 60,
+            "command": "d=\"${XDG_CACHE_HOME:-$HOME/.cache}/ricochet-rs/agent-instructions\"; export GIT_TERMINAL_PROMPT=0; { [ -d \"$d/.git\" ] || git clone --quiet --filter=blob:none https://github.com/ricochet-rs/agent-instructions.git \"$d\"; } && sh \"$d/scripts/bootstrap.sh\" >/dev/null && printf 'Shared ricochet-rs instructions synchronized to %s. Do not fetch them again in this session.\\n\\n' \"$(git -C \"$d\" rev-parse --short HEAD)\" && cat \"$d/instructions/global.md\""
+          }
+        ]
+      }
+    ]
+  }
+}
