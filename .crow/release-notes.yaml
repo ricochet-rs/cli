@@ -1,6 +1,7 @@
 # Release notes workflow - generates user-facing release notes via AI rewrite
 # Fetches raw notes from the GitHub release, rewrites them with Claude,
-# and opens a PR on ricochet-rs/docs with the result.
+# checks the page with the docs repo's own Vale and readability linters,
+# and opens a PR on ricochet-rs/docs only once those checks pass.
 #
 # Can run independently for testing by pushing a tag that already has
 # a GitHub release with notes.
@@ -24,7 +25,8 @@ labels:
 
 steps:
   'Generate and publish release notes':
-    image: reg.ricochet.rs/docker.io/library/alpine:3.24
+    # Bun runs the docs repo's readability and semantic-break scripts
+    image: reg.ricochet.rs/docker.io/oven/bun:1.4-alpine
     environment:
       ANTHROPIC_API_KEY:
         from_secret: anthropic-api-key
@@ -35,7 +37,7 @@ steps:
     commands:
       - |
         set -euxo pipefail
-        apk add --no-cache -q git openssh curl jq github-cli
+        apk add --no-cache -q git openssh curl jq github-cli vale
 
         # Prefer CI variable, fall back to latest git tag
         TAG=${CI_COMMIT_TAG}
@@ -54,7 +56,7 @@ steps:
         # Fetch raw release notes from the GitHub release
         NOTES=$(gh release view "$TAG" --repo ricochet-rs/cli --json body -q .body)
         if [ -z "$NOTES" ]; then
-          echo "Error: no release notes found for $CI_COMMIT_TAG" >&2
+          echo "Error: no release notes found for $TAG" >&2
           exit 1
         fi
 
@@ -62,51 +64,13 @@ steps:
         INSTRUCTIONS=$(gh api \
           repos/ricochet-rs/agent-instructions/contents/instructions/global.md \
           -H "Accept: application/vnd.github.raw+json")
-        if [ -z "$INSTRUCTIONS" ]; then
+        DOCS_SKILL=$(gh api \
+          repos/ricochet-rs/agent-instructions/contents/skills/user-facing-docs/SKILL.md \
+          -H "Accept: application/vnd.github.raw+json")
+        if [ -z "$INSTRUCTIONS" ] || [ -z "$DOCS_SKILL" ]; then
           echo "Error: shared agent instructions are empty" >&2
           exit 1
         fi
-
-        # Build the Anthropic API request payload (jq handles JSON escaping)
-        PAYLOAD=$(jq -n \
-          --arg notes "$NOTES" \
-          --arg version "$VERSION" \
-          --arg date "$RELEASE_DATE" \
-          --arg instructions "$INSTRUCTIONS" \
-          '{
-            model: "claude-sonnet-4-5",
-            max_tokens: 4096,
-            messages: [{
-              role: "user",
-              content: ("Follow the release-note prose rules in the shared Ricochet instructions below. Rewrite the following release notes for the Ricochet CLI v" + $version + ". Use subgroups for scoped conventional commits when they match. Do not include frontmatter, a document title, or code fences. Start the output with **Released: " + $date + "**.\n\nShared Ricochet instructions:\n\n" + $instructions + "\n\nRelease notes to rewrite:\n\n" + $notes)
-            }]
-          }')
-
-        # Call Anthropic API
-        HTTP_CODE=$(curl -s -o /tmp/api-response.json -w '%{http_code}' \
-          https://api.anthropic.com/v1/messages \
-          -H "x-api-key: $ANTHROPIC_API_KEY" \
-          -H "anthropic-version: 2023-06-01" \
-          -H "content-type: application/json" \
-          -d "$PAYLOAD")
-
-        if [ "$HTTP_CODE" -ne 200 ]; then
-          echo "Error: Anthropic API returned HTTP $HTTP_CODE" >&2
-          cat /tmp/api-response.json >&2
-          exit 1
-        fi
-
-        REWRITTEN=$(jq -r '.content[0].text' /tmp/api-response.json)
-
-        if [ -z "$REWRITTEN" ] || [ "$REWRITTEN" = "null" ]; then
-          echo "Error: AI rewrite returned empty content" >&2
-          cat /tmp/api-response.json >&2
-          exit 1
-        fi
-
-        echo "--- Rewritten release notes ---"
-        echo "$REWRITTEN"
-        echo "---"
 
         # Setup SSH for docs repo
         mkdir -p ~/.ssh && chmod 700 ~/.ssh
@@ -126,23 +90,19 @@ steps:
         git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
         git reset --hard origin/main
 
-        # Write the .mdx file (printf avoids heredoc escaping issues)
-        mkdir -p src/content/docs/releases
-        {
-          printf '%s\n' '---'
-          printf 'title: CLI v%s\n' "$VERSION"
-          printf 'docs: release notes for Ricochet CLI v%s\n' "$VERSION"
-          printf 'slug: releases/cli-v%s\n' "$VERSION"
-          printf '%s\n' 'tableOfContents: false'
-          printf '%s\n' 'template: splash'
-          printf '%s\n' '---'
-          printf '\n'
-          printf '%s\n' "$REWRITTEN"
-        } > "src/content/docs/releases/cli-v$VERSION.mdx"
+        # Install the docs repo's linters so the PR passes its lint and vale pipelines
+        bun install --frozen-lockfile
+        # Vale parses .mdx through mdx2vast, which the docs CI image ships preinstalled
+        bun add -g mdx2vast
+        export PATH="$HOME/.bun/bin:$PATH"
+        vale sync
 
-        # Update releases index — insert new entry after the first ### CLI heading
+        PAGE="src/content/docs/releases/cli-v$VERSION.mdx"
         INDEX="src/content/docs/releases/index.mdx"
-        ENTRY="- [v$VERSION](/releases/cli-v$VERSION/) - $RELEASE_DATE"
+
+        # Update releases index, insert new entry after the first ### CLI heading.
+        # Keep the date in parentheses: a spaced hyphen fails the readability dash check.
+        ENTRY="- [v$VERSION](/releases/cli-v$VERSION/) ($RELEASE_DATE)"
 
         CLI_LINE=$(grep -n "^### CLI" "$INDEX" | head -1 | cut -d: -f1)
         if [ -n "$CLI_LINE" ]; then
@@ -152,9 +112,93 @@ steps:
           echo "Warning: could not find ### CLI section in index, skipping index update" >&2
         fi
 
+        # The conversation grows by one rejected draft and its lint report per retry
+        jq -n \
+          --arg notes "$NOTES" \
+          --arg version "$VERSION" \
+          --arg date "$RELEASE_DATE" \
+          --arg instructions "$INSTRUCTIONS" \
+          --arg skill "$DOCS_SKILL" \
+          '[{
+            role: "user",
+            content: ("Follow the release-note prose rules in the shared Ricochet instructions and the user-facing docs skill below. Rewrite the following release notes for the Ricochet CLI v" + $version + ". Use subgroups for scoped conventional commits when they match. Do not include frontmatter, a document title, or code fences. Start the output with **Released: " + $date + "**.\n\nShared Ricochet instructions:\n\n" + $instructions + "\n\nUser-facing docs skill:\n\n" + $skill + "\n\nRelease notes to rewrite:\n\n" + $notes)
+          }]' > /tmp/messages.json
+
+        MAX_ATTEMPTS=3
+        ATTEMPT=1
+        while :; do
+          PAYLOAD=$(jq -n --slurpfile messages /tmp/messages.json \
+            '{model: "claude-sonnet-4-5", max_tokens: 4096, messages: $messages[0]}')
+
+          # Call Anthropic API
+          HTTP_CODE=$(curl -s -o /tmp/api-response.json -w '%{http_code}' \
+            https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Error: Anthropic API returned HTTP $HTTP_CODE" >&2
+            cat /tmp/api-response.json >&2
+            exit 1
+          fi
+
+          REWRITTEN=$(jq -r '.content[0].text' /tmp/api-response.json)
+
+          if [ -z "$REWRITTEN" ] || [ "$REWRITTEN" = "null" ]; then
+            echo "Error: AI rewrite returned empty content" >&2
+            cat /tmp/api-response.json >&2
+            exit 1
+          fi
+
+          echo "--- Rewritten release notes (attempt $ATTEMPT) ---"
+          echo "$REWRITTEN"
+          echo "---"
+
+          # Write the .mdx file (printf avoids heredoc escaping issues)
+          mkdir -p src/content/docs/releases
+          {
+            printf '%s\n' '---'
+            printf 'title: CLI v%s\n' "$VERSION"
+            printf 'description: Release notes for Ricochet CLI v%s.\n' "$VERSION"
+            printf 'slug: releases/cli-v%s\n' "$VERSION"
+            printf '%s\n' 'tableOfContents: false'
+            printf '%s\n' 'template: splash'
+            printf '%s\n' '---'
+            printf '\n'
+            printf '%s\n' "$REWRITTEN"
+          } > "$PAGE"
+
+          # Same prose formatting and checks the docs repo runs in just fmt and CI
+          bun run scripts/semantic-breaks.mjs "$PAGE"
+          CHECKS_OK=1
+          vale --output=line "$PAGE" "$INDEX" > /tmp/checks.txt 2>&1 || CHECKS_OK=0
+          bun run scripts/readability.mjs "$PAGE" "$INDEX" >> /tmp/checks.txt 2>&1 || CHECKS_OK=0
+          cat /tmp/checks.txt
+
+          if [ "$CHECKS_OK" -eq 1 ]; then
+            break
+          fi
+          if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+            echo "Error: release notes still fail the docs checks after $MAX_ATTEMPTS attempts, not opening a PR" >&2
+            exit 1
+          fi
+
+          ATTEMPT=$((ATTEMPT + 1))
+          jq \
+            --arg previous "$REWRITTEN" \
+            --rawfile report /tmp/checks.txt \
+            '. + [
+              {role: "assistant", content: $previous},
+              {role: "user", content: ("The docs Vale and readability checks rejected these release notes:\n\n" + $report + "\n\nFix every reported problem and return the complete corrected release notes under the same rules, keeping every user-visible change. Format commands, subcommands, flags, and file names as inline code, since Vale spell-checks plain and bold text.")}
+            ]' /tmp/messages.json > /tmp/messages.next
+          mv /tmp/messages.next /tmp/messages.json
+        done
+
         git config user.name "ricochet-bot"
         git config user.email "droid@ricochet.rs"
-        git add -A
+        git add "$PAGE" "$INDEX"
         git commit -m "docs: add CLI release notes for v$VERSION"
         git push --force-with-lease origin "$BRANCH"
 
