@@ -46,7 +46,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "stream"
 ] }
-jiff = { version = "0.2", features = ["serde"] }
+jiff = { version = "1.0", features = ["serde"] }
 lsp-server = "0.10"
 lsp-types = "0.97"
 ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", rev = "d6df36f8329c0e73d4d21cd7a6c567165fb7eec2", default-features = false }
