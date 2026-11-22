@@ -23,7 +23,7 @@ clap-markdown = "0.1"
 colored = "3.0"
 comfy-table = "8.0"
 console = "0.16"
-croner = "4.0"
+croner = "5.0"
 dialoguer = { version = "0.12", features = ["fuzzy-select"] }
 dirs = "7.0"
 flate2 = "1.0"
