@@ -587,7 +587,7 @@ async fn main() -> Result<()> {
         && config.servers.is_empty()
         && !ricochet_cli::utils::is_non_interactive()
     {
-        commands::server::configure_first_server(&mut config)?;
+        config.configure_first_server()?;
     }
 
     // Execute command
