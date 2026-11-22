@@ -566,6 +566,30 @@ async fn main() -> Result<()> {
     // Load or initialize config
     let mut config = Config::load()?;
 
+    let needs_server = !matches!(
+        cli.command,
+        None | Some(
+            Commands::Logout
+                | Commands::Deploy { dry_run: true, .. }
+                | Commands::Config { .. }
+                | Commands::Detect { .. }
+                | Commands::Init { .. }
+                | Commands::Lsp
+                | Commands::Mcp
+                | Commands::Server { .. }
+                | Commands::SelfUpdate { .. }
+                | Commands::Self_ { .. }
+                | Commands::GenerateDocs
+        )
+    );
+    if needs_server
+        && cli.server.is_none()
+        && config.servers.is_empty()
+        && !ricochet_cli::utils::is_non_interactive()
+    {
+        commands::server::configure_first_server(&mut config)?;
+    }
+
     // Execute command
     match cli.command {
         Some(Commands::Login {

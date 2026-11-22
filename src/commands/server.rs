@@ -5,7 +5,7 @@ use crate::{
 use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
-use dialoguer::{Confirm, theme::ColorfulTheme};
+use dialoguer::{Confirm, Input, theme::ColorfulTheme};
 use serde::Serialize;
 
 /// A configured server, as `server list` and `config` report it.
@@ -104,6 +104,37 @@ pub fn list(config: &Config, format: OutputFormat) -> Result<()> {
 
         Ok(output)
     })
+}
+
+const HOSTED_TRIAL_HOST: &str = "try.ricochet.rs";
+
+/// Ask for the URL and nickname of the first server, then save it as the default
+pub fn configure_first_server(config: &mut Config) -> Result<()> {
+    let theme = ColorfulTheme::default();
+
+    eprintln!("{}", "No ricochet instance configured.".yellow());
+    let url: String = Input::with_theme(&theme)
+        .with_prompt(format!(
+            "Provide your instance url, or press enter to use {HOSTED_TRIAL_HOST}"
+        ))
+        .default(format!("https://{HOSTED_TRIAL_HOST}"))
+        .show_default(false)
+        .validate_with(|input: &String| {
+            parse_server_url(input.trim())
+                .map(|_| ())
+                .map_err(|err| err.to_string())
+        })
+        .interact_text()?;
+    let name: String = Input::with_theme(&theme)
+        .with_prompt("Give your server a nickname")
+        .interact_text()?;
+
+    let name = name.trim().to_string();
+    config.add_server(name.clone(), parse_server_url(url.trim())?, None);
+    config.save()?;
+
+    eprintln!("Saved {} as your default server.", name.bright_cyan());
+    Ok(())
 }
 
 /// Add a new server

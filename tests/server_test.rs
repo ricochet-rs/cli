@@ -615,3 +615,29 @@ mod servers_tests {
         cleanup_env();
     }
 }
+
+mod first_run {
+    use tempfile::TempDir;
+
+    #[test]
+    fn piped_command_without_servers_fails_without_prompting() {
+        let home = TempDir::new().unwrap();
+
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_ricochet"))
+            .args(["app", "list"])
+            .env("HOME", home.path())
+            .env_remove("RICOCHET_SERVER")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success());
+        assert!(stderr.contains("No servers configured"), "stderr: {stderr}");
+        assert!(
+            !stderr.contains("Provide your instance url"),
+            "stderr: {stderr}"
+        );
+        assert!(!home.path().join(".config/ricochet/config.toml").exists());
+    }
+}
