@@ -276,7 +276,7 @@ fn render_line(line: &LogLine, timezone: &TimeZone) -> String {
         return line.line.clone();
     };
     let time = timestamp
-        .to_zoned(timezone.clone())
+        .to_zoned_datetime(timezone.clone())
         .strftime("%H:%M:%S")
         .to_string();
     let Some(stream) = &line.stream else {
