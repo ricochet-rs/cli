@@ -40,6 +40,7 @@ async fn test_client_creation_with_valid_key() {
     let client = ricochet_cli::client::RicochetClient::new_with_key(
         mock_url.clone(),
         "rico_test_key_123".to_string(),
+        None,
     );
 
     assert!(client.is_ok(), "Client creation should succeed");
@@ -61,6 +62,7 @@ async fn test_client_with_invalid_server() -> anyhow::Result<()> {
     let client = ricochet_cli::client::RicochetClient::new_with_key(
         "not-a-valid-url".to_string(),
         "rico_test_key_123".to_string(),
+        None,
     );
 
     // this should cause an error because the url is invalid
@@ -86,6 +88,7 @@ async fn test_client_with_invalid_server() -> anyhow::Result<()> {
     let client = ricochet_cli::client::RicochetClient::new_with_key(
         server.url(),
         "invalid_api_key".to_string(),
+        None,
     )?;
 
     let validation = client.validate_key().await?;

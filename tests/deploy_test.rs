@@ -30,6 +30,7 @@ mod deploy_tests {
             ServerConfig {
                 url: Url::parse(prod_url).unwrap(),
                 api_key: Some("prod_api_key".to_string()),
+                proxy: None,
             },
         );
         servers.insert(
@@ -37,6 +38,7 @@ mod deploy_tests {
             ServerConfig {
                 url: Url::parse(staging_url).unwrap(),
                 api_key: Some("staging_api_key".to_string()),
+                proxy: None,
             },
         );
         Config {

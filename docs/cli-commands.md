@@ -783,6 +783,8 @@ Add a new server
 ###### **Options:**
 
 * `--default` — Set this server as the default
+* `--proxy <URL>` — Proxy to reach this server through (http, https, socks5 or socks5h URL)
+* `--no-proxy <HOSTS>` — Comma-separated hosts that bypass the proxy
 
 
 

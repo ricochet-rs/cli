@@ -1625,6 +1625,24 @@ async fn server_commands_write_json_alone() {
 
     let removed = cli.json(&["server", "remove", "staging", "-f"]).await;
     assert_eq!(removed["name"], "staging");
+
+    cli.json(&[
+        "server",
+        "add",
+        "proxied",
+        "https://proxied.example.com",
+        "--proxy",
+        "http://alice:secret@proxy.internal:3128",
+        "--no-proxy",
+        "localhost,.internal",
+    ])
+    .await;
+    let listed = cli.json(&["server", "list"]).await;
+    let proxied = listed
+        .as_array()
+        .and_then(|servers| servers.iter().find(|server| server["name"] == "proxied"))
+        .expect("the proxied server is listed");
+    assert_eq!(proxied["proxy"], "http://alice:***@proxy.internal:3128/");
 }
 
 #[tokio::test]

@@ -43,7 +43,7 @@ pub async fn serve_mcp(config: &Config, server_ref: Option<&str>) -> anyhow::Res
                 let authorization = HeaderValue::from_str(&format!("Key {api_key}")).context(
                     "invalid character in the API key, run `ricochet login` to set a new API key",
                 )?;
-                let client = reqwest::Client::builder()
+                let client = crate::client::http_client_builder(server.proxy.as_ref())?
                     .connect_timeout(CONNECT_TIMEOUT)
                     .build()?;
                 let transport = StreamableHttpClientTransport::with_client(

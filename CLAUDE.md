@@ -134,6 +134,7 @@ On a tagged release, the `binaries.yaml` pipeline:
 - Run tests with `cargo test --all-features` (use `--test-threads=1` for env var tests)
 - The project uses tokio for async runtime
 - HTTP client uses reqwest with 5-minute timeout
+- Build every client that talks to a Ricochet server from `http_client_builder` in `src/client.rs`, or that server's configured `proxy` is skipped
 - File uploads support both individual files and directory bundling (creates tar.gz)
 - Uses ULID for unique identifiers
 - `ContentItem::validate_config` resolves a relative entrypoint against the process working directory, so validate a copy whose entrypoint is joined to the project directory or a Shiny directory entrypoint is rejected
