@@ -26,6 +26,7 @@ async fn fetches_and_parses_public_key() {
     let cfg = ServerConfig {
         url: Url::parse(&server.url()).unwrap(),
         api_key: Some("test_api_key".to_string()),
+        proxy: None,
     };
     let client = RicochetClient::new(&cfg).unwrap();
 

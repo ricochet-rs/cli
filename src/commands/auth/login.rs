@@ -113,7 +113,11 @@ pub async fn login(
     if let Some(ref sc) = server_config
         && let Some(ref existing_key) = sc.api_key
     {
-        let client = RicochetClient::new_with_key(server_url.to_string(), existing_key.clone())?;
+        let client = RicochetClient::new_with_key(
+            server_url.to_string(),
+            existing_key.clone(),
+            sc.proxy.as_ref(),
+        )?;
         let existing_key_valid = client.validate_key().await.unwrap_or_else(|err| {
             tracing::debug!(error = format!("{err:#}"), "existing api key check failed");
             false
@@ -428,7 +432,7 @@ async fn create_api_key_with_session(
 ) -> Result<()> {
     eprintln!("\n{}", "Creating API key using session...".dimmed());
 
-    let client = reqwest::Client::builder()
+    let client = crate::client::http_client_builder(config.proxy_for(&server))?
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
 
@@ -610,7 +614,8 @@ async fn validate_and_save_key(
     format: OutputFormat,
 ) -> Result<()> {
     eprintln!("\n{}", "Validating credentials...".dimmed());
-    let client = RicochetClient::new_with_key(server.to_string(), key.clone())?;
+    let client =
+        RicochetClient::new_with_key(server.to_string(), key.clone(), config.proxy_for(&server))?;
 
     match client.validate_key().await {
         Ok(true) => {
@@ -861,6 +866,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("https://ricochet.example.com").expect("valid URL"),
                 api_key: None,
+                proxy: None,
             },
         );
         let config = Config {

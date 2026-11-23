@@ -44,12 +44,14 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "multipart",
   "rustls",
-  "stream"
+  "socks",
+  "stream",
+  "system-proxy"
 ] }
 jiff = { version = "1.0", features = ["serde"] }
 lsp-server = "0.10"
 lsp-types = "0.97"
-ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", rev = "d6df36f8329c0e73d4d21cd7a6c567165fb7eec2", default-features = false }
+ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", rev = "7695cced252c1cad8ac5595e498db4068986e60e", default-features = false }
 self-replace = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use ricochet_core::config::proxy::ProxyConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,6 +22,9 @@ pub struct ServerConfig {
     pub url: Url,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    /// The forward proxy requests to this server go through, ahead of `HTTPS_PROXY` and the system proxy
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<ProxyConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,6 +72,7 @@ impl Config {
             ServerConfig {
                 url: server_url,
                 api_key,
+                proxy: None,
             },
         );
         Self {
@@ -130,8 +135,14 @@ impl Config {
     fn migrate_v1_config(&mut self) {
         if let Some(url) = self.server.take() {
             let api_key = self.api_key.take();
-            self.servers
-                .insert("default".to_string(), ServerConfig { url, api_key });
+            self.servers.insert(
+                "default".to_string(),
+                ServerConfig {
+                    url,
+                    api_key,
+                    proxy: None,
+                },
+            );
             self.default_server = Some("default".to_string());
         }
     }
@@ -188,7 +199,11 @@ impl Config {
                 }
             }
             // No match, use the URL with an API key from the environment if set
-            return Ok(self.apply_env_key_override(ServerConfig { url, api_key: None }));
+            return Ok(self.apply_env_key_override(ServerConfig {
+                url,
+                api_key: None,
+                proxy: None,
+            }));
         }
 
         // Not found
@@ -235,16 +250,34 @@ impl Config {
         anyhow::bail!("No servers configured. Run `ricochet login <URL>` to add one.")
     }
 
-    /// Add or update a server
+    /// Add or update a server, keeping the proxy an existing entry of that name has.
     pub fn add_server(&mut self, name: impl Into<String>, url: Url, api_key: Option<String>) {
         let name = name.into();
-        self.servers
-            .insert(name.clone(), ServerConfig { url, api_key });
+        let proxy = self
+            .servers
+            .get(&name)
+            .and_then(|server| server.proxy.clone());
+        self.servers.insert(
+            name.clone(),
+            ServerConfig {
+                url,
+                api_key,
+                proxy,
+            },
+        );
 
         // Set as default if it's the first server
         if self.default_server.is_none() {
             self.default_server = Some(name);
         }
+    }
+
+    /// The proxy configured for the server with `url`, if any.
+    pub fn proxy_for(&self, url: &Url) -> Option<&ProxyConfig> {
+        self.servers
+            .values()
+            .find(|server| &server.url == url)
+            .and_then(|server| server.proxy.as_ref())
     }
 
     /// Remove a server. Returns true if this was the default server.
@@ -359,6 +392,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("https://prod.ricochet.com").unwrap(),
                 api_key: Some("rico_prod_key".to_string()),
+                proxy: None,
             },
         );
         servers.insert(
@@ -366,6 +400,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("https://staging.ricochet.com").unwrap(),
                 api_key: Some("rico_staging_key".to_string()),
+                proxy: None,
             },
         );
         servers.insert(
@@ -373,6 +408,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("http://localhost:3000").unwrap(),
                 api_key: None,
+                proxy: None,
             },
         );
         Config {
@@ -429,6 +465,25 @@ mod tests {
         let server = config.servers.get("new").unwrap();
         assert_eq!(server.url, url);
         assert_eq!(server.api_key, Some("rico_key".to_string()));
+    }
+
+    #[test]
+    fn relogin_keeps_the_proxy_and_the_toml_round_trips_it() -> Result<()> {
+        cleanup_env();
+        let mut config = create_test_config();
+        let url = Url::parse("https://prod.ricochet.com")?;
+        if let Some(prod) = config.servers.get_mut("prod") {
+            prod.proxy = Some(toml::from_str(
+                "url = \"socks5h://127.0.0.1:1055\"\nno_proxy = [\"localhost\"]",
+            )?);
+        }
+        config.add_server("prod", url.clone(), Some("rico_new_key".to_string()));
+        let proxy = config.proxy_for(&url).context("the proxy is gone")?;
+        assert_eq!(proxy.url.as_str(), "socks5h://127.0.0.1:1055");
+
+        let reloaded = toml::from_str::<Config>(&toml::to_string(&config)?)?;
+        assert_eq!(reloaded.proxy_for(&url), Some(proxy));
+        Ok(())
     }
 
     #[test]

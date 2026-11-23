@@ -76,6 +76,15 @@ Server resolution runs in this order:
 `RICOCHET_API_KEY` replaces the stored key for whichever server was resolved.
 An unknown `-S` value fails with `Server '<name>' not found` and lists the configured profiles.
 
+Requests honor `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY`, and on macOS and Windows the system proxy settings.
+A proxy for one profile goes in with `server add`, accepts `http`, `https`, `socks5` and `socks5h` URLs, and takes precedence over the environment:
+
+```sh
+ricochet server add production https://ricochet.example.com --proxy socks5h://127.0.0.1:1055 --no-proxy localhost
+```
+
+`ricochet login --debug` shows which proxy a request went through.
+
 ## Describe the content item
 
 Every deployable directory holds a `_ricochet.toml` next to its package lockfile.

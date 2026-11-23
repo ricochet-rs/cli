@@ -475,6 +475,12 @@ enum ServerCommands {
         /// Set this server as the default
         #[arg(long)]
         default: bool,
+        /// Proxy to reach this server through (http, https, socks5 or socks5h URL)
+        #[arg(long, value_name = "URL")]
+        proxy: Option<ricochet_core::config::proxy::ProxyUrl>,
+        /// Comma-separated hosts that bypass the proxy
+        #[arg(long, value_name = "HOSTS", requires = "proxy")]
+        no_proxy: Option<ricochet_core::config::proxy::NoProxy>,
     },
     /// Remove a server
     Remove {
@@ -1039,8 +1045,18 @@ async fn main() -> Result<()> {
             ServerCommands::List => {
                 commands::server::list(&config, cli.format)?;
             }
-            ServerCommands::Add { name, url, default } => {
-                commands::server::add(&mut config, name, url, default, cli.format)?;
+            ServerCommands::Add {
+                name,
+                url,
+                default,
+                proxy,
+                no_proxy,
+            } => {
+                let proxy = proxy.map(|url| ricochet_core::config::proxy::ProxyConfig {
+                    url,
+                    no_proxy: no_proxy.unwrap_or_default(),
+                });
+                commands::server::add(&mut config, name, url, default, proxy, cli.format)?;
             }
             ServerCommands::Remove { name, force } => {
                 commands::server::remove(&mut config, name, force, cli.format)?;

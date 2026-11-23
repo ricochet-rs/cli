@@ -6,6 +6,7 @@ use anyhow::Result;
 use colored::Colorize;
 use comfy_table::{Cell, Color, Table, presets::UTF8_FULL};
 use dialoguer::{Confirm, theme::ColorfulTheme};
+use ricochet_core::config::proxy::ProxyConfig;
 use serde::Serialize;
 
 /// A configured server, as `server list` and `config` report it.
@@ -15,6 +16,9 @@ pub struct ConfiguredServer {
     pub url: String,
     /// Masked unless the caller asked for the full value.
     pub api_key: Option<String>,
+    /// The proxy URL with its password hidden.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<String>,
     pub default: bool,
 }
 
@@ -39,6 +43,10 @@ pub fn configured_servers(config: &Config) -> Vec<ConfiguredServer> {
             name: name.clone(),
             url: server_config.url.as_str().to_string(),
             api_key: server_config.api_key.as_deref().map(mask_api_key),
+            proxy: server_config
+                .proxy
+                .as_ref()
+                .map(|proxy| proxy.url.to_string()),
             default: default_server == Some(name.as_str()),
         })
         .collect()
@@ -66,7 +74,12 @@ pub fn list(config: &Config, format: OutputFormat) -> Result<()> {
 
         let mut table = Table::new();
         table.load_style(UTF8_FULL);
-        table.set_header(vec!["Name", "URL", "API Key", "Default"]);
+        let any_proxy = servers.iter().any(|server| server.proxy.is_some());
+        let mut header = vec!["Name", "URL", "API Key", "Default"];
+        if any_proxy {
+            header.push("Proxy");
+        }
+        table.set_header(header);
 
         for server in &servers {
             let name_cell = if server.default {
@@ -86,12 +99,16 @@ pub fn list(config: &Config, format: OutputFormat) -> Result<()> {
                 Cell::new("")
             };
 
-            table.add_row(vec![
+            let mut row = vec![
                 name_cell,
                 Cell::new(&server.url),
                 api_key_status,
                 default_marker,
-            ]);
+            ];
+            if any_proxy {
+                row.push(Cell::new(server.proxy.as_deref().unwrap_or("")));
+            }
+            table.add_row(row);
         }
 
         let mut output = table.to_string();
@@ -112,6 +129,7 @@ pub fn add(
     name: String,
     url: String,
     default: bool,
+    proxy: Option<ProxyConfig>,
     format: OutputFormat,
 ) -> Result<()> {
     let parsed_url = parse_server_url(&url)?;
@@ -130,6 +148,9 @@ pub fn add(
     }
 
     config.add_server(name.clone(), parsed_url.clone(), None);
+    if let Some(server) = config.servers.get_mut(&name) {
+        server.proxy = proxy;
+    }
 
     if default {
         config.set_default_server(&name)?;

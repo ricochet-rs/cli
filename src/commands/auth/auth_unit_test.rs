@@ -252,6 +252,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("https://prod.ricochet.com").unwrap(),
                 api_key: Some("rico_prod_key".to_string()),
+                proxy: None,
             },
         );
         servers.insert(
@@ -259,6 +260,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("https://staging.ricochet.com").unwrap(),
                 api_key: Some("rico_staging_key".to_string()),
+                proxy: None,
             },
         );
         servers.insert(
@@ -266,6 +268,7 @@ mod tests {
             ServerConfig {
                 url: Url::parse("http://localhost:3000").unwrap(),
                 api_key: None,
+                proxy: None,
             },
         );
         Config {

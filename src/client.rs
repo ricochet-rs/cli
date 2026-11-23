@@ -1,9 +1,12 @@
 use crate::config::{ServerConfig, parse_server_url};
 use anyhow::{Context, Result};
 use colored::Colorize;
-use reqwest::{Client, Response, StatusCode};
+use reqwest::{Client, ClientBuilder, NoProxy, Proxy, Response, StatusCode};
 use ricochet_core::{
-    config::git::{GitCredential, GitProtocol, GitRepo},
+    config::{
+        git::{GitCredential, GitProtocol, GitRepo},
+        proxy::ProxyConfig,
+    },
     content::{ContentItem, OwnershipScope},
     events::RestoreState,
 };
@@ -291,15 +294,29 @@ impl<R: AsyncRead + Unpin> AsyncRead for ProgressReader<R> {
     }
 }
 
+/// A client builder that routes through `proxy`, or through `HTTPS_PROXY` and the system proxy without one.
+pub(crate) fn http_client_builder(proxy: Option<&ProxyConfig>) -> Result<ClientBuilder> {
+    let builder = Client::builder();
+    let Some(proxy) = proxy else {
+        return Ok(builder);
+    };
+    let route = Proxy::all(proxy.url.as_str())
+        .with_context(|| format!("Invalid proxy URL {}", proxy.url))?
+        .no_proxy(NoProxy::from_string(&proxy.no_proxy.to_string()));
+    tracing::debug!(proxy = %proxy.url, no_proxy = %proxy.no_proxy, "using the configured proxy");
+    Ok(builder.proxy(route))
+}
+
 pub struct RicochetClient {
     pub(crate) client: Client,
     pub(crate) base_url: Url,
     pub(crate) api_key: String,
+    proxy: Option<ProxyConfig>,
 }
 
 impl RicochetClient {
     pub fn new(server_config: &ServerConfig) -> Result<Self> {
-        let client = Client::builder()
+        let client = http_client_builder(server_config.proxy.as_ref())?
             .timeout(std::time::Duration::from_secs(300))
             .build()?;
 
@@ -312,11 +329,16 @@ impl RicochetClient {
             client,
             base_url: server_config.url.clone(),
             api_key,
+            proxy: server_config.proxy.clone(),
         })
     }
 
-    pub fn new_with_key(server: String, api_key: String) -> Result<Self> {
-        let client = Client::builder()
+    pub fn new_with_key(
+        server: String,
+        api_key: String,
+        proxy: Option<&ProxyConfig>,
+    ) -> Result<Self> {
+        let client = http_client_builder(proxy)?
             .timeout(std::time::Duration::from_secs(300))
             .build()?;
 
@@ -326,6 +348,7 @@ impl RicochetClient {
             client,
             base_url,
             api_key,
+            proxy: proxy.cloned(),
         })
     }
 
@@ -624,7 +647,7 @@ impl RicochetClient {
 
         // The server holds the request open for as long as the deployment waits in the queue,
         // which can outlast the shared client's request timeout, so only connecting is bounded.
-        let client = Client::builder()
+        let client = http_client_builder(self.proxy.as_ref())?
             .connect_timeout(std::time::Duration::from_secs(30))
             .build()?;
         let response = client
@@ -651,7 +674,7 @@ impl RicochetClient {
         url.set_path(&format!("/api/v0/content/logs/{log_id}"));
 
         // A live log outlasts the shared client's request timeout, so only the wait for headers is bounded.
-        let client = Client::builder().build()?;
+        let client = http_client_builder(self.proxy.as_ref())?.build()?;
         let request = client
             .get(url)
             .header("Authorization", format!("Key {}", self.api_key))
@@ -1108,6 +1131,39 @@ mod tests {
             serde_json::to_value(&event)?,
             json!({"event": "error", "kind": "rejected", "status": 422, "message": "bad bundle"})
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn the_configured_proxy_carries_requests_except_for_no_proxy_hosts() -> Result<()> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let proxy = ProxyConfig {
+            url: format!("http://{}", listener.local_addr()?).parse()?,
+            no_proxy: "bypassed.invalid".parse()?,
+        };
+        let proxy_server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await?;
+            let mut request = vec![0; 1024];
+            let read = stream.read(&mut request).await?;
+            stream
+                .write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
+                .await?;
+            anyhow::Ok(String::from_utf8_lossy(&request[..read]).into_owned())
+        });
+
+        let client = http_client_builder(Some(&proxy))?.build()?;
+        let response = client.get("http://target.invalid/health").send().await?;
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let request = proxy_server.await??;
+        assert!(
+            request.starts_with("GET http://target.invalid/health HTTP/1.1"),
+            "{request}"
+        );
+
+        let bypassed = client.get("http://bypassed.invalid/").send().await;
+        assert!(bypassed.is_err_and(|error| error.is_connect()));
         Ok(())
     }
 }
