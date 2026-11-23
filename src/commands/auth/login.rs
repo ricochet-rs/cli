@@ -3,6 +3,7 @@ use crate::{OutputFormat, client::RicochetClient, commands::server::mask_api_key
 use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Password;
+use ricochet_core::config::proxy::ProxyConfig;
 use serde::{Deserialize, Serialize};
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -110,6 +111,9 @@ pub async fn login(
 
     // Check if already authenticated with this server
     let server_config = config.resolve_server(server_ref).ok();
+    let proxy = server_config
+        .as_ref()
+        .and_then(|server| server.proxy.as_ref());
     if let Some(ref sc) = server_config
         && let Some(ref existing_key) = sc.api_key
     {
@@ -152,6 +156,7 @@ pub async fn login(
         return validate_and_save_key(
             config,
             server_url.clone(),
+            proxy,
             key,
             server_name.clone(),
             server_source,
@@ -177,12 +182,28 @@ pub async fn login(
                 .underline()
         );
         let key = read_pasted_key()?;
-        return validate_and_save_key(config, server_url, key, server_name, server_source, format)
-            .await;
+        return validate_and_save_key(
+            config,
+            server_url,
+            proxy,
+            key,
+            server_name,
+            server_source,
+            format,
+        )
+        .await;
     }
 
     // Use OAuth with local callback server
-    oauth_login_with_callback(config, server_url, server_name, server_source, format).await?;
+    oauth_login_with_callback(
+        config,
+        server_url,
+        proxy,
+        server_name,
+        server_source,
+        format,
+    )
+    .await?;
 
     Ok(())
 }
@@ -254,6 +275,7 @@ fn config_is_unconfigured(config: &Config) -> bool {
 async fn oauth_login_with_callback(
     config: &mut Config,
     server: url::Url,
+    proxy: Option<&ProxyConfig>,
     server_name: Option<String>,
     server_source: LoginServerSource,
     format: OutputFormat,
@@ -383,6 +405,7 @@ async fn oauth_login_with_callback(
             validate_and_save_key(
                 config,
                 server.clone(),
+                proxy,
                 token.clone(),
                 server_name.clone(),
                 server_source,
@@ -394,6 +417,7 @@ async fn oauth_login_with_callback(
             create_api_key_with_session(
                 config,
                 server.clone(),
+                proxy,
                 token.clone(),
                 server_name.clone(),
                 server_source,
@@ -416,7 +440,16 @@ async fn oauth_login_with_callback(
 
         let key = read_pasted_key()?;
 
-        validate_and_save_key(config, server, key, server_name, server_source, format).await?;
+        validate_and_save_key(
+            config,
+            server,
+            proxy,
+            key,
+            server_name,
+            server_source,
+            format,
+        )
+        .await?;
     }
 
     Ok(())
@@ -425,6 +458,7 @@ async fn oauth_login_with_callback(
 async fn create_api_key_with_session(
     config: &mut Config,
     server: Url,
+    proxy: Option<&ProxyConfig>,
     session_token: String,
     server_name: Option<String>,
     server_source: LoginServerSource,
@@ -432,7 +466,7 @@ async fn create_api_key_with_session(
 ) -> Result<()> {
     eprintln!("\n{}", "Creating API key using session...".dimmed());
 
-    let client = crate::client::http_client_builder(config.proxy_for(&server))?
+    let client = crate::client::http_client_builder(proxy)?
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
 
@@ -608,14 +642,14 @@ fn is_headless() -> bool {
 async fn validate_and_save_key(
     config: &mut Config,
     server: url::Url,
+    proxy: Option<&ProxyConfig>,
     key: String,
     server_name: Option<String>,
     server_source: LoginServerSource,
     format: OutputFormat,
 ) -> Result<()> {
     eprintln!("\n{}", "Validating credentials...".dimmed());
-    let client =
-        RicochetClient::new_with_key(server.to_string(), key.clone(), config.proxy_for(&server))?;
+    let client = RicochetClient::new_with_key(server.to_string(), key.clone(), proxy)?;
 
     match client.validate_key().await {
         Ok(true) => {

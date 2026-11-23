@@ -51,7 +51,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 jiff = { version = "1.0", features = ["serde"] }
 lsp-server = "0.10"
 lsp-types = "0.97"
-ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", rev = "7695cced252c1cad8ac5595e498db4068986e60e", default-features = false }
+ricochet-core = { git = "https://github.com/ricochet-rs/ricochet", rev = "9afbab3140839a2dfc63dba5ef596d9af44fa03c", default-features = false }
 self-replace = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

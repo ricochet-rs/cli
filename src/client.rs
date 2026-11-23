@@ -1136,34 +1136,60 @@ mod tests {
 
     #[tokio::test]
     async fn the_configured_proxy_carries_requests_except_for_no_proxy_hosts() -> Result<()> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-        let proxy = ProxyConfig {
-            url: format!("http://{}", listener.local_addr()?).parse()?,
-            no_proxy: "bypassed.invalid".parse()?,
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+            sync::mpsc,
         };
-        let proxy_server = tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await?;
-            let mut request = vec![0; 1024];
-            let read = stream.read(&mut request).await?;
-            stream
-                .write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
-                .await?;
-            anyhow::Ok(String::from_utf8_lossy(&request[..read]).into_owned())
-        });
+
+        let proxy_listener = TcpListener::bind("127.0.0.1:0").await?;
+        let target_listener = TcpListener::bind("127.0.0.1:0").await?;
+        let proxy = ProxyConfig {
+            url: format!("http://{}", proxy_listener.local_addr()?).parse()?,
+            no_proxy: "127.0.0.1".parse()?,
+        };
+        let target = format!("http://{}/direct", target_listener.local_addr()?);
+        let (proxy_seen, mut proxy_requests) = mpsc::unbounded_channel();
+        let (target_seen, mut target_requests) = mpsc::unbounded_channel();
+        // Both answer every connection with 204 and report each request line.
+        for (listener, seen) in [(proxy_listener, proxy_seen), (target_listener, target_seen)] {
+            tokio::spawn(async move {
+                while let Ok((mut stream, _)) = listener.accept().await {
+                    let mut request = vec![0; 1024];
+                    let read = stream.read(&mut request).await.unwrap_or(0);
+                    let line = String::from_utf8_lossy(&request[..read])
+                        .lines()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned();
+                    let _ = seen.send(line);
+                    let _ = stream
+                        .write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
+                        .await;
+                }
+            });
+        }
 
         let client = http_client_builder(Some(&proxy))?.build()?;
         let response = client.get("http://target.invalid/health").send().await?;
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        let request = proxy_server.await??;
-        assert!(
-            request.starts_with("GET http://target.invalid/health HTTP/1.1"),
-            "{request}"
-        );
+        let line = proxy_requests
+            .recv()
+            .await
+            .context("the proxy saw no request")?;
+        assert_eq!(line, "GET http://target.invalid/health HTTP/1.1");
 
-        let bypassed = client.get("http://bypassed.invalid/").send().await;
-        assert!(bypassed.is_err_and(|error| error.is_connect()));
+        let response = client.get(&target).send().await?;
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let line = tokio::time::timeout(std::time::Duration::from_secs(5), target_requests.recv())
+            .await
+            .context("the bypassed request never reached the target")?
+            .context("the target saw no request")?;
+        assert_eq!(line, "GET /direct HTTP/1.1");
+        assert!(
+            proxy_requests.try_recv().is_err(),
+            "the bypassed request reached the proxy"
+        );
         Ok(())
     }
 }

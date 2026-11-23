@@ -272,14 +272,6 @@ impl Config {
         }
     }
 
-    /// The proxy configured for the server with `url`, if any.
-    pub fn proxy_for(&self, url: &Url) -> Option<&ProxyConfig> {
-        self.servers
-            .values()
-            .find(|server| &server.url == url)
-            .and_then(|server| server.proxy.as_ref())
-    }
-
     /// Remove a server. Returns true if this was the default server.
     pub fn remove_server(&mut self, name: &str) -> Result<bool> {
         if !self.servers.contains_key(name) {
@@ -478,11 +470,14 @@ mod tests {
             )?);
         }
         config.add_server("prod", url.clone(), Some("rico_new_key".to_string()));
-        let proxy = config.proxy_for(&url).context("the proxy is gone")?;
+        let proxy = config.servers["prod"]
+            .proxy
+            .as_ref()
+            .context("the proxy is gone")?;
         assert_eq!(proxy.url.as_str(), "socks5h://127.0.0.1:1055");
 
         let reloaded = toml::from_str::<Config>(&toml::to_string(&config)?)?;
-        assert_eq!(reloaded.proxy_for(&url), Some(proxy));
+        assert_eq!(reloaded.servers["prod"].proxy.as_ref(), Some(proxy));
         Ok(())
     }
 
