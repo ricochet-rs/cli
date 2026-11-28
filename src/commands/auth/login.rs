@@ -10,9 +10,6 @@ use tokio::sync::Mutex;
 use unicode_icons::icons::symbols;
 use url::Url;
 
-const HOSTED_TRIAL_SERVER: &str = "https://try.ricochet.rs";
-const HOSTED_TRIAL_PROFILE: &str = "try";
-
 /// How to fetch an API key when no credentials are persisted or set with `--api-key`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoginFlow {
@@ -20,12 +17,6 @@ pub enum LoginFlow {
     Browser,
     /// Paste the API key directly, used in headless sessions
     PastedKey,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LoginServerSource {
-    Configured,
-    HostedTrialFallback,
 }
 
 #[derive(Debug)]
@@ -78,8 +69,8 @@ pub async fn login(
     eprintln!("🔐 Authenticating against Ricochet server\n");
 
     // Resolve which server to authenticate with
-    let (server_url, server_name, server_source) = resolve_login_server(config, server_ref)?;
-    tracing::debug!(server = %server_url, profile = ?server_name, source = ?server_source, "resolved login server");
+    let (server_url, server_name) = resolve_login_server(config, server_ref)?;
+    tracing::debug!(server = %server_url, profile = ?server_name, "resolved login server");
     let proxy_vars: Vec<&str> = [
         "HTTPS_PROXY",
         "https_proxy",
@@ -98,13 +89,6 @@ pub async fn login(
     eprintln!("Server: {}", server_url.as_str().bright_cyan());
     if let Some(ref name) = server_name {
         eprintln!("Profile: {}", name.bright_cyan());
-    }
-    if server_source == LoginServerSource::HostedTrialFallback {
-        eprintln!("{}", "Using the hosted trial default.".dimmed());
-        eprintln!(
-            "{}",
-            "Register your own server with `ricochet server add <NAME> <URL>`.".dimmed()
-        );
     }
     eprintln!();
 
@@ -145,15 +129,8 @@ pub async fn login(
 
     // If an API key was provided directly, try to validate it
     if let Some(key) = api_key {
-        return validate_and_save_key(
-            config,
-            server_url.clone(),
-            key,
-            server_name.clone(),
-            server_source,
-            format,
-        )
-        .await;
+        return validate_and_save_key(config, server_url.clone(), key, server_name.clone(), format)
+            .await;
     }
 
     if flow == LoginFlow::Browser && is_headless() {
@@ -173,12 +150,11 @@ pub async fn login(
                 .underline()
         );
         let key = read_pasted_key()?;
-        return validate_and_save_key(config, server_url, key, server_name, server_source, format)
-            .await;
+        return validate_and_save_key(config, server_url, key, server_name, format).await;
     }
 
     // Use OAuth with local callback server
-    oauth_login_with_callback(config, server_url, server_name, server_source, format).await?;
+    oauth_login_with_callback(config, server_url, server_name, format).await?;
 
     Ok(())
 }
@@ -187,15 +163,11 @@ pub async fn login(
 fn resolve_login_server(
     config: &Config,
     server_ref: Option<&str>,
-) -> Result<(Url, Option<String>, LoginServerSource)> {
+) -> Result<(Url, Option<String>)> {
     if let Some(ref_str) = server_ref {
         // Check if it's a named server
         if let Some(server_config) = config.servers.get(ref_str) {
-            return Ok((
-                server_config.url.clone(),
-                Some(ref_str.to_string()),
-                LoginServerSource::Configured,
-            ));
+            return Ok((server_config.url.clone(), Some(ref_str.to_string())));
         }
 
         // Check if it's a URL
@@ -204,11 +176,11 @@ fn resolve_login_server(
             // Check if we have a server with this URL
             for (name, server_config) in &config.servers {
                 if server_config.url == url {
-                    return Ok((url, Some(name.clone()), LoginServerSource::Configured));
+                    return Ok((url, Some(name.clone())));
                 }
             }
             // New server by URL - will be added during login
-            return Ok((url, None, LoginServerSource::Configured));
+            return Ok((url, None));
         }
 
         // It's a new server name - prompt for URL? For now, use default URL
@@ -219,39 +191,16 @@ fn resolve_login_server(
         );
     }
 
-    if config_is_unconfigured(config) {
-        return Ok((
-            crate::config::parse_server_url(HOSTED_TRIAL_SERVER)?,
-            Some(HOSTED_TRIAL_PROFILE.to_string()),
-            LoginServerSource::HostedTrialFallback,
-        ));
-    }
-
     // Use default server
     let server_config = config.resolve_server(None)?;
     let server_name = config.default_server().map(|s| s.to_string());
-    Ok((
-        server_config.url,
-        server_name,
-        LoginServerSource::Configured,
-    ))
-}
-
-/// No servers, or only the logged-out localhost default that earlier releases saved.
-fn config_is_unconfigured(config: &Config) -> bool {
-    config.servers.is_empty()
-        || (config.default_server() == Some("default")
-            && config.servers.len() == 1
-            && config.servers.get("default").is_some_and(|server| {
-                server.url.as_str() == "http://localhost:3000/" && server.api_key.is_none()
-            }))
+    Ok((server_config.url, server_name))
 }
 
 async fn oauth_login_with_callback(
     config: &mut Config,
     server: url::Url,
     server_name: Option<String>,
-    server_source: LoginServerSource,
     format: OutputFormat,
 ) -> Result<()> {
     use axum::{Router, extract::Query, response::Html, routing::get};
@@ -381,7 +330,6 @@ async fn oauth_login_with_callback(
                 server.clone(),
                 token.clone(),
                 server_name.clone(),
-                server_source,
                 format,
             )
             .await?;
@@ -392,7 +340,6 @@ async fn oauth_login_with_callback(
                 server.clone(),
                 token.clone(),
                 server_name.clone(),
-                server_source,
                 format,
             )
             .await?;
@@ -412,7 +359,7 @@ async fn oauth_login_with_callback(
 
         let key = read_pasted_key()?;
 
-        validate_and_save_key(config, server, key, server_name, server_source, format).await?;
+        validate_and_save_key(config, server, key, server_name, format).await?;
     }
 
     Ok(())
@@ -423,7 +370,6 @@ async fn create_api_key_with_session(
     server: Url,
     session_token: String,
     server_name: Option<String>,
-    server_source: LoginServerSource,
     format: OutputFormat,
 ) -> Result<()> {
     eprintln!("\n{}", "Creating API key using session...".dimmed());
@@ -458,13 +404,7 @@ async fn create_api_key_with_session(
     if response.status().is_success() {
         let api_key_data: ApiKeyResponse = response.json().await?;
 
-        let name = store_login_credentials(
-            config,
-            &server,
-            api_key_data.key.clone(),
-            server_name,
-            server_source,
-        )?;
+        let name = store_login_credentials(config, &server, api_key_data.key.clone(), server_name);
         config.save()?;
 
         // Display expiration info
@@ -553,14 +493,10 @@ fn store_login_credentials(
     server: &Url,
     api_key: String,
     server_name: Option<String>,
-    server_source: LoginServerSource,
-) -> Result<String> {
+) -> String {
     let name = determine_server_name(config, server, server_name);
     config.add_server(name.clone(), server.clone(), Some(api_key));
-    if server_source == LoginServerSource::HostedTrialFallback {
-        config.set_default_server(&name)?;
-    }
-    Ok(name)
+    name
 }
 
 /// Prompt for an API key on a terminal, or read one line from piped stdin.
@@ -606,7 +542,6 @@ async fn validate_and_save_key(
     server: url::Url,
     key: String,
     server_name: Option<String>,
-    server_source: LoginServerSource,
     format: OutputFormat,
 ) -> Result<()> {
     eprintln!("\n{}", "Validating credentials...".dimmed());
@@ -614,8 +549,7 @@ async fn validate_and_save_key(
 
     match client.validate_key().await {
         Ok(true) => {
-            let name =
-                store_login_credentials(config, &server, key.clone(), server_name, server_source)?;
+            let name = store_login_credentials(config, &server, key.clone(), server_name);
             config.save()?;
 
             eprintln!(
@@ -720,28 +654,12 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn bare_login_uses_hosted_trial_without_servers() {
+    fn bare_login_without_servers_has_no_server_to_use() {
         let config = Config::default();
 
-        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+        let error = resolve_login_server(&config, None).expect_err("no server resolves");
 
-        assert_eq!(url.as_str(), "https://try.ricochet.rs/");
-        assert_eq!(profile.as_deref(), Some("try"));
-        assert_eq!(source, LoginServerSource::HostedTrialFallback);
-    }
-
-    #[test]
-    fn bare_login_uses_hosted_trial_for_legacy_localhost_default() {
-        let config = Config::for_test(
-            Url::parse("http://localhost:3000").expect("valid URL"),
-            None,
-        );
-
-        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
-
-        assert_eq!(url.as_str(), "https://try.ricochet.rs/");
-        assert_eq!(profile.as_deref(), Some("try"));
-        assert_eq!(source, LoginServerSource::HostedTrialFallback);
+        assert!(error.to_string().contains("No servers configured"));
     }
 
     #[test]
@@ -751,12 +669,11 @@ mod tests {
             None,
         );
 
-        let (url, profile, source) =
+        let (url, profile) =
             resolve_login_server(&config, Some("default")).expect("server resolves");
 
         assert_eq!(url.as_str(), "http://localhost:3000/");
         assert_eq!(profile.as_deref(), Some("default"));
-        assert_eq!(source, LoginServerSource::Configured);
     }
 
     #[test]
@@ -764,16 +681,10 @@ mod tests {
         let mut config = Config::default();
         let url = Url::parse("https://ricochet.example.com").expect("valid URL");
 
-        let (resolved, profile, source) =
+        let (resolved, profile) =
             resolve_login_server(&config, Some(url.as_str())).expect("server resolves");
-        let name = store_login_credentials(
-            &mut config,
-            &resolved,
-            "rico_test".to_string(),
-            profile,
-            source,
-        )
-        .expect("credentials stored");
+        let name =
+            store_login_credentials(&mut config, &resolved, "rico_test".to_string(), profile);
 
         assert_eq!(name, "ricochet");
         assert_eq!(config.default_server(), Some("ricochet"));
@@ -784,14 +695,7 @@ mod tests {
         let mut config = Config::default();
         for host in ["https://first.example.com", "https://second.example.com"] {
             let url = Url::parse(host).expect("valid URL");
-            store_login_credentials(
-                &mut config,
-                &url,
-                "rico_test".to_string(),
-                None,
-                LoginServerSource::Configured,
-            )
-            .expect("credentials stored");
+            store_login_credentials(&mut config, &url, "rico_test".to_string(), None);
         }
 
         assert_eq!(config.default_server(), Some("first"));
@@ -806,14 +710,7 @@ mod tests {
             ("http://127.0.0.1:5000", "rico_three"),
         ] {
             let url = Url::parse(url).expect("valid URL");
-            store_login_credentials(
-                &mut config,
-                &url,
-                key.to_string(),
-                None,
-                LoginServerSource::Configured,
-            )
-            .expect("credentials stored");
+            store_login_credentials(&mut config, &url, key.to_string(), None);
         }
 
         let saved = |name: &str| {
@@ -833,14 +730,7 @@ mod tests {
         let mut config = Config::default();
         let url = Url::parse("https://ricochet.team-a.com").expect("valid URL");
         for key in ["rico_old", "rico_new"] {
-            store_login_credentials(
-                &mut config,
-                &url,
-                key.to_string(),
-                None,
-                LoginServerSource::Configured,
-            )
-            .expect("credentials stored");
+            store_login_credentials(&mut config, &url, key.to_string(), None);
         }
 
         assert_eq!(config.servers.len(), 1);
@@ -872,35 +762,9 @@ mod tests {
             skip_update_check: None,
         };
 
-        let (url, profile, source) = resolve_login_server(&config, None).expect("server resolves");
+        let (url, profile) = resolve_login_server(&config, None).expect("server resolves");
 
         assert_eq!(url.as_str(), "https://ricochet.example.com/");
         assert_eq!(profile.as_deref(), Some("production"));
-        assert_eq!(source, LoginServerSource::Configured);
-    }
-
-    #[test]
-    fn hosted_trial_credentials_make_try_profile_default() {
-        let mut config = Config::default();
-        let url = Url::parse(HOSTED_TRIAL_SERVER).expect("valid URL");
-
-        let name = store_login_credentials(
-            &mut config,
-            &url,
-            "rico_test".to_string(),
-            Some(HOSTED_TRIAL_PROFILE.to_string()),
-            LoginServerSource::HostedTrialFallback,
-        )
-        .expect("credentials stored");
-
-        assert_eq!(name, "try");
-        assert_eq!(config.default_server(), Some("try"));
-        assert_eq!(
-            config
-                .servers
-                .get("try")
-                .and_then(|server| server.api_key.as_deref()),
-            Some("rico_test")
-        );
     }
 }

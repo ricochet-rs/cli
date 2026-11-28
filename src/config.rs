@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
 
+const HOSTED_TRIAL_HOST: &str = "try.ricochet.rs";
+
 /// Parse a server URL with validation that it includes the http:// or https:// scheme
 pub fn parse_server_url(url_str: &str) -> Result<Url> {
     if !url_str.starts_with("http://") && !url_str.starts_with("https://") {
@@ -262,6 +264,45 @@ impl Config {
         }
 
         Ok(was_default)
+    }
+
+    /// Ask for the URL and nickname of the first server, then save it as the default
+    pub fn configure_first_server(&mut self) -> Result<()> {
+        use colored::Colorize;
+        use dialoguer::{Input, theme::ColorfulTheme};
+
+        let theme = ColorfulTheme::default();
+
+        eprintln!("{}", "No ricochet instance configured.".yellow());
+        let url: String = Input::with_theme(&theme)
+            .with_prompt(format!(
+                "Provide your instance url, or press enter to use {HOSTED_TRIAL_HOST}"
+            ))
+            .default(format!("https://{HOSTED_TRIAL_HOST}"))
+            .show_default(false)
+            .validate_with(|input: &String| {
+                parse_server_url(input.trim())
+                    .map(|_| ())
+                    .map_err(|err| err.to_string())
+            })
+            .interact_text()?;
+        let name: String = Input::with_theme(&theme)
+            .with_prompt("Give your server a nickname")
+            .validate_with(|input: &String| {
+                if input.trim().is_empty() {
+                    Err("The nickname cannot be blank")
+                } else {
+                    Ok(())
+                }
+            })
+            .interact_text()?;
+
+        let name = name.trim().to_string();
+        self.add_server(name.clone(), parse_server_url(url.trim())?, None);
+        self.save()?;
+
+        eprintln!("Saved {} as your default server.", name.bright_cyan());
+        Ok(())
     }
 
     /// Set the default server
